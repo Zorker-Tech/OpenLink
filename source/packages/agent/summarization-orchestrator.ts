@@ -768,8 +768,8 @@ export class SummarizationOrchestrator {
       const archiveBlobIds = await Promise.all(
         messagesActuallySummarized
           .filter(transcriptMessage => !(transcriptMessage.providerOptions as {
-            readonly cursor?: { readonly isSummary?: unknown } | undefined
-          } | undefined)?.cursor?.isSummary)
+            readonly slate?: { readonly isSummary?: unknown } | undefined
+          } | undefined)?.slate?.isSummary)
           .map(async transcriptMessage => {
             const serializedBytes = messageSerde.serialize(transcriptMessage)
             const blobId = await getBlobId(serializedBytes)
@@ -910,8 +910,8 @@ export class SummarizationOrchestrator {
         ...replacementList.filter((transcriptMessage, index) =>
           transcriptMessage === newSummaryMessage ||
           (transcriptMessage.providerOptions as {
-            readonly cursor?: { readonly isSummary?: unknown } | undefined
-          } | undefined)?.cursor?.isSummary === true ||
+            readonly slate?: { readonly isSummary?: unknown } | undefined
+          } | undefined)?.slate?.isSummary === true ||
           preservedTailPositions.has(index)
         ),
         ...postSummaryMessages,

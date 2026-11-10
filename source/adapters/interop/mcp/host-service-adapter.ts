@@ -2,7 +2,7 @@
 
 import type { McpBackendExecPort } from "../../../shared/node/mcp/mcp-manager.ts"
 import type { CatalogField, CatalogPlugin, EffectivePlugin, McpServerSummary, ServerState } from "../../../host/mcp/mcp-service-contracts.ts"
-import type { createDashboardSlateBackendMcpExec } from "../cursor-backend/backend-mcp-exec.ts"
+import type { createDashboardSlateBackendMcpExec } from "../slate-backend/backend-mcp-exec.ts"
 
 /** One account server as the host-facing management port returns it. */
 export function toInstalledServer(summary: McpServerSummary): Record<string, unknown> {

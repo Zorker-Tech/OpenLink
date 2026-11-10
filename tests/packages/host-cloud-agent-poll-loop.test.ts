@@ -26,7 +26,7 @@ import {
   SAVED_ENVIRONMENT_LIST_LIMIT,
   TEAM_ADMIN_POLICY_TTL_MS,
   type CloudAgentCompletion,
-  type DetailedComposer,
+  type DetailedCloudAgent,
 } from "../../source/host/cloud-agents/cloud-agent-poll-loop.ts";
 
 const environment = (name: string, publicId: string) => ({ name, publicId });
@@ -37,7 +37,7 @@ async function settled(completion: Promise<CloudAgentCompletion>): Promise<Cloud
 }
 
 /** What one poll answers with: the response's composer is the detailed record, and the run's status sits inside it. */
-const detailedWith = (status: number, overrides: DetailedComposer = {}) => ({ composer: { ...overrides, composer: { ...overrides.composer, status } } });
+const detailedWith = (status: number, overrides: DetailedCloudAgent = {}) => ({ composer: { ...overrides, composer: { ...overrides.composer, status } } });
 
 describe("how a run's own vocabulary is read", () => {
   it("answers with what the wire's numbers mean", () => {
@@ -89,7 +89,7 @@ describe("what a caller is told when a watch ends", () => {
   });
 
   it("says what the platform's own limit was, when that is why it stopped", () => {
-    const limited: DetailedComposer = { permanentError: { details: { title: "  Limit reached  ", detail: "  Your plan's included usage is used up.  ", additionalInfo: { rateLimitReason: "slate_included_limit" } } } };
+    const limited: DetailedCloudAgent = { permanentError: { details: { title: "  Limit reached  ", detail: "  Your plan's included usage is used up.  ", additionalInfo: { rateLimitReason: "slate_included_limit" } } } };
     assert.equal(resolveSlateLimitError(limited), "Limit reached\nYour plan's included usage is used up.");
     assert.equal(resolveSlateLimitError({ permanentError: { details: { title: "Other", detail: "no", additionalInfo: { rateLimitReason: "something_else" } } } }), null);
     assert.equal(resolveSlateLimitError({}), null);
@@ -167,7 +167,7 @@ describe("the two caches", () => {
 });
 
 describe("the watcher", () => {
-  function watchWorld(options: { maxWaitMs?: number; runRestartGraceMs?: number; answers?: (tick: number) => Promise<{ composer?: DetailedComposer }> | { composer?: DetailedComposer }; isRateLimitError?: (error: unknown) => boolean } = {}) {
+  function watchWorld(options: { maxWaitMs?: number; runRestartGraceMs?: number; answers?: (tick: number) => Promise<{ composer?: DetailedCloudAgent }> | { composer?: DetailedCloudAgent }; isRateLimitError?: (error: unknown) => boolean } = {}) {
     let now = 0;
     const ticks: (() => Promise<void>)[] = [];
     const disposed: number[] = [];
@@ -181,7 +181,7 @@ describe("the watcher", () => {
         randomFn: () => 0,
         ...(options.isRateLimitError === undefined ? {} : { isRateLimitError: options.isRateLimitError }),
       },
-      () => ({ getBackgroundComposerInfo: async () => (await (options.answers?.(tickCount++) ?? detailedWith(2))) as { composer?: DetailedComposer } }),
+      () => ({ getBackgroundComposerInfo: async () => (await (options.answers?.(tickCount++) ?? detailedWith(2))) as { composer?: DetailedCloudAgent } }),
     );
     return {
       poller,

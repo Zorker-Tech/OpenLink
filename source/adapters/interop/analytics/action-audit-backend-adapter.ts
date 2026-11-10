@@ -11,7 +11,7 @@ import {
   SlateAuditEvent_McpToolCall,
   SlateAuditEvent_ShellCommand,
 } from "../proto/generated/aiserver/v1/dashboard_pb.ts"
-import { createSlateCursorBackendClient } from "../cursor-backend/cursor-inference.ts"
+import { createSlateBackendClient } from "../slate-backend/slate-backend-client.ts"
 import type { AuditEvent } from "../../../host/extensions/action-audit/action-audit-service.ts"
 
 /** A count or duration accepted by the backend: whole, and never negative. */
@@ -97,7 +97,7 @@ export function createSlateAuditBatchSender(deps: {
       readonly recordSlateAuditEvents: MethodInfoUnary<RecordSlateAuditEventsRequest, RecordSlateAuditEventsResponse>
     }
   }
-  const client = createSlateCursorBackendClient(service, {
+  const client = createSlateBackendClient(service, {
     getAccessToken: deps.getAccessToken,
     getMachineId: deps.getMachineId,
   })

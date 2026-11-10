@@ -32,7 +32,7 @@ import {
   type EventTrigger,
   type GithubTrigger,
 } from "../../../shared/automations.ts";
-import { backendCloudTrigger, type BackendCloudTrigger } from "../cursor-backend/slate-automation-cloud-trigger-adapter.ts";
+import { backendCloudTrigger, type BackendCloudTrigger } from "../slate-backend/slate-automation-cloud-trigger-adapter.ts";
 import { stableAutomationId } from "../../../host/automations/automation-id.ts";
 import { sha256Hex } from "../../../host/sha256.ts";
 

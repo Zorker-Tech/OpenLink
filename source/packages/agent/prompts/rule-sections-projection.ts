@@ -3,8 +3,11 @@ import path from "node:path"
 import { normalizeToUnixPath } from "../../utils/paths.ts"
 import { getFirstNonEmptyLine } from "../utils/common-helpers.ts"
 import type { PromptRuleDescriptor } from "./rule-sections-contracts.ts"
+import { SLATE_RULES_DIRECTORY } from "../workspace-conventions.ts"
+import { EXTERNAL_RULE_DIRECTORIES } from "../../../adapters/interop/workspace/external-workspace-directories-adapter.ts"
 
 const separator = "/"
+const RULE_DIRECTORY_PARTS = [SLATE_RULES_DIRECTORY, ...EXTERNAL_RULE_DIRECTORIES].map(directory => directory.split(separator))
 
 function valueRecord(rule: PromptRuleDescriptor): Record<string, unknown> | undefined {
   const value = rule.type?.type?.value
@@ -23,7 +26,9 @@ export function getRuleDir(fullPath: string): string {
   const segments = containingDirectory.split(separator)
 
   for (let cursor = segments.length - 2; cursor >= 0; cursor -= 1) {
-    if (segments[cursor] !== ".cursor" || segments[cursor + 1] !== "rules") continue
+    const matched = RULE_DIRECTORY_PARTS.some(parts =>
+      parts.every((part, offset) => segments[cursor + offset] === part))
+    if (!matched) continue
     const project = segments.slice(0, cursor)
     return project.length === 0 ? separator : project.join(separator)
   }

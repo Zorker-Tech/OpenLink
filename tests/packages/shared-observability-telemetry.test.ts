@@ -27,7 +27,7 @@ describe("the platform's telemetry vocabulary", () => {
 
   it("names the slices of client state the platform persists", () => {
     assert.deepEqual([...SLATE_CLIENT_PERSISTENCE_SLICES], [
-      "client-meta.account-slot", "composer-drafts", "host-settings.onboarding", "roster.agent-avatars",
+      "client-meta.account-slot", "draft-inputs", "host-settings.onboarding", "roster.agent-avatars",
       "roster.last-roster", "selection.last-agent", "send-journal", "sidebar.last-sections",
       "transcript.replicas", "ui-agent-refs", "ui-layout", "other",
     ]);

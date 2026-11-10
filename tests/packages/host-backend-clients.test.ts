@@ -11,7 +11,7 @@ import { smartModeClassifierAttemptIndexKey, smartModeClassifierModeKey } from "
 import { ClassifySlateAutoReviewRequest, ClassifySlateAutoReviewResponse } from "../../source/adapters/interop/proto/generated/aiserver/v1/dashboard_pb.ts";
 import { RunGenerateImageRequest, RunGenerateImageResponse, RunWebFetchRequest, RunWebFetchResponse, RunWebSearchRequest, RunWebSearchResponse } from "../../source/adapters/interop/proto/generated/aiserver/v1/aiserver_pb.ts";
 import { SmartModeClassifierArgs, SmartModeClassifierConversationMessage, SmartModeClassifierDecision, SmartModeClassifierResult, SmartModeRiskTarget } from "../../source/adapters/interop/proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts";
-import { createCursorGenerateImageService, SlateGenerateImageError, SlateGenerateImageModelRestrictedError } from "../../source/adapters/interop/cursor-backend/cursor-generate-image.ts";
+import { createSlateImageGenerator, SlateGenerateImageError, SlateGenerateImageModelRestrictedError } from "../../source/adapters/interop/slate-backend/slate-generate-image.ts";
 import { createSlateWebFetchService, createSlateWebSearchService } from "../../source/adapters/interop/agent/slate-web-tools-adapter.ts";
 import { fetchSlateModelCatalogWithClient } from "../../source/adapters/interop/agent/model-catalog-adapter.ts";
 import { createSlateBackendSmartModeClassifierExecutor, SlateSmartModeClassifierError } from "../../source/adapters/interop/agent/auto-review-backend-executor-adapter.ts";
@@ -21,7 +21,7 @@ const account = { getAccessToken: async () => "token", getMachineId: async () =>
 describe("generating an image", () => {
   const imageWorld = (result: unknown) => {
     const requests: RunGenerateImageRequest[] = [];
-    const service = createCursorGenerateImageService({
+    const service = createSlateImageGenerator({
       ...account,
       modelId: "image-model",
       client: {
@@ -44,7 +44,7 @@ describe("generating an image", () => {
     const bare = imageWorld({ case: "success", value: { imageData: "AAAA", mimeType: "image/png" } });
     await bare.service(undefined, "a cat");
     assert.deepEqual(bare.requests[0]!.referenceImages, []);
-    const maximised = createCursorGenerateImageService({ ...account, modelId: "image-model", maxMode: true, client: { runGenerateImage: async () => ({ result: { case: "success", value: { imageData: "A", mimeType: "image/png" } } }) as unknown as RunGenerateImageResponse } });
+    const maximised = createSlateImageGenerator({ ...account, modelId: "image-model", maxMode: true, client: { runGenerateImage: async () => ({ result: { case: "success", value: { imageData: "A", mimeType: "image/png" } } }) as unknown as RunGenerateImageResponse } });
     await maximised(undefined, "a cat");
   });
 

@@ -8,7 +8,7 @@ import { createClient, type Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 
 import { DashboardService } from "../proto/generated/aiserver/v1/dashboard_connect.ts";
-import { createCursorChecksum, getSlateInferenceBackendUrl } from "../cursor-backend/cursor-inference.ts";
+import { createSlateChecksum, getSlateInferenceBackendUrl } from "../slate-backend/slate-backend-client.ts";
 import { getSlateBackendClientHeaders } from "../backend/slate-client-metadata-adapter.ts";
 
 export const MARKETPLACE_REQUEST_TIMEOUT_MS = 12_000;
@@ -26,7 +26,7 @@ export function createMarketplaceInterceptor<Request extends MarketplaceRequest,
   options: { readonly env?: NodeJS.ProcessEnv; readonly uuid?: () => string } = {},
 ) {
   return (next: MarketplaceNext<Request, Response>): MarketplaceNext<Request, Response> => async (request) => {
-    try { if (getMachineId != null) request.header.set("x-cursor-checksum", createCursorChecksum(await getMachineId())); } catch {}
+    try { if (getMachineId != null) request.header.set("x-cursor-checksum", createSlateChecksum(await getMachineId())); } catch {}
     for (const [name, value] of Object.entries(getSlateBackendClientHeaders(options.env))) request.header.set(name, value);
     request.header.set("x-ghost-mode", "true");
     request.header.set("x-request-id", options.uuid?.() ?? globalThis.crypto.randomUUID());

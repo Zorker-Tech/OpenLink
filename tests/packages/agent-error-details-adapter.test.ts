@@ -14,7 +14,7 @@ import { Code } from "@connectrpc/connect";
 function remoteFailure(details: readonly ErrorDetails[], fields: { readonly cause?: unknown; readonly header?: string } = {}) {
   return {
     cause: fields.cause,
-    metadata: { get: (name: string) => name === "x-cursor-inference-request-error-type" ? fields.header ?? null : null },
+    metadata: { get: (name: string) => name === "x-slate-backend-client-request-error-type" ? fields.header ?? null : null },
     findDetails: () => details,
   };
 }

@@ -12,7 +12,7 @@ import { MDM_SIGN_IN_POLICY_HEADER_NAME, POLICY_CACHE_TTL_MS, readMdmSignInPolic
 
 describe("how a request says it came from the command line", () => {
   it("reads the mode from the environment, and has a header of its own", () => {
-    assert.equal(LOCAL_CLI_MODE_ENV, "CURSOR_AGENT_CLI_LOCAL_MODE");
+    assert.equal(LOCAL_CLI_MODE_ENV, "SLATE_AGENT_CLI_LOCAL_MODE");
     assert.equal(LOCAL_CLI_MODE_HEADER, "local-cli-mode");
     const previous = process.env[LOCAL_CLI_MODE_ENV];
     // Only the exact word turns it on — "1" and "yes" do not.

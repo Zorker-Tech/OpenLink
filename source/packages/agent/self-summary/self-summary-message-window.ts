@@ -1,5 +1,5 @@
 import { prepareMessagesForCompaction } from "../../agent-summarization/prepare-messages.ts";
-import { hasCounterpartSummaryMarker } from "../../../adapters/interop/cursor-backend/summary-origin-marker-adapter.ts";
+import { hasCounterpartSummaryMarker } from "../../../adapters/interop/slate-backend/summary-origin-marker-adapter.ts";
 import type { PrivacyMode } from "../../redaction/privacy-mode.ts";
 
 export interface SelfSummaryMessage {

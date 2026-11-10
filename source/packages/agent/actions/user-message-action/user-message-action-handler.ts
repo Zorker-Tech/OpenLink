@@ -384,7 +384,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         priorUserInfoCloudTestingSectionsPlacement,
       });
       if (shouldAppendMultitaskEnterReminderToUserInfo) userInfoContent = `${userInfoContent}\n\n${renderInteropMultitaskModeEnterUserReminder(configAny.modelInfo, { hideAsyncSubagentTaskNotifications: configAny.featureFlags?.hideAsyncSubagentTaskNotifications })}`;
-      newMessages.push({ role: "user", content: userInfoContent, providerOptions: { slate: { requestContextCompleteness, userInfoSummarizationEpoch: currentSummarizationEpoch, omitCloudWorkerProcedure, ...(userInfoCloudTestingSectionsPlacement !== undefined ? { composer2CloudTestingSectionsPlacement: userInfoCloudTestingSectionsPlacement } : {}) } } });
+      newMessages.push({ role: "user", content: userInfoContent, providerOptions: { slate: { requestContextCompleteness, userInfoSummarizationEpoch: currentSummarizationEpoch, omitCloudWorkerProcedure, ...(userInfoCloudTestingSectionsPlacement !== undefined ? { cloudTestingSectionsPlacement: userInfoCloudTestingSectionsPlacement } : {}) } } });
     }
     const effectivePriorMessages = didReplaceUserInfo ? priorMessages.slice(1) : priorMessages;
     const conversationHistoryMessages = deserializeConversationHistoryMessages(

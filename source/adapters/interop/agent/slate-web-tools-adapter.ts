@@ -7,7 +7,7 @@ import {
   type RunWebFetchResponse,
   type RunWebSearchResponse,
 } from "../proto/generated/aiserver/v1/aiserver_pb.ts"
-import { createSlateCursorBackendClient, type SlateInferenceOptions } from "../cursor-backend/cursor-inference.ts"
+import { createSlateBackendClient, type SlateInferenceOptions } from "../slate-backend/slate-backend-client.ts"
 import type { SlateWebFetchResult, SlateWebSearchAnswer } from "../../../host/extensions/inference/web-tool-contracts.ts"
 
 type BackendOptions = Omit<SlateInferenceOptions, "backendUrl">
@@ -24,7 +24,7 @@ export function createSlateWebSearchService(
   options: BackendOptions & { readonly modelId: string; readonly client?: WebSearchRpcClient | undefined },
 ) {
   const client = options.client ??
-    (createSlateCursorBackendClient(AiService, options) as unknown as WebSearchRpcClient)
+    (createSlateBackendClient(AiService, options) as unknown as WebSearchRpcClient)
 
   return async (_context: unknown, args: { searchTerm: string; explanation?: string }): Promise<SlateWebSearchAnswer> => {
     const response = await client.runWebSearch(new RunWebSearchRequest({
@@ -48,7 +48,7 @@ export function createSlateWebFetchService(
   options: BackendOptions & { readonly client?: WebFetchRpcClient | undefined },
 ) {
   const client = options.client ??
-    (createSlateCursorBackendClient(AiService, options) as unknown as WebFetchRpcClient)
+    (createSlateBackendClient(AiService, options) as unknown as WebFetchRpcClient)
 
   return async (_context: unknown, url: string): Promise<SlateWebFetchResult> => {
     const response = await client.runWebFetch(new RunWebFetchRequest({ url }))

@@ -147,7 +147,7 @@ describe("a pending checkpoint", () => {
   });
 
   it("carries the deferred step when the cursor holds one", () => {
-    const parsed = parsePendingCheckpoint(checkpointRecord({ slate: { turnCount: 2, deferredStep: { turnIndex: 1, stepIndex: 0 } } }));
+    const parsed = parsePendingCheckpoint(checkpointRecord({ cursor: { turnCount: 2, deferredStep: { turnIndex: 1, stepIndex: 0 } } }));
     assert.deepEqual(parsed.cursor, { turnCount: 2, deferredStep: { turnIndex: 1, stepIndex: 0 } });
     assert.deepEqual(Object.keys(parsed.cursor), ["turnCount", "deferredStep"]);
     assert.deepEqual(Object.keys(parsePendingCheckpoint(checkpointRecord()).cursor), ["turnCount"], "a cursor without one has no key");
@@ -176,8 +176,8 @@ describe("a pending checkpoint", () => {
     corrupted(checkpointRecord({ lines: [line({ message: { content: [] } })] }), "pending transcript line does not use the legacy message envelope", "a line without a role is not the envelope");
     corrupted(checkpointRecord({ cursor: [] }), "pending transcript checkpoint metadata is invalid", "a cursor has to be a record");
     corrupted(checkpointRecord({ cursor: "cursor" }), "pending transcript checkpoint metadata is invalid", "a cursor has to be a record");
-    corrupted(checkpointRecord({ slate: { turnCount: -1 } }), "pending transcript checkpoint cursor is invalid");
-    corrupted(checkpointRecord({ slate: { turnCount: 0, deferredStep: { turnIndex: -1, stepIndex: 0 } } }), "transcript deferred cursor is invalid");
+    corrupted(checkpointRecord({ cursor: { turnCount: -1 } }), "pending transcript checkpoint cursor is invalid");
+    corrupted(checkpointRecord({ cursor: { turnCount: 0, deferredStep: { turnIndex: -1, stepIndex: 0 } } }), "transcript deferred cursor is invalid");
   });
 
   it("reports the first corruption the format checks for", () => {

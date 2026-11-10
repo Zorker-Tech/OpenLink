@@ -12,7 +12,7 @@
 
 import type { Context } from "../../../context/context.ts"
 import { createLogger } from "../../../context/logging.ts"
-import { readCounterpartMessageTraceIds } from "../../../../adapters/interop/cursor-backend/summary-origin-marker-adapter.ts"
+import { readCounterpartMessageTraceIds } from "../../../../adapters/interop/slate-backend/summary-origin-marker-adapter.ts"
 import { isSyntheticUserMessage } from "./synthetic-user-message.ts"
 
 interface Message {

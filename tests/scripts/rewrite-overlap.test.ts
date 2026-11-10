@@ -856,9 +856,9 @@ describe("rewrite overlap gate inputs", () => {
       "host/cloud-agents/cloud-agent-view-mappers.ts",
       "host/cloud-agents/cloud-agent-manager-queries.ts",
       "host/cloud-agents/cloud-agent-manager-launch.ts",
-      "adapters/interop/cursor-backend/slate-cloud-agent-client-adapter.ts",
+      "adapters/interop/slate-backend/slate-cloud-agent-client-adapter.ts",
     ]);
-    assert.match(exemptSourceReason("adapters/interop/cursor-backend/slate-cloud-agent-client-adapter.ts") ?? "", /interop adapter/);
+    assert.match(exemptSourceReason("adapters/interop/slate-backend/slate-cloud-agent-client-adapter.ts") ?? "", /interop adapter/);
     assert.deepEqual(sourcePathsOf({
       port: "host/automations/automation-store.ts",
       rewritten: "source/host/automations/automation-store.ts",
@@ -1136,13 +1136,13 @@ describe("rewrite overlap gate inputs", () => {
       rewritten: "source/packages/chat-inference-proto/client.ts",
     }), ["adapters/interop/chat-inference-proto/client.ts"]);
     assert.deepEqual(sourcePathsOf({
-      port: "shared/node/cursor-backend/cursor-inference.ts",
-      rewritten: "source/shared/node/cursor-backend/cursor-inference.ts",
-    }), ["adapters/interop/cursor-backend/cursor-inference.ts"]);
+      port: "shared/node/slate-backend/slate-backend-client.ts",
+      rewritten: "source/shared/node/slate-backend/slate-backend-client.ts",
+    }), ["adapters/interop/slate-backend/slate-backend-client.ts"]);
   });
 
   it("scores Slate-owned fragments while listing counterpart adapters separately", () => {
-    const adapter = "adapters/interop/cursor-backend/summary-origin-marker-adapter.ts";
+    const adapter = "adapters/interop/slate-backend/summary-origin-marker-adapter.ts";
     const result = overlapForOwnedSources(
       "first second third fourth",
       ["packages/agent/local-policy.ts", adapter],
@@ -1202,7 +1202,7 @@ describe("rewrite overlap gate inputs", () => {
     }), [
       "packages/agent/actions/user-message-action/synthetic-user-message.ts",
       "packages/agent/actions/user-message-action/notification-message-classifier.ts",
-      "adapters/interop/cursor-backend/summary-origin-marker-adapter.ts",
+      "adapters/interop/slate-backend/summary-origin-marker-adapter.ts",
     ]);
     assert.deepEqual(sourcePathsOf({
       port: "packages/agent/self-summary/self-summary.ts",
@@ -1211,10 +1211,10 @@ describe("rewrite overlap gate inputs", () => {
       "packages/agent/self-summary/self-summary.ts",
       "packages/agent/self-summary/self-summary-message-window.ts",
       "packages/agent/self-summary/self-summary-trigger-policy.ts",
-      "adapters/interop/cursor-backend/summary-origin-marker-adapter.ts",
+      "adapters/interop/slate-backend/summary-origin-marker-adapter.ts",
     ]);
     assert.equal(
-      exemptSourceReason("adapters/interop/cursor-backend/summary-origin-marker-adapter.ts"),
+      exemptSourceReason("adapters/interop/slate-backend/summary-origin-marker-adapter.ts"),
       "interop adapter: reads the counterpart provider's summary-origin marker",
     );
   });

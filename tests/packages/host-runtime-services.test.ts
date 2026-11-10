@@ -26,7 +26,7 @@ import { classifyBotBlockPage, withBotBlockDetection } from "../../source/host/r
 import { isSqliteBusyError, isSqliteCantOpenError, isSqliteCorruptError, isSqliteIoError, retrySqliteBusy, SQLITE_BUSY, SQLITE_CANTOPEN, SQLITE_CORRUPT, SQLITE_IOERR, SQLITE_LOCKED, SQLITE_NOTADB } from "../../source/host/storage/sqlite-busy.ts";
 import { SlateSendNotPersistedError } from "../../source/host/transcript/send-not-persisted-error.ts";
 import { mergeTurnUsage, toSafeTokenCount, turnUsageFromTurnEnded, type TurnUsage } from "../../source/host/runner/turn-usage.ts";
-import { backendCloudTrigger } from "../../source/adapters/interop/cursor-backend/slate-automation-cloud-trigger-adapter.ts";
+import { backendCloudTrigger } from "../../source/adapters/interop/slate-backend/slate-automation-cloud-trigger-adapter.ts";
 import { agentProfileIdentitiesEqual, normalizeAgentProfileIdentity, parseLatestAgentProfileUpdate, renderAgentProfileUpdate, resolveAgentProfilePromptSnapshot, SLATE_AGENT_PROFILE_UPDATE_MARKER } from "../../source/host/runner/slate-agent-profile-prompt.ts";
 import { getBoxStoreBackendPolicy, isBoxStoreCopyInEnabled, isBoxStoreSyncEnabled, resolveBackendKind, SLATE_BOX_STORE_BACKEND_ENV, SLATE_BOX_STORE_LOCAL_DIR_ENV } from "../../source/host/boxes/box-store-backend-policy.ts";
 import { BOX_STORE_HYDRATION_HANDOFF_MANIFEST_PATH, isBoxStoreFullyHydrated, isHydrationHandoffManifestPath, removeHydrationHandoffMarker, writeHydrationHandoffMarker } from "../../source/host/boxes/box-store-sync/box-store-hydration.ts";

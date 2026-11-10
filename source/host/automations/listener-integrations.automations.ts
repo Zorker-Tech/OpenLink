@@ -1,7 +1,7 @@
-import { createListenerIntegrationsDashboard, DASHBOARD_INTEGRATIONS_URL } from "../../adapters/interop/cursor-backend/listener-integrations-dashboard.ts"
+import { createListenerIntegrationsDashboard, SLATE_DASHBOARD_INTEGRATIONS_URL } from "../../adapters/interop/slate-backend/listener-integrations-dashboard.ts"
 import { countListenerPlatforms, type ListenerPlatform } from "./listener-platforms.ts"
 
-export { DASHBOARD_INTEGRATIONS_URL } from "../../adapters/interop/cursor-backend/listener-integrations-dashboard.ts"
+export { SLATE_DASHBOARD_INTEGRATIONS_URL } from "../../adapters/interop/slate-backend/listener-integrations-dashboard.ts"
 
 export const LISTENER_PLATFORMS = [{ platform: "slack" as const }, { platform: "github" as const }]
 export const CONNECTOR_MANIFESTS = [{ platform: "slack" as const }, { platform: "github" as const }]
@@ -66,11 +66,11 @@ export function createListenerIntegrationReads(deps: ListenerIntegrationDependen
   }
 
   async function getConnectUrl(platform: ListenerPlatform): Promise<string> {
-    if (platform !== "slack") return DASHBOARD_INTEGRATIONS_URL
+    if (platform !== "slack") return SLATE_DASHBOARD_INTEGRATIONS_URL
     try {
-      return (await dashboard().getSlackInstallUrl()).url || DASHBOARD_INTEGRATIONS_URL
+      return (await dashboard().getSlackInstallUrl()).url || SLATE_DASHBOARD_INTEGRATIONS_URL
     } catch {
-      return DASHBOARD_INTEGRATIONS_URL
+      return SLATE_DASHBOARD_INTEGRATIONS_URL
     }
   }
 

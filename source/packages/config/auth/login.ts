@@ -1,7 +1,7 @@
 /** Public sign-in API with separate browser, polling, API-key, and configuration owners. */
 export { AuthNetworkError } from "./login-contracts.ts";
 export type {
-  CursorTokens,
+  SlateTokens,
   ExchangeApiKeyOptions,
   LoginLinkHandler,
   LoginManagerOptions,

@@ -28,12 +28,12 @@ import { projectThreadSessionKind } from "../../../adapters/interop/agent/thread
 import { ComputerUseInstructionsSection, GitOrNoRepositoryInstructions } from "./prompt-sections.ts"
 import { TestingInstructions2 } from "./testing/instructions.ts"
 
-type ComposerToolInfo = {
+type CloudAgentToolInfo = {
   readonly allTools: Record<string, { readonly name: string } | undefined>
   readonly [key: string]: unknown
 }
 
-type ComposerEnvironment = {
+type CloudAgentEnvironment = {
   readonly artifactsFolder?: string | undefined
   readonly [key: string]: unknown
 }
@@ -57,11 +57,11 @@ interface CloudTestingSectionsProps {
   readonly isCloudMetaAgentParent?: boolean | undefined
   readonly subagentType?: SlateSubagentType | undefined
   readonly useLocalAgentPrompting?: boolean | undefined
-  readonly env?: ComposerEnvironment | undefined
+  readonly env?: CloudAgentEnvironment | undefined
   readonly browserTools?: readonly string[] | undefined
   readonly cloudRule?: unknown
   readonly mode?: unknown
-  readonly toolInfo?: ComposerToolInfo | undefined
+  readonly toolInfo?: CloudAgentToolInfo | undefined
   readonly isDev?: boolean | undefined
   readonly isRepoless?: boolean | undefined
   readonly isThreadSurface?: boolean | undefined

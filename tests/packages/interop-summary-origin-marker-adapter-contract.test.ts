@@ -4,7 +4,7 @@ import { test } from "node:test";
 import {
   hasCounterpartSummaryOrigin,
   readCounterpartMessageTraceIds,
-} from "../../source/adapters/interop/cursor-backend/summary-origin-marker-adapter.ts";
+} from "../../source/adapters/interop/slate-backend/summary-origin-marker-adapter.ts";
 
 test("counterpart summary metadata is recognized only at its exact marker path", () => {
   assert.equal(hasCounterpartSummaryOrigin({ role: "user", providerOptions: { slate: { isSummary: true } } }), true);

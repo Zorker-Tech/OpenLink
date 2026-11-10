@@ -23,6 +23,7 @@
  * than a message should be.
  */
 
+import { APP_CONTROL_MCP_SERVER_ID } from "../../../../adapters/interop/agent/mcp-provider-identity-adapter.ts"
 import { RE2JS } from "re2js"
 import { z } from "zod"
 
@@ -69,7 +70,6 @@ const FILE_OUTPUT_THRESHOLD_BYTES = 12_000
 const MAX_REGEX_PATTERN_LENGTH = 256
 const MCP_AUTH_INPUT_SCHEMA = { type: "object", properties: {}, additionalProperties: false }
 /** The server the platform's own workspace-changing tools live on; its identifier is the server's own toolName. */
-const APP_CONTROL_MCP_SERVER = "cursor-app-control"
 const WORKSPACE_MUTATION_TOOLS = new Set(["move_agent_to_root", "move_agent_to_cloned_root", "create_project"])
 
 interface LoadedServer {
@@ -273,7 +273,7 @@ async function loadServers(ctx: Context, accessor: ResourceAccessor<RemoteExecMa
 
 /** Moving the agent's workspace around is refused for a project workspace, whatever asked for it. */
 function isWorkspaceMove(input: { readonly serverIdentifier: string; readonly toolName: string }): boolean {
-  return input.serverIdentifier.toLowerCase() === APP_CONTROL_MCP_SERVER && WORKSPACE_MUTATION_TOOLS.has(input.toolName.toLowerCase())
+  return input.serverIdentifier.toLowerCase() === APP_CONTROL_MCP_SERVER_ID && WORKSPACE_MUTATION_TOOLS.has(input.toolName.toLowerCase())
 }
 
 function checkRequest(request: GetMcpToolsRequest, dynamic: boolean): void {

@@ -2,7 +2,7 @@
 import type { MethodInfoUnary } from "@bufbuild/protobuf";
 import { DashboardService } from "../proto/generated/aiserver/v1/dashboard_connect.ts";
 import { GetUserPrivacyModeRequest, type GetUserPrivacyModeResponse } from "../proto/generated/aiserver/v1/dashboard_pb.ts";
-import { createSlateCursorBackendClient } from "../cursor-backend/cursor-inference.ts";
+import { createSlateBackendClient } from "../slate-backend/slate-backend-client.ts";
 import { PrivacyMode as SlatePrivacyMode, type PrivacyMode } from "../../../packages/redaction/privacy-mode.ts";
 import { privacyModeFromWire, privacyModeToWire } from "./privacy-mode-wire-adapter.ts";
 
@@ -32,7 +32,7 @@ export async function readSlatePrivacyModeFromDashboard(
 export function createSlatePrivacyModeDashboardReader(authApi: { readonly getMachineId: () => Promise<string> }) {
   return (args: { readonly auth: { readonly authToken: string }; readonly signal: AbortSignal }) => {
     const service = DashboardService as DashboardWithPrivacyMode;
-    const client = createSlateCursorBackendClient(service, {
+    const client = createSlateBackendClient(service, {
       getAccessToken: async () => args.auth.authToken,
       getMachineId: () => authApi.getMachineId(),
     });

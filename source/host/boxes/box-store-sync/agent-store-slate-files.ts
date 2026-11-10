@@ -27,7 +27,8 @@ import { BcsAgentStoreTransport } from "../../../packages/agent-store-sync/bcs-t
 import { AGENT_STORE_SYNC_CLIENT_CONFIG_DEFAULTS } from "../../../packages/agent-store-sync/sync-client-config.ts";
 import { TokenCachingAgentStoreClient } from "../../../packages/agent-store-sync/token-caching-client.ts";
 import { normalizeS3Etag } from "../../../packages/agent-store-sync/etag.ts";
-import { createSlateBackendTransport, getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { createSlateBackendTransport, getSlateInferenceBackendUrl } from "../../../adapters/interop/slate-backend/slate-backend-client.ts";
+import { isSlatePlaygroundBackend } from "../../../adapters/interop/slate-backend/backend-host-policy.ts";
 import { sha256Hex } from "../../sha256.ts";
 import { reportBoxStoreDiagnostic } from "./box-store-diagnostics.ts";
 import { BoxStoreSyncError } from "./box-store-sync-error.ts";
@@ -156,14 +157,7 @@ function validateUrl(raw: string, relPath: string): void {
   const backend = getSlateInferenceBackendUrl();
   if ((backend.includes("localhost") || backend.includes("lclhst.build")) && url.protocol === "http:" && isLoopback(url.hostname)) return;
   if (url.protocol !== "https:") throw new Error(`Refusing presigned URL for ${relPath}: Refused presigned URL with non-https scheme: ${url.protocol}`);
-  const playground = (() => {
-    try {
-      const hostname = new URL(backend).hostname.toLowerCase();
-      return hostname === "playground.cursor.sh" || hostname.endsWith(".playground.cursor.sh");
-    } catch {
-      return false;
-    }
-  })();
+  const playground = isSlatePlaygroundBackend(backend);
   const allowed = playground ? PLAYGROUND_AGENT_STORE_BUCKET_HOSTS : BCS_AGENT_STORE_BUCKET_HOSTS;
   if (!allowed.has(url.hostname.toLowerCase())) throw new Error(`Refusing presigned URL for ${relPath}: Refused presigned URL whose host is not in the allowlist: ${url.hostname}`);
 }

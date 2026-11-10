@@ -11,6 +11,8 @@
  * file decides what is eligible and that one decides what fits.
  */
 
+import { SLATE_SKILLS_DIRECTORY } from "../workspace-conventions.ts"
+import { EXTERNAL_SKILL_DIRECTORY_SEGMENTS } from "../../../adapters/interop/workspace/external-workspace-directories-adapter.ts"
 import path from "node:path"
 
 import type { PromptNode } from "../../prompt-jsx/index.ts"
@@ -45,11 +47,8 @@ interface AvailableSkillsPromptOverrides {
 
 const COMPUTER_USE_SKILL_PATTERN = /computer[-_ ]use|\bcua\b/i
 const SKILL_DIR_SEGMENTS = [
-  [".cursor", "skills"],
-  [".cursor", "skills-cursor"],
-  [".agents", "skills"],
-  [".claude", "skills"],
-  [".codex", "skills"],
+  SLATE_SKILLS_DIRECTORY.split("/"),
+  ...EXTERNAL_SKILL_DIRECTORY_SEGMENTS,
 ] as const
 const SEP = "/"
 

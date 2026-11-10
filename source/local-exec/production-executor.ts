@@ -306,7 +306,7 @@ function localExecResourceRegistry(root: string, maxFileBytes: number, guards: L
   const permissionsService = new PermissiveLocalExecAuthorization();
   const ignoreService = new EmptyWorkspaceIgnorePolicy();
   const terminalExecutor = createDefaultTerminalExecutor({
-    env: { CURSOR_AGENT: "1", SLATE_AGENT: "1" },
+    env: { SLATE_AGENT: "1" },
   }).clone(root);
   const shellCoreExecutor = new BaseShellCoreExecutor(terminalExecutor, root, root);
   const backgroundShellExecutor = new LocalBackgroundShellExecutor(

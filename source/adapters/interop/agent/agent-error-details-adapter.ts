@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { ErrorDetails, ErrorDetails_Error } from "../proto/generated/aiserver/v1/utils_pb.ts";
 import type { AgentErrorCode, AgentErrorDetails } from "../../../packages/agent-client/error-contract.ts";
 
-const INFERENCE_FAILURE_HEADER = "x-cursor-inference-request-error-type";
+const INFERENCE_FAILURE_HEADER = "x-slate-backend-client-request-error-type";
 
 const CATEGORY_CODES: ReadonlyArray<readonly [AgentErrorCode, readonly number[]]> = [
   ["authentication", [2, 18, 11, 12, 3, 38, 46, 47]],

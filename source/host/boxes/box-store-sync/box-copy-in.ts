@@ -33,7 +33,7 @@ import { isAgentStoreSourceId } from "../../../packages/agent-store-sync/identif
 import { tryAcquireStoreLock } from "../../../packages/agent-store-sync/store-lock.ts";
 import { errorMessage } from "../../../shared/errors/summary.ts";
 import { STRUCTURED_LOG_SUBMIT_DEADLINE_MS } from "../../../shared/observability/structured-log-transport.ts";
-import { getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { getSlateInferenceBackendUrl } from "../../../adapters/interop/slate-backend/slate-backend-client.ts";
 import { getSlateRootDir } from "../../host-paths.ts";
 import { getOrCreateHostMachineId } from "../../host-secret-store.ts";
 import { getBoxStoreBackendPolicy, isBoxStoreCopyInEnabled } from "../box-store-backend-policy.ts";

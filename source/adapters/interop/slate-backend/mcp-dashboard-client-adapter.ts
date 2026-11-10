@@ -3,7 +3,7 @@
 import { DashboardService } from "../proto/generated/aiserver/v1/dashboard_connect.ts"
 import type { AccountMcpClient } from "./account-mcp.ts"
 import type { DashboardMcpExecClient } from "./backend-mcp-exec.ts"
-import { createSlateCursorBackendClient } from "./cursor-inference.ts"
+import { createSlateBackendClient } from "./slate-backend-client.ts"
 
 export interface McpDashboardCredentials {
   getAccessToken(options?: { backendUrl?: string }): Promise<string>
@@ -11,7 +11,7 @@ export interface McpDashboardCredentials {
 }
 
 export function createMcpDashboardClient(credentials: McpDashboardCredentials): AccountMcpClient & DashboardMcpExecClient {
-  return createSlateCursorBackendClient(DashboardService, {
+  return createSlateBackendClient(DashboardService, {
     getAccessToken: options => credentials.getAccessToken({ backendUrl: options.backendUrl }),
     getMachineId: credentials.getMachineId,
   }) as unknown as AccountMcpClient & DashboardMcpExecClient

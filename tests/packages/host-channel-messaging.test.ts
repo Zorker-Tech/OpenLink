@@ -186,7 +186,7 @@ const hashOf = (text: string) => createHash("sha256").update(text).digest("hex")
 
 test("the whole channel section of the system prompt is stable", () => {
   const prompt = renderChannelsSystemPrompt([availableManifest, comingSoonManifest], [], "/repo");
-  assert.equal(hashOf(prompt), "ecb88f673918c0ddba2e6091b1cdd3d8bf51cfb67e623f4c0526335f00f54e08");
+  assert.equal(hashOf(prompt), "7ab6b694e59077c5fda3cb1609e540496ad8fd79ee3c5afbbd9ce59b8e58d6a1");
   const connected = renderChannelsSystemPrompt(
     [availableManifest],
     [
@@ -195,7 +195,7 @@ test("the whole channel section of the system prompt is stable", () => {
     ],
     "/repo",
   );
-  assert.equal(hashOf(connected), "f9b90152ba663d5f57131591aea6539d84746a3f0e8959e0432b567e699f9d3d");
+  assert.equal(hashOf(connected), "ed17ab90927d3dfa00f2ff132f1b11f3c45907040c6cfe6f6f2ea4c34ab57b71");
 });
 
 test("the whole inbound wake prompt and failure notice are stable", () => {

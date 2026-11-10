@@ -9,10 +9,10 @@ import {
   GetSlackUserSettingsRequest,
   type GetSlackUserSettingsResponse,
 } from "../proto/generated/aiserver/v1/dashboard_pb.ts"
-import { createSlateCursorBackendClient } from "./cursor-inference.ts"
+import { createSlateBackendClient } from "./slate-backend-client.ts"
 
 /** The destination provided by the counterpart when no direct install link is available. */
-export const DASHBOARD_INTEGRATIONS_URL = "https://cursor.com/dashboard?tab=integrations"
+export const SLATE_DASHBOARD_INTEGRATIONS_URL = "https://cursor.com/dashboard?tab=integrations"
 
 export interface ListenerDashboardAuth {
   getAccessToken(args: { readonly backendUrl: string }): Promise<string>
@@ -42,7 +42,7 @@ export function createListenerIntegrationsDashboard(auth: ListenerDashboardAuth)
       readonly getSlackInstallUrl: MethodInfoUnary<GetSlackInstallUrlRequest, GetSlackInstallUrlResponse>
     }
   }
-  const client = createSlateCursorBackendClient(service, {
+  const client = createSlateBackendClient(service, {
     getAccessToken: auth.getAccessToken,
     getMachineId: auth.getMachineId,
   })

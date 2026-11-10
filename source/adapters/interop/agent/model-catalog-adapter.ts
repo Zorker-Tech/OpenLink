@@ -6,7 +6,7 @@ import {
   AvailableModelsScope,
   type AvailableModelsResponse,
 } from "../proto/generated/aiserver/v1/aiserver_pb.ts"
-import { createSlateCursorBackendClient } from "../cursor-backend/cursor-inference.ts"
+import { createSlateBackendClient } from "../slate-backend/slate-backend-client.ts"
 import type { CatalogModel, ModelParameter } from "../../../shared/agents/model-catalog.ts"
 
 type InteropAvailableModel = AvailableModelsResponse["models"][number]
@@ -80,6 +80,6 @@ export async function fetchSlateModelCatalogWithClient(client: ModelCatalogClien
 
 /** Build the external RPC client here so generated service and message types do not escape this adapter. */
 export async function fetchSlateModelCatalogFromInterop(connection: ModelCatalogConnection): Promise<CatalogModel[]> {
-  const client = createSlateCursorBackendClient(AiService, connection)
+  const client = createSlateBackendClient(AiService, connection)
   return fetchSlateModelCatalogWithClient(client)
 }

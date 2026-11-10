@@ -108,7 +108,7 @@ test("the read output bounds separate the response cap from blob spill", () => {
 })
 
 test("the subagent model policy and ids are the values the catalogue uses", () => {
-  assert.deepEqual(Object.values(SubagentModelForcePolicy), ["none", "parent_pin", "request_based_composer"])
+  assert.deepEqual(Object.values(SubagentModelForcePolicy), ["none", "parent_pin", "request_based_agent"])
   assert.equal(isSubagentModelForcePolicy("parent_pin"), true)
   assert.equal(isSubagentModelForcePolicy("unknown"), false)
   assert.equal(isSubagentModelForcePolicy(undefined), false)

@@ -1,6 +1,6 @@
 import { DashboardService } from "../proto/generated/aiserver/v1/dashboard_connect.ts"
 import { GetTeamsRequest, PublishPluginRequest, UnpublishPluginRequest } from "../proto/generated/aiserver/v1/dashboard_pb.ts"
-import { createSlateCursorBackendClient, getSlateInferenceBackendUrl } from "../cursor-backend/cursor-inference.ts"
+import { createSlateBackendClient, getSlateInferenceBackendUrl } from "../slate-backend/slate-backend-client.ts"
 import type {
   PublishedSkillResult,
   SkillPublishClient,
@@ -51,7 +51,7 @@ export function createSlateSkillPublishClient(deps: {
     getMachineId(): Promise<string>
   }
 }): SkillPublishClient {
-  const wire = createSlateCursorBackendClient(DashboardService, {
+  const wire = createSlateBackendClient(DashboardService, {
     getAccessToken: async () => await deps.auth.getAccessToken({ backendUrl: getSlateInferenceBackendUrl() }),
     getMachineId: deps.auth.getMachineId,
   }) as unknown as DashboardSkillWireClient

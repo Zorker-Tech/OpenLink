@@ -24,10 +24,7 @@ const FOREIGN = /(\bGrok|\bgrok|Anysphere|anysphere|Bugbot|bugbot|\bSand\b|\bSan
 const KEPT_WIRE_VALUES = [
   "cursor-0226",
   "cursor-app-control",
-  "providerOptions.cursor",
   "cursor-browser-extension",
-  "CURSOR_AGENT_CLI_LOCAL_MODE",
-  ".cursor/rules",
 ];
 
 function sourceFiles(dir: string): string[] {

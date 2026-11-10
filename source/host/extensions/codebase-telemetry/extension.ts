@@ -12,7 +12,7 @@
  */
 
 import { join } from "node:path";
-import { getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { getSlateInferenceBackendUrl } from "../../../adapters/interop/slate-backend/slate-backend-client.ts";
 import { createCodebaseTelemetryUploadCredentialsAdapter } from "../../../adapters/interop/telemetry/codebase-telemetry-upload-credentials-adapter.ts";
 import { getSlateRootDir } from "../../host-paths.ts";
 import { defineHostExtension } from "../host-extensions.ts";

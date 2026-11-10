@@ -9,7 +9,7 @@
  */
 
 import type { CatalogModel } from "../../shared/agents/model-catalog.ts";
-import { createSlateCloudAgentClient, createSlateCloudAgentDashboardClient } from "../../adapters/interop/cursor-backend/slate-cloud-agent-client-adapter.ts";
+import { createSlateCloudAgentClient, createSlateCloudAgentDashboardClient } from "../../adapters/interop/slate-backend/slate-cloud-agent-client-adapter.ts";
 import type { CloudAgentEnvironment } from "./cloud-agent-request-composition.ts";
 import {
   CloudAgentCompletionPoller,

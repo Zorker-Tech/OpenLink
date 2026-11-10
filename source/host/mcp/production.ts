@@ -2,7 +2,7 @@
  * Composes the host-specific services behind the MCP extension ports.
  */
 import { createRealPollingPolicy } from "../extensions/scheduling.ts"
-import { getSlateInferenceBackendUrl } from "../../adapters/interop/cursor-backend/cursor-inference.ts"
+import { getSlateInferenceBackendUrl } from "../../adapters/interop/slate-backend/slate-backend-client.ts"
 import { cleanupLegacyMcpAuthCredentials } from "../../shared/node/mcp/mcp-auth-cleanup.ts"
 import type { McpManagerSettingsPort } from "../../shared/node/mcp/mcp-manager.ts"
 import { getSlateRootDir } from "../host-paths.ts"

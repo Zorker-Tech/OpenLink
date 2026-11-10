@@ -5,7 +5,7 @@ import type { Context } from "../../../packages/context/context.ts"
 import { SmartModeClassifierArgs, type SmartModeClassifierResult } from "../proto/generated/agent/v1/smart_mode_classifier_exec_pb.ts"
 import { DashboardService } from "../proto/generated/aiserver/v1/dashboard_connect.ts"
 import { ClassifySlateAutoReviewRequest, type ClassifySlateAutoReviewResponse } from "../proto/generated/aiserver/v1/dashboard_pb.ts"
-import { createSlateCursorBackendClient, type SlateInferenceOptions } from "../cursor-backend/cursor-inference.ts"
+import { createSlateBackendClient, type SlateInferenceOptions } from "../slate-backend/slate-backend-client.ts"
 import { smartModeClassifierAttemptIndexKey, smartModeClassifierModeKey } from "../../../packages/agent/utils/smart-mode-classifier-measurement.ts"
 
 export class SlateSmartModeClassifierError extends Error {}
@@ -28,7 +28,7 @@ export function createSlateBackendSmartModeClassifierExecutor(options: SlateBack
         readonly classifySlateAutoReview: MethodInfoUnary<ClassifySlateAutoReviewRequest, ClassifySlateAutoReviewResponse>
       }
     }
-    return createSlateCursorBackendClient(service, options)
+    return createSlateBackendClient(service, options)
   })()
 
   return {

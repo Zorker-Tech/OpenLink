@@ -10,7 +10,7 @@ import { LocalLsExecutor, MissingLsTraversalBindingError } from "../../source/pa
 import type { LocalLsOutcome } from "../../source/packages/local-exec/ls.ts";
 
 interface IgnoreRules {
-  listCursorIgnoreFilesByRoot(root: string): Promise<readonly string[]>;
+  listWorkspaceIgnoreFilesByRoot(root: string): Promise<readonly string[]>;
   getRepoBlockExcludeGlobs(root: string): Promise<readonly string[]>;
   isRepoBlocked(path: string): Promise<boolean> | boolean;
 }
@@ -22,7 +22,7 @@ function withRoot(run: (rootDir: string) => Promise<void>): Promise<void> {
 
 function ignoreRules(overrides: Partial<IgnoreRules> = {}): IgnoreRules {
   return {
-    listCursorIgnoreFilesByRoot: async () => [],
+    listWorkspaceIgnoreFilesByRoot: async () => [],
     getRepoBlockExcludeGlobs: async () => [],
     isRepoBlocked: () => false,
     ...overrides,
@@ -55,7 +55,7 @@ describe("the local directory listing", () => {
       const blockedChecks: string[] = [];
       const walkArgs: Array<Record<string, unknown>> = [];
       const ignore = ignoreRules({
-        listCursorIgnoreFilesByRoot: async (root) => [`${root}/.cursorignore`],
+        listWorkspaceIgnoreFilesByRoot: async (root) => [`${root}/.cursorignore`],
         getRepoBlockExcludeGlobs: async () => ["vendor/**"],
         isRepoBlocked: (path) => { blockedChecks.push(path); return path.includes("blocked"); },
       });
@@ -72,7 +72,7 @@ describe("the local directory listing", () => {
       assert.deepEqual(walkArgs[0], {
         root: resolve(rootDir),
         excludeGlobs: ["tmp/**", "vendor/**"],
-        cursorIgnoreFiles: [`${resolve(rootDir)}/.cursorignore`],
+        workspaceIgnoreFiles: [`${resolve(rootDir)}/.cursorignore`],
         sandboxPolicy,
         source: "ls",
       });

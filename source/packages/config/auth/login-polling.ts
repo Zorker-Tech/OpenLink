@@ -5,7 +5,7 @@ import {
   SIGN_IN_POLICY_VIOLATION_ERROR,
 } from "./mdm-sign-in-policy.ts";
 import { proxyFetch } from "./proxy-fetch.ts";
-import { resolveApiBaseUrl, type CursorTokens } from "./login-contracts.ts";
+import { resolveApiBaseUrl, type SlateTokens } from "./login-contracts.ts";
 
 function cancellationRequested(signal?: AbortSignal): boolean {
   return signal?.aborted === true;
@@ -33,7 +33,7 @@ function pauseUntilRetry(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-function hasTokenPair(value: unknown): value is CursorTokens {
+function hasTokenPair(value: unknown): value is SlateTokens {
   if (typeof value !== "object" || value === null) return false;
   return "accessToken" in value
     && typeof value.accessToken === "string"
@@ -47,7 +47,7 @@ export async function pollAuthenticationStatus(args: {
   readonly verifier: string;
   readonly apiBaseUrl?: string;
   readonly signal?: AbortSignal;
-}): Promise<CursorTokens | null> {
+}): Promise<SlateTokens | null> {
   const {
     uuid: sessionId,
     verifier: proofValue,

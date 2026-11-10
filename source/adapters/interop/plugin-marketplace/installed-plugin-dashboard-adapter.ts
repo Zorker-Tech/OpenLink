@@ -7,7 +7,7 @@ import {
   GetEffectiveUserPluginsResponse,
   GetMeRequest,
 } from "../proto/generated/aiserver/v1/dashboard_pb.ts";
-import { createSlateCursorBackendClient, getSlateInferenceBackendUrl } from "../cursor-backend/cursor-inference.ts";
+import { createSlateBackendClient, getSlateInferenceBackendUrl } from "../slate-backend/slate-backend-client.ts";
 import type { SlatePluginDashboardPort, EffectivePluginsResponse } from "../../../packages/plugin-install/backend-marketplace-client.ts";
 
 type DashboardRpcClient = Pick<Client<typeof DashboardService>, "getEffectiveUserPlugins" | "getMe">;
@@ -38,7 +38,7 @@ export function createSlatePluginDashboardPort(auth: {
   getMachineId(): Promise<string>;
 }): SlatePluginDashboardPort {
   const backendUrl = getSlateInferenceBackendUrl();
-  const client = createSlateCursorBackendClient(DashboardService, {
+  const client = createSlateBackendClient(DashboardService, {
     getAccessToken: async () => await auth.getAccessToken({ backendUrl }),
     getMachineId: auth.getMachineId,
   });

@@ -7,7 +7,7 @@
  * platform's own root.
  */
 
-import { getSlateInferenceBackendUrl } from "../../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { getSlateInferenceBackendUrl } from "../../../adapters/interop/slate-backend/slate-backend-client.ts";
 import { createDashboardClient } from "../../../adapters/interop/plugin-marketplace/dashboard-client-adapter.ts";
 import { getSlateRootDir } from "../../host-paths.ts";
 import type { HostExtensionContext } from "../host-extensions.ts";

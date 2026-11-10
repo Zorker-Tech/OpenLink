@@ -7,7 +7,7 @@
  */
 
 import { SLATE_DEFAULT_MODEL_ID } from "../../shared/agents/agent-model.ts";
-import { createCursorGenerateImageService } from "../../adapters/interop/cursor-backend/cursor-generate-image.ts";
+import { createSlateImageGenerator } from "../../adapters/interop/slate-backend/slate-generate-image.ts";
 
 export class SlateGenerateImagePersistError extends Error {}
 
@@ -54,7 +54,7 @@ export interface GenerateImageServiceOptions {
 }
 
 export function createSlateGenerateImageService<Context>(auth: GenerateImageAuth, options: GenerateImageServiceOptions) {
-  const buildGenerator = options.generateImage ?? createCursorGenerateImageService;
+  const buildGenerator = options.generateImage ?? createSlateImageGenerator;
   const generate = buildGenerator(generatorOptions(auth, options.onRequestId));
   return (context: Context, description: string, _filePath: string, referenceImages: readonly GenerateImageReferenceImage[]) =>
     generateAndPersistImage(context, description, referenceImages, generate, options.persistImage);

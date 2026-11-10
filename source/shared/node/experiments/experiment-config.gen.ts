@@ -4774,9 +4774,9 @@ export const DYNAMIC_CONFIGS = {
         client: true,
         fallbackValues: {
           products: {
-            "co.slate.cursor.pro.monthly": "pro",
-            "co.slate.cursor.proplus.monthly": "pro_plus",
-            "co.slate.cursor.ultra.monthly": "ultra",
+            "co.slate.pro.monthly": "pro",
+            "co.slate.proplus.monthly": "pro_plus",
+            "co.slate.ultra.monthly": "ultra",
             "co.slate.slate.ultra.monthly": "ultra"
           }
         }

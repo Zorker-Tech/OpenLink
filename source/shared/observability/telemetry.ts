@@ -11,7 +11,7 @@ const SLATE_TELEMETRY_VOCABULARY = {
   accessBlockedCauses: ["wrong_account_suspected", "seat_revoked", "plan_expired", "no_plan", "unknown"],
   onboardingStepNames: ["meet", "computer-demo", "jobs", "tools", "create", "hand-off"],
   queuedFlushCauseCodes: { nonceMismatch: "SLATE-E0703", capabilityUnavailable: "SLATE-E0704", hostRejected: "SLATE-E0705", superseded: "SLATE-E0706", ackExpired: "SLATE-E0707" },
-  clientPersistenceSlices: ["client-meta.account-slot", "composer-drafts", "host-settings.onboarding", "roster.agent-avatars", "roster.last-roster", "selection.last-agent", "send-journal", "sidebar.last-sections", "transcript.replicas", "ui-agent-refs", "ui-layout", "other"],
+  clientPersistenceSlices: ["client-meta.account-slot", "draft-inputs", "host-settings.onboarding", "roster.agent-avatars", "roster.last-roster", "selection.last-agent", "send-journal", "sidebar.last-sections", "transcript.replicas", "ui-agent-refs", "ui-layout", "other"],
 } as const;
 
 /** The causes an account can be blocked for: a report that says why is one of these. */
