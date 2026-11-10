@@ -82,7 +82,7 @@ describe("a message the agent sent, as the conversation keeps it", () => {
     const kept: Record<string, Record<string, unknown>> = {
       text: { type: "text", content: "c", images: [{ url: "u" }] },
       widget: { type: "widget", widget: { prompt: "Keep?" } },
-      "cursor-agent": { type: "cursor-agent", bcId: "because-1" },
+      "slate-agent": { type: "slate-agent", agentId: "agent-1" },
       "secret-request": { type: "secret-request", secretRequest: { field: 1 } },
       "permission-request": { type: "permission-request", permission: { scope: "read" } },
     };

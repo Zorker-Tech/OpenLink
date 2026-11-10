@@ -64,7 +64,7 @@ const TASK_TYPE_NAMES: Readonly<Record<KnownSlateSubagentKind, SlateSubagentType
   [SlateSubagentKind.DEBUG]: "debug",
   [SlateSubagentKind.VIDEO_REVIEW]: "videoReview",
   [SlateSubagentKind.WATCH_VIDEO]: "watchVideo",
-  [SlateSubagentKind.GUIDE]: "cursor-guide",
+  [SlateSubagentKind.GUIDE]: "guide",
   [SlateSubagentKind.ENVIRONMENT_SETUP]: "vmSetupHelper",
   [SlateSubagentKind.CUSTOM]: "unknown",
   [SlateSubagentKind.UNKNOWN]: "unknown",

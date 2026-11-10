@@ -115,7 +115,7 @@ export function createReadRenderer(formattingOptions: ReadFormattingOptions, spa
         addAmountOfOmittedLines: success.readRange !== undefined &&
           (success.readRange.startLine > 1 || success.readRange.endLine < (success.totalLines ?? 0)),
       })
-      return createStringResult(addReminders(formatted, success.relatedCursorRules ?? [], skills))
+      return createStringResult(addReminders(formatted, success.relatedRules ?? [], skills))
     },
   }
 }

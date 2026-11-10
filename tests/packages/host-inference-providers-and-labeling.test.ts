@@ -108,7 +108,7 @@ describe("the labeling a finished turn leaves", () => {
 
   it("leaves a summarization turn and an empty session alone", async () => {
     const world = labelingWorld();
-    world.messages.push({ role: "assistant", content: "x", providerOptions: { cursor: { inferenceReason: "agent-summarization" } } });
+    world.messages.push({ role: "assistant", content: "x", providerOptions: { slate: { inferenceReason: "agent-summarization" } } });
     const wrapper = wrapExecutorWithSlateFollowupLabeling(world.executor as never, world.client, "m", new Set());
     wrapper.stream(ctxFor("conv-label-2", "req-1"), "inv-1", [], {});
     wrapper.stream(ctxFor("conv-label-2", "req-2"), "inv-2", [], {});

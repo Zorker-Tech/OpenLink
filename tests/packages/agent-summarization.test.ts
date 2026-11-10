@@ -27,7 +27,7 @@ const redacted = (message: CoreMessageLike) => toRedactedCoreMessage(message, Pr
 
 const textMessage = (role: string, text: string) => redacted({ role, content: text })
 const partsMessage = (role: string, parts: Array<Record<string, unknown>>) => redacted({ role, content: parts })
-const summaryMessage = (text: string) => redacted({ role: "user", content: text, providerOptions: { cursor: { isSummary: true } } })
+const summaryMessage = (text: string) => redacted({ role: "user", content: text, providerOptions: { slate: { isSummary: true } } })
 
 test("the instructions are kept out of a compaction and the conversation is not", () => {
   const system = textMessage("system", "you are an agent")

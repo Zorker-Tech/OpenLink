@@ -733,7 +733,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         })
       : { resolve: () => ({}), resolveRules: async () => [] };
 
-    const resolveCloudAgentTitle = async (_context: unknown, bcId: string) => (await looseMethod(cloudAgents, "get")?.(bcId))?.name;
+    const resolveCloudAgentTitle = async (_context: unknown, agentId: string) => (await looseMethod(cloudAgents, "get")?.(agentId))?.name;
     const awaitCloudAgent = looseMethod(cloudAgents, "awaitCompletion");
     const sendToAgent = (toAgentId: string, text: string, images: unknown, priority: boolean) =>
       looseMethod(transcript, "sendToAgent")?.(session.id, toAgentId, text, images, priority);

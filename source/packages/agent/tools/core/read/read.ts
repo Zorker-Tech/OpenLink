@@ -111,7 +111,7 @@ interface ReadMetadata {
   readonly stateHandler?: ReadStateHandler
   readonly hookContextCollector?: HookContextEntry[]
   readonly stepReadPathDedup?: Set<string>
-  readonly cursorRules?: readonly unknown[]
+  readonly rules?: readonly unknown[]
   readonly agentSkills?: readonly ReadSkill[]
   readonly workspacePaths?: readonly string[]
 }
@@ -485,11 +485,11 @@ export function createReadTool(
       meta.stateHandler?.recordReadPath?.(resolvedPath)
       meta.stepReadPathDedup?.add(resolvedPath)
       // The rules and skills that belong to this file are attached to the result, not looked up again later.
-      const cursorRules = fromInteropReadRules(meta.cursorRules ?? [])
-      const relatedRules = cursorRules.filter(rule =>
+      const rules = fromInteropReadRules(meta.rules ?? [])
+      const relatedRules = rules.filter(rule =>
         rule.fullPath !== undefined && normalizeComparablePath(rule.fullPath) === normalizeComparablePath(resolvedPath))
-      result.result.value.relatedCursorRules = relatedRules
-      result.result.value.relatedCursorRulePaths = relatedRules.flatMap(rule => (rule.fullPath === undefined ? [] : [rule.fullPath]))
+      result.result.value.relatedRules = relatedRules
+      result.result.value.relatedRulePaths = relatedRules.flatMap(rule => (rule.fullPath === undefined ? [] : [rule.fullPath]))
       const eligibleSkills = filterItemsForRunEnvironment(Array.from(meta.agentSkills ?? []), meta.stateHandler?.agentType)
       const relatedSkills = eligibleSkills.filter(skill =>
         skill.disableModelInvocation !== true &&

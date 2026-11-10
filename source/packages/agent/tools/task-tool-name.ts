@@ -14,7 +14,7 @@ export interface TaskToolModelInfo {
   readonly promptVersion: string
 }
 
-function composerTaskTool(model: TaskToolModelInfo): string | undefined {
+function legacyModelTaskTool(model: TaskToolModelInfo): string | undefined {
   return model.isComposer1 || model.isComposer15 ? "mcp_task" : undefined
 }
 
@@ -23,5 +23,5 @@ function codexTaskTool(model: TaskToolModelInfo): string | undefined {
 }
 
 export function getTaskToolName(parentModelInfo: TaskToolModelInfo): string {
-  return composerTaskTool(parentModelInfo) ?? codexTaskTool(parentModelInfo) ?? "Task"
+  return legacyModelTaskTool(parentModelInfo) ?? codexTaskTool(parentModelInfo) ?? "Task"
 }

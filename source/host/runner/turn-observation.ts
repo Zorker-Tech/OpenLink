@@ -393,10 +393,10 @@ export function createTurnObservation(
   /** The cloud agents this conversation is watching, as tasks. */
   function cloudAgentTasks(): AsyncTask[] {
     const tasks: AsyncTask[] = [];
-    for (const [bcId, watch] of host.cloudAgentWatchEntries?.() ?? []) {
+    for (const [agentId, watch] of host.cloudAgentWatchEntries?.() ?? []) {
       tasks.push({
         kind: "cloud-agent",
-        id: bcId,
+        id: agentId,
         label: watch.title,
         status: "running",
         startedAtMs: watch.startedAtMs,

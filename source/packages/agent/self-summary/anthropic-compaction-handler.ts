@@ -30,7 +30,7 @@ import {
 } from "../../agent-summarization/pipeline.ts"
 import { prepareMessagesForCompaction } from "../../agent-summarization/prepare-messages.ts"
 import { collectAttachedSkillBlocksFromConversation } from "../../../adapters/interop/agent/compaction-skill-message-adapter.ts"
-import { SUMMARIZATION_CURSOR_PROVIDER_OPTIONS } from "../../agent-summarization/summarization-handler.ts"
+import { SUMMARIZATION_PROVIDER_OPTIONS } from "../../agent-summarization/summarization-handler.ts"
 import type { Context } from "../../context/context.ts"
 import { createLogger, createSpan } from "../../context/index.ts"
 import { createCounter, createHistogram } from "../../metrics/index.ts"
@@ -154,7 +154,7 @@ function compactionRequestMessages(
       _privacyMode: privacySource._privacyMode,
       role: "user",
       content: safeString(finalPrompt),
-      providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
+      providerOptions: SUMMARIZATION_PROVIDER_OPTIONS,
     },
   ]
 }
@@ -340,7 +340,7 @@ export class AnthropicCompactionHandler {
       message: toRedactedCoreMessage({
         role: "user",
         content: wrappedContent,
-        providerOptions: { cursor: { isSummary: true } },
+        providerOptions: { slate: { isSummary: true } },
       }, summaryPrivacyMode),
       summaryTextLength: wrappedContent.length,
     }

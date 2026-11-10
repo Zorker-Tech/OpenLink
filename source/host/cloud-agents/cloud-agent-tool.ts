@@ -96,7 +96,7 @@ export function summaryLine(summary: CloudAgentSummary): string {
   if (summary.isArchived) bits.push("archived");
   if (summary.branchName.length > 0) bits.push(summary.branchName);
   if (summary.prUrl.length > 0) bits.push(summary.prUrl);
-  return `- ${summary.bcId} — ${summary.name.trim() || "(unnamed)"} [${bits.join(", ")}] ${summary.url}`;
+  return `- ${summary.agentId} — ${summary.name.trim() || "(unnamed)"} [${bits.join(", ")}] ${summary.url}`;
 }
 
 /** What one action was given: the caller's words, the tool's deps, and the images loaded for it. */
@@ -128,7 +128,7 @@ async function launchCloudAgent(world: ActionWorld): Promise<string> {
   const modelError = await validateModelSelection(deps.api, args.model, args.model_params);
   if (modelError != null) return modelError;
   if (world.ctx.signal.aborted) return CANCELLED_BEFORE_CLOUD_AGENT_CALL;
-  let result: { bcId: string; url: string };
+  let result: { agentId: string; url: string };
   try {
     result = await deps.api.launch({ prompt, repoUrl, startingRef: args.starting_ref, modelId: args.model, modelParams: args.model_params, images: world.images, title: args.title, environment: toCloudAgentEnvironment(environment) });
   } catch (error) {
@@ -136,21 +136,21 @@ async function launchCloudAgent(world: ActionWorld): Promise<string> {
     if (rejection != null) return `Could not launch the cloud agent: ${rejection}`;
     throw error;
   }
-  deps.launchedIds.add(result.bcId);
-  deps.onLaunched?.({ bcId: result.bcId, ...(args.model ? { model: args.model } : {}) });
-  deps.watch?.(result.bcId, { quietOrigin: quietOriginKey(world) });
+  deps.launchedIds.add(result.agentId);
+  deps.onLaunched?.({ agentId: result.agentId, ...(args.model ? { model: args.model } : {}) });
+  deps.watch?.(result.agentId, { quietOrigin: quietOriginKey(world) });
   const followup = deps.watch
     ? 'You\'re revived automatically when it finishes, so keep working and don\'t poll it — use "reply" to send a follow-up, or "get" if you need its status sooner.'
     : 'Use action "get" with this agent_id to check status, or "reply" to send a follow-up.';
   const pullRequest = environment?.type === "machine" ? " It opens a PR when done only if the worker can push to the repo." : " It will open a PR when done.";
-  return `Launched cloud agent ${result.bcId}.\n${result.url}\nIt runs on ${cloudAgentRuntimeDescription(environment)}.${pullRequest} ${followup}`;
+  return `Launched cloud agent ${result.agentId}.\n${result.url}\nIt runs on ${cloudAgentRuntimeDescription(environment)}.${pullRequest} ${followup}`;
 }
 
 async function listCloudAgents(world: ActionWorld): Promise<string> {
   const { args, deps } = world;
   const scope = args.scope ?? "launched";
   const all = await deps.api.list({ ...(args.limit === undefined ? {} : { limit: args.limit }), ...(args.include_archived === undefined ? {} : { includeArchived: args.include_archived }) });
-  const listed = scope === "launched" ? all.filter((summary) => deps.launchedIds.has(summary.bcId)) : all;
+  const listed = scope === "launched" ? all.filter((summary) => deps.launchedIds.has(summary.agentId)) : all;
   if (listed.length === 0) {
     return scope === "launched" ? 'No cloud agents launched via this tool yet. Use scope: "all" to list every cloud agent on the account.' : "No cloud agents found.";
   }
@@ -167,7 +167,7 @@ async function readCloudAgent(world: ActionWorld): Promise<string> {
   const id = requireCloudAgentField(world.args.agent_id, "agent_id", "get");
   const detail = await world.deps.api.get(id);
   if (detail == null) return `No cloud agent found for ${id}.`;
-  const lines = [`Cloud agent ${detail.bcId} — ${detail.name || "(unnamed)"}`, `Status: ${detail.status}${detail.isArchived ? " (archived)" : ""}`, `URL: ${detail.url}`];
+  const lines = [`Cloud agent ${detail.agentId} — ${detail.name || "(unnamed)"}`, `Status: ${detail.status}${detail.isArchived ? " (archived)" : ""}`, `URL: ${detail.url}`];
   if (detail.branchName) lines.push(`Branch: ${detail.branchName}`);
   if (detail.prUrl) lines.push(`Pull request: ${detail.prUrl}`);
   if (detail.filesChanged > 0) lines.push(`Changes: +${detail.linesAdded}/-${detail.linesRemoved} across ${detail.filesChanged} file(s).`);
@@ -182,7 +182,7 @@ async function dumpCloudAgent(world: ActionWorld): Promise<string> {
   if (!deps.launchedIds.has(id)) {
     return `dump is limited to agents this session has launched, watched, or replied to (not ${id}). Use action "watch" with ${id} first, or inspect the branch with your available repository tools.`;
   }
-  const outcome = await dumpCloudAgentTranscript({ api: deps.api, writeBoxFile: (path, data) => deps.writeBoxFile(world.ctx, path, data), bcId: id });
+  const outcome = await dumpCloudAgentTranscript({ api: deps.api, writeBoxFile: (path, data) => deps.writeBoxFile(world.ctx, path, data), agentId: id });
   if (outcome == null) return `No cloud agent found for ${id}.`;
   const progress =
     outcome.status === "running" || outcome.status === "creating"
@@ -226,13 +226,13 @@ async function replyToCloudAgent(world: ActionWorld): Promise<string> {
   if (world.ctx.signal.aborted) return CANCELLED_BEFORE_CLOUD_AGENT_CALL;
   let result: { runId: string };
   try {
-    result = await deps.api.reply({ bcId: id, prompt, modelId: args.model, modelParams: args.model_params, images: world.images, interrupt });
+    result = await deps.api.reply({ agentId: id, prompt, modelId: args.model, modelParams: args.model_params, images: world.images, interrupt });
   } catch (error) {
     const rejection = backendRejectionMessage(error);
     if (rejection != null) return `Could not send the follow-up: ${rejection}`;
     throw error;
   }
-  deps.onFollowupSent?.({ bcId: id, interrupt, ...(args.model ? { model: args.model } : {}) });
+  deps.onFollowupSent?.({ agentId: id, interrupt, ...(args.model ? { model: args.model } : {}) });
   deps.watch?.(id, { afterFollowup: true, quietOrigin: quietOriginKey(world) });
   deps.launchedIds.add(id);
   const sent = !interrupt

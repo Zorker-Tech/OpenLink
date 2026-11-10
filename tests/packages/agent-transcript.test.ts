@@ -31,7 +31,7 @@ function blobStoreOf(blobs: Map<string, Uint8Array>) {
 const blobId = (name: string) => encoder.encode(name)
 
 const message = (role: string, content: unknown, options: { isSummary?: boolean } = {}): Uint8Array =>
-  encoder.encode(JSON.stringify({ role, content, ...(options.isSummary === true ? { providerOptions: { cursor: { isSummary: true } } } : {}) }))
+  encoder.encode(JSON.stringify({ role, content, ...(options.isSummary === true ? { providerOptions: { slate: { isSummary: true } } } : {}) }))
 
 function harness(options: {
   blobs?: Map<string, Uint8Array>

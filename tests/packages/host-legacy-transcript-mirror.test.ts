@@ -38,7 +38,7 @@ test("only message lines count", () => {
 
 test("a message becomes a transcript line, and the hidden parts do not", () => {
   assert.equal(formatSingleMessageJsonl({ role: "system", content: "sys" }), undefined)
-  assert.equal(formatSingleMessageJsonl({ role: "assistant", providerOptions: { cursor: { isSummary: true } }, content: "summary" }), undefined)
+  assert.equal(formatSingleMessageJsonl({ role: "assistant", providerOptions: { slate: { isSummary: true } }, content: "summary" }), undefined)
   assert.deepEqual(JSON.parse(formatSingleMessageJsonl({ role: "user", content: "hello" }) ?? "null"), { role: "user", message: { content: [{ type: "text", text: "hello" }] } })
   const assistant = formatSingleMessageJsonl({ role: "assistant", content: [{ type: "text", text: "visible" }, { type: "reasoning", text: "thought" }, { type: "image" }, { type: "file", filename: "a.txt" }, { type: "tool-call", toolName: "run", args: { a: 1 } }] }) ?? ""
   const parsed = JSON.parse(assistant)

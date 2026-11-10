@@ -82,7 +82,7 @@ interface ImagePart {
   readonly type: "image";
   readonly image: Uint8Array | string | URL;
   readonly mimeType: string;
-  readonly providerOptions?: { readonly cursor: { readonly mimeType?: string; readonly videoFps?: number } };
+  readonly providerOptions?: { readonly slate: { readonly mimeType?: string; readonly videoFps?: number } };
 }
 type UserContentPart = TextPart | ImagePart;
 
@@ -287,14 +287,14 @@ export async function processSelectedContext(
         type: "image",
         image: new URL(result.videoUrl),
         mimeType: result.mimeType,
-        providerOptions: { cursor: { mimeType: result.mimeType, ...(result.fps === undefined ? {} : { videoFps: result.fps }) } },
+        providerOptions: { slate: { mimeType: result.mimeType, ...(result.fps === undefined ? {} : { videoFps: result.fps }) } },
       });
     } else if (result.videoData) {
       userContent.push({
         type: "image",
         image: `data:${result.mimeType};base64,${Buffer.from(result.videoData).toString("base64")}`,
         mimeType: result.mimeType,
-        ...(result.fps === undefined ? {} : { providerOptions: { cursor: { videoFps: result.fps } } }),
+        ...(result.fps === undefined ? {} : { providerOptions: { slate: { videoFps: result.fps } } }),
       });
     }
   }

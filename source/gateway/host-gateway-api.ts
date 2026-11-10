@@ -549,7 +549,7 @@ export function createHostGatewayApi(
       ),
     getCloudAgentInfo: (args: any) =>
       call(ports.extensions.api("cloud-agents"), "getInfo")(
-        args.bcId,
+        args.agentId,
         args.includeFiles
       ),
     ensureForeverBox: async (args: any) =>

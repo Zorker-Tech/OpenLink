@@ -79,7 +79,7 @@ type RuntimeTool = Record<string, unknown> & {
 }
 
 type ReplayProviderOptions = {
-  readonly cursor?: {
+  readonly slate?: {
     readonly isAlreadySummarizedThinking?: boolean
     readonly modelName?: string
   }
@@ -798,7 +798,7 @@ export async function executeDeferredToolCall(
         experimental_content: resultContent,
       }],
       providerOptions: {
-        cursor: {
+        slate: {
           highLevelToolCallResult: keptResult ?? {},
         },
       },
@@ -917,19 +917,19 @@ function sanitizeContentBufferForReplay(buffer: readonly ResponseContentPart[]):
     if (part.type !== "reasoning") {
       return [part]
     }
-    const isSummary = part.providerOptions?.cursor?.isAlreadySummarizedThinking === true
+    const isSummary = part.providerOptions?.slate?.isAlreadySummarizedThinking === true
     if (!isSummary) {
       return [part]
     }
     if (part.signature !== undefined && part.signature.length > 0) {
-      const modelName = part.providerOptions?.cursor?.modelName
+      const modelName = part.providerOptions?.slate?.modelName
       if (modelName === undefined) {
         return []
       }
       return [{
         type: "redacted-reasoning" as const,
         data: part.signature,
-        providerOptions: { cursor: { modelName } },
+        providerOptions: { slate: { modelName } },
       }]
     }
     return []
@@ -1155,20 +1155,20 @@ function streamModelAndCollectToolCalls(
           const previous = contentAccumulator.at(-1)
           if (previous !== undefined && previous.type === "reasoning" && previous.signature === undefined) {
             previous.text += chunk.textDelta
-            const incomingCursor = incomingOptions?.cursor
+            const incomingSlateOptions = incomingOptions?.slate
             if (
-              incomingCursor?.isAlreadySummarizedThinking === true ||
-              incomingCursor?.modelName !== undefined
+              incomingSlateOptions?.isAlreadySummarizedThinking === true ||
+              incomingSlateOptions?.modelName !== undefined
             ) {
               previous.providerOptions = {
                 ...(previous.providerOptions ?? {}),
-                cursor: {
-                  ...(previous.providerOptions?.cursor ?? {}),
-                  ...(incomingCursor.isAlreadySummarizedThinking === true
+                slate: {
+                  ...(previous.providerOptions?.slate ?? {}),
+                  ...(incomingSlateOptions.isAlreadySummarizedThinking === true
                     ? { isAlreadySummarizedThinking: true }
                     : {}),
-                  ...(incomingCursor.modelName !== undefined
-                    ? { modelName: incomingCursor.modelName }
+                  ...(incomingSlateOptions.modelName !== undefined
+                    ? { modelName: incomingSlateOptions.modelName }
                     : {}),
                 },
               }
@@ -1187,12 +1187,12 @@ function streamModelAndCollectToolCalls(
           const previous = contentAccumulator.at(-1)
           if (previous !== undefined && previous.type === "redacted-reasoning") {
             previous.data += chunk.data
-            if (incomingOptions?.cursor?.modelName !== undefined) {
+            if (incomingOptions?.slate?.modelName !== undefined) {
               previous.providerOptions = {
                 ...(previous.providerOptions ?? {}),
-                cursor: {
-                  ...(previous.providerOptions?.cursor ?? {}),
-                  modelName: incomingOptions.cursor.modelName,
+                slate: {
+                  ...(previous.providerOptions?.slate ?? {}),
+                  modelName: incomingOptions.slate.modelName,
                 },
               }
             }

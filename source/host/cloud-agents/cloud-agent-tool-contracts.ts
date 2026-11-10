@@ -58,7 +58,7 @@ export interface CloudModelCatalogEntry {
 }
 
 export interface CloudAgentSummary {
-  readonly bcId: string
+  readonly agentId: string
   readonly name: string
   readonly status: string
   readonly isArchived: boolean
@@ -87,7 +87,7 @@ export interface CloudAgentLaunchRequest {
 }
 
 export interface CloudAgentReplyRequest {
-  readonly bcId: string
+  readonly agentId: string
   readonly prompt: string
   readonly modelId: string | undefined
   readonly modelParams: Readonly<Record<string, string>> | undefined
@@ -102,11 +102,11 @@ export type CloudAgentRuntimeEnvironment =
   | { readonly type: "environment"; readonly publicId: string | undefined; readonly name: string | undefined }
 
 export interface CloudAgentApi {
-  launch(args: CloudAgentLaunchRequest): Promise<{ bcId: string; url: string }>
+  launch(args: CloudAgentLaunchRequest): Promise<{ agentId: string; url: string }>
   list(args: { limit?: number; includeArchived?: boolean }): Promise<CloudAgentSummary[]>
   listModels(): Promise<CloudModelCatalogEntry[]>
   get(id: string): Promise<CloudAgentDetail | null>
-  getTranscriptDump(args: { bcId: string }): Promise<{ status: string; lineCount: number; jsonl: string } | null>
+  getTranscriptDump(args: { agentId: string }): Promise<{ status: string; lineCount: number; jsonl: string } | null>
   reply(args: CloudAgentReplyRequest): Promise<{ runId: string }>
   rename(id: string, title: string): Promise<unknown>
   cancel(id: string): Promise<unknown>
@@ -134,6 +134,6 @@ export interface CloudAgentToolDeps {
     readonly signal?: AbortSignal
   }) => Promise<{ allowed: boolean; reason: string }>
   readonly watch?: (id: string, options: { quietOrigin: unknown; afterFollowup?: boolean }) => void
-  readonly onLaunched?: (event: { bcId: string; model?: string }) => void
-  readonly onFollowupSent?: (event: { bcId: string; interrupt: boolean; model?: string }) => void
+  readonly onLaunched?: (event: { agentId: string; model?: string }) => void
+  readonly onFollowupSent?: (event: { agentId: string; interrupt: boolean; model?: string }) => void
 }

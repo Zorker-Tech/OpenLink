@@ -106,7 +106,7 @@ test("a request-based session prefers the user's own pick of the family", async 
     userRequestedModelId: "composer-2.5-fast",
   })
   assert.equal(await resolveForcedSubagentModel(args as never), "composer-2.5-fast")
-  assert.equal(logged[0]?.modelResolutionReason, "force_model_user_composer_selection")
+  assert.equal(logged[0]?.modelResolutionReason, "force_model_user_agent_selection")
 })
 
 test("a pick outside the family falls back to the pinned model", async () => {
@@ -287,7 +287,7 @@ test("a normal conversation, and a run of summaries, are not reported", () => {
   const summaries = Array.from({ length: 5 }, () => ({
     role: "user",
     content: "s",
-    providerOptions: { cursor: { isSummary: true } },
+    providerOptions: { slate: { isSummary: true } },
   }))
   warnIfLongTrailingUserMessageRun(context, summaries, "inv-1")
   const notifications = Array.from({ length: 5 }, () => ({
@@ -314,7 +314,7 @@ test("the report counts duplicates among the tail's message ids", () => {
   const tail = [{ role: "assistant", content: "old answer" }, ...Array.from({ length: 13 }, () => ({
     role: "user",
     content: "m",
-    providerOptions: { cursor: { messageId: "same", requestId: "req" } },
+    providerOptions: { slate: { messageId: "same", requestId: "req" } },
   }))]
   warnIfLongTrailingUserMessageRun(context, tail, "inv-1")
   const metadata = entries[0]?.metadata

@@ -23,7 +23,7 @@ The box is near disk capacity. Avoid disk-heavy work and do not fill the remaini
 export interface MessageLike {
   readonly role: string;
   readonly content: string | readonly { readonly type?: string; readonly text?: string; readonly toolName?: string }[];
-  readonly providerOptions?: { readonly cursor?: Readonly<Record<string, unknown>> };
+  readonly providerOptions?: { readonly slate?: Readonly<Record<string, unknown>> };
 }
 
 /** The mark a reminder carries in the provider options, so a reader can tell it from something the user wrote. */
@@ -46,7 +46,7 @@ function carriesReminderText(message: MessageLike, text: string): boolean {
 
 /** Whether a message is marked with this reminder. */
 function isMarked(message: MessageLike, mark: ReminderMark): boolean {
-  return message.providerOptions?.cursor?.[mark] === true;
+  return message.providerOptions?.slate?.[mark] === true;
 }
 
 /** Whether a message is a reminder this build injected, rather than something the user or the agent said. */
@@ -112,7 +112,7 @@ export function hasReminderFiredThisSilentStreak(messages: readonly MessageLike[
 
 /** A reminder as the message that carries it: written as the user, and marked so no reader shows it. */
 function reminderMessage(text: string, mark: ReminderMark): MessageLike {
-  return { role: "user", content: text, providerOptions: { cursor: { [mark]: true } } };
+  return { role: "user", content: text, providerOptions: { slate: { [mark]: true } } };
 }
 
 export function createSendMessageReminderMessage(): MessageLike {
@@ -168,12 +168,12 @@ export class DiskPressureReminderMiddleware extends WrappingMiddleware {
   }
 
   protected reminderFor(messages: readonly MessageLike[]): MessageLike | undefined {
-    const alreadyWarned = messages.some((message) => message.providerOptions?.cursor?.slateDiskPressureReminderEpisodeId === this.episodeId);
+    const alreadyWarned = messages.some((message) => message.providerOptions?.slate?.slateDiskPressureReminderEpisodeId === this.episodeId);
     if (alreadyWarned) return undefined;
     return {
       role: "user",
       content: DISK_PRESSURE_REMINDER_MESSAGE,
-      providerOptions: { cursor: { slateDiskPressureReminder: true, slateDiskPressureReminderEpisodeId: this.episodeId } },
+      providerOptions: { slate: { slateDiskPressureReminder: true, slateDiskPressureReminderEpisodeId: this.episodeId } },
     };
   }
 }

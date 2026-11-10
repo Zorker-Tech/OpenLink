@@ -209,8 +209,13 @@ function shapeThreadable(message: SendMessage, replyTo?: string): SendMessage {
       }
     case "widget":
       return { type: "widget", widget: message.widget, ...thread }
-    case "cursor-agent":
-      return { type: "cursor-agent", bcId: message.bcId, ...thread }
+    case "slate-agent":
+      return {
+        type: "slate-agent",
+        agentId: message.agentId,
+        ...optionalEntry("title", message.title),
+        ...thread,
+      }
     case "secret-request":
       return { type: "secret-request", secretRequest: message.secretRequest, ...thread }
     case "permission-request":

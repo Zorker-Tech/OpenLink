@@ -13,13 +13,13 @@ export function buildOpeningMessageReminder(content: string): MessageLike {
   return {
     role: "user",
     content,
-    providerOptions: { cursor: { slateOpeningMessageReminder: true } },
+    providerOptions: { slate: { slateOpeningMessageReminder: true } },
   }
 }
 
 export function isOpeningMessageReminder(message: MessageLike): boolean {
-  return message.providerOptions?.cursor?.slateOpeningMessageReminder === true
-    || message.providerOptions?.cursor?.slateStartOfTurnAckReminder === true
+  return message.providerOptions?.slate?.slateOpeningMessageReminder === true
+    || message.providerOptions?.slate?.slateStartOfTurnAckReminder === true
 }
 
 export function isPlainTextDeliveryArgs(args: unknown): boolean {

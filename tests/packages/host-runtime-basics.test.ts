@@ -188,7 +188,7 @@ describe("a cloud agent's transcript, dumped into its box", () => {
     const api = { getTranscriptDump: async () => ({ status: "completed", lineCount: 3, jsonl: "{\"a\":1}\n{\"b\":2}\n{\"c\":3}\n" }) };
     const outcome = await dumpCloudAgentTranscript({
       api,
-      bcId: "bc-7",
+      agentId: "bc-7",
       writeBoxFile: async (path, data) => { written.push({ path, size: data.byteLength }); },
     });
     assert.equal(outcome?.lineCount, 3);
@@ -203,7 +203,7 @@ describe("a cloud agent's transcript, dumped into its box", () => {
     let wrote = false;
     const outcome = await dumpCloudAgentTranscript({
       api: { getTranscriptDump: async () => ({ status: "running", lineCount: 0, jsonl: "" }) },
-      bcId: "bc-8",
+      agentId: "bc-8",
       writeBoxFile: async () => { wrote = true; },
     });
     assert.deepEqual(outcome, { status: "running", lineCount: 0 });
@@ -214,7 +214,7 @@ describe("a cloud agent's transcript, dumped into its box", () => {
     const result = { text: "the agent's report" };
     const augmented = await augmentWatchResultWithTranscriptDump({
       api: { getTranscriptDump: async () => { throw new Error("backend is away"); } },
-      bcId: "bc-9",
+      agentId: "bc-9",
       writeBoxFile: async () => {},
       result,
     });

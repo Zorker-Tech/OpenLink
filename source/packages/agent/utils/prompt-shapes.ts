@@ -14,7 +14,7 @@ export interface PromptMessageLike {
    * Provider options carried on the message. The summary marker is written under the provider's own
    * namespace by the summarizer, so the path is a contract between the two.
    */
-  providerOptions?: { cursor?: { isSummary?: boolean } } | undefined
+  providerOptions?: { slate?: { isSummary?: boolean } } | undefined
 }
 
 export interface PromptToolLike {

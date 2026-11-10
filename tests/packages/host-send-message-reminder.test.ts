@@ -24,7 +24,7 @@ type Message = Parameters<typeof getUserMessageText>[0];
 const user = (text: string): Message => ({ role: "user", content: text });
 const textOnly = (text: string): Message => ({ role: "user", content: [{ type: "text", text }] });
 const toolCall = (toolName: string): Message => ({ role: "assistant", content: [{ type: "tool-call", toolName }] });
-const marked = (mark: string): Message => ({ role: "user", content: "a reminder", providerOptions: { cursor: { [mark]: true } } });
+const marked = (mark: string): Message => ({ role: "user", content: "a reminder", providerOptions: { slate: { [mark]: true } } });
 
 describe("reading a message", () => {
   it("takes the text a user wrote, and nothing from a message that is not theirs", () => {
@@ -139,9 +139,9 @@ describe("reminding an agent that has gone quiet", () => {
       return appended;
     };
     assert.equal(warn([user("hello")]).length, 1);
-    const warned = { role: "user", content: "a warning", providerOptions: { cursor: { slateDiskPressureReminder: true, slateDiskPressureReminderEpisodeId: "episode-1" } } };
+    const warned = { role: "user", content: "a warning", providerOptions: { slate: { slateDiskPressureReminder: true, slateDiskPressureReminderEpisodeId: "episode-1" } } };
     assert.deepEqual(warn([user("hello"), warned]), [], "this episode was already warned");
-    const otherEpisode = { ...warned, providerOptions: { cursor: { slateDiskPressureReminder: true, slateDiskPressureReminderEpisodeId: "episode-2" } } };
+    const otherEpisode = { ...warned, providerOptions: { slate: { slateDiskPressureReminder: true, slateDiskPressureReminderEpisodeId: "episode-2" } } };
     assert.equal(warn([user("hello"), otherEpisode]).length, 1, "another episode has not been");
   });
 

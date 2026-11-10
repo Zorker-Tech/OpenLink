@@ -213,7 +213,7 @@ test("the metadata of the first user info is read back as it was written", () =>
       role: "user",
       content: "anything",
       providerOptions: {
-        cursor: { requestContextCompleteness: { files: true }, userInfoSummarizationEpoch: 42, omitCloudWorkerProcedure: true },
+        slate: { requestContextCompleteness: { files: true }, userInfoSummarizationEpoch: 42, omitCloudWorkerProcedure: true },
       },
     },
   ]

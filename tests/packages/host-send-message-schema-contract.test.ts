@@ -50,11 +50,11 @@ describe("SendMessage schema behavior contract", () => {
       url: "https://example.test/a",
       alt: "image",
       widget: { prompt: "Q", options: [{ label: "A" }] },
-      bcId: "bc-1",
+      agentId: "bc-1",
       secret: { label: "Token", connector: "chat", field: "token" },
     } as SendMessageInput;
     const issues = refineSendMessage(value);
-    assert.deepEqual(issues.map(({ path }) => path[0]), ["content", "url", "alt", "bcId", "secret"]);
+    assert.deepEqual(issues.map(({ path }) => path[0]), ["content", "url", "alt", "agentId", "secret"]);
     assert.equal(issues.every(({ message }) => message.includes("cannot ride a type:widget message") && message.includes("Nothing was sent")), true);
   });
 
@@ -100,7 +100,7 @@ describe("SendMessage schema behavior contract", () => {
       secret: { label: " Token ", connector: "chat", field: "token" },
     }).success, true);
     assert.equal(sendMessageParameters.safeParse({ type: "secret-request", secret: { label: "Token", connector: "chat" } }).success, false);
-    assert.equal(sendMessageParameters.safeParse({ type: "slate-agent", bcId: " bc-1 " }).success, true);
+    assert.equal(sendMessageParameters.safeParse({ type: "slate-agent", agentId: " bc-1 " }).success, true);
   });
 
   it("keeps explicit reply addresses and attachment alt text independent of message content", () => {

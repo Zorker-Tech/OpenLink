@@ -66,7 +66,7 @@ type CoreInput = Omit<
 
 /** Values still arriving from the action/request-context wire boundary. */
 export type InteropUserInfoInput = CoreInput & {
-  readonly cursorRules?: readonly CursorRule[] | undefined
+  readonly rules?: readonly CursorRule[] | undefined
   readonly agentSkills?: readonly AgentSkill[] | undefined
   readonly env?: RequestContextEnv | undefined
   readonly gitRepos?: readonly GitRepoInfo[] | undefined
@@ -117,7 +117,7 @@ export function projectInteropCursorRule(rule: CursorRule): UserInfoRule {
   }
 }
 
-export function projectInteropCursorRules(rules: readonly unknown[]): UserInfoRule[] {
+export function projectInteropRules(rules: readonly unknown[]): UserInfoRule[] {
   return rules.map(rule => projectInteropCursorRule(rule as CursorRule))
 }
 
@@ -271,7 +271,7 @@ function cloudTestingSections(input: InteropUserInfoInput) {
   ) {
     return undefined
   }
-  const { cursorRules: _cursorRules, ...ownedInputs } = input
+  const { rules: _rules, ...ownedInputs } = input
   const promptInput = {
     ...ownedInputs,
     modelInfo: adaptInteropCloudTestingModelProfile(input.modelInfo),
@@ -286,7 +286,7 @@ export function renderInteropUserInfo(input: InteropUserInfoInput): string {
   const {
     mode,
     modelInfo,
-    cursorRules: _cursorRules,
+    rules: _rules,
     agentSkills: _agentSkills,
     env: _env,
     gitRepos: _gitRepos,
@@ -305,7 +305,7 @@ export function renderInteropUserInfo(input: InteropUserInfoInput): string {
   const shouldRestrictProjectWorkspace = decodedMode === "project" || input.isRootProject === true
   return UserInfo({
     ...ownedInputs,
-    workspaceRules: projectInteropCursorRules(_cursorRules ?? []),
+    workspaceRules: projectInteropRules(_rules ?? []),
     agentSkills: projectInteropAgentSkills(_agentSkills),
     env: projectInteropEnvironment(_env),
     gitRepos: projectInteropGitRepositories(_gitRepos),

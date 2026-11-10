@@ -30,7 +30,7 @@ interface CoreMessage {
   readonly role: string;
   readonly content?: string | readonly CoreMessagePart[];
   readonly providerOptions?: {
-    readonly cursor?: { readonly isSummary?: boolean };
+    readonly slate?: { readonly isSummary?: boolean };
   };
 }
 
@@ -86,7 +86,7 @@ export function countTranscriptMessageLines(jsonl: string): number {
 
 
 function isSummaryMessage(message: CoreMessage): boolean {
-  return message.providerOptions?.cursor?.isSummary === true;
+  return message.providerOptions?.slate?.isSummary === true;
 }
 
 

@@ -47,7 +47,7 @@ function samplePrompt(): PromptMessageLike[] {
     message("tool", [
       { type: "tool-result", toolCallId: "call-1", toolName: "shell", result: "a\nb" },
     ]),
-    message("user", "the summary of everything so far", { providerOptions: { cursor: { isSummary: true } } }),
+    message("user", "the summary of everything so far", { providerOptions: { slate: { isSummary: true } } }),
   ]
 }
 
@@ -141,7 +141,7 @@ test("each piece of the prompt is counted where it belongs", () => {
 test("the summary is counted as its own category and not as conversation", () => {
   const snapshot = buildPromptTokenBreakdownSnapshot(ctx(), {
     messages: [
-      message("user", "the summary of everything so far", { providerOptions: { cursor: { isSummary: true } } }),
+      message("user", "the summary of everything so far", { providerOptions: { slate: { isSummary: true } } }),
     ],
     tools: [],
     totalUsedTokens: 100,

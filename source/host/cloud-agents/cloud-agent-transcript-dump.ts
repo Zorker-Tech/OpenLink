@@ -7,20 +7,20 @@
  */
 
 /** Where a cloud agent's transcript is dumped: one file per cloud agent, one JSON message per line. */
-export function cloudAgentTranscriptDumpPath(bcId: string): string {
-  return `cloud-agent-transcripts/${bcId}.jsonl`;
+export function cloudAgentTranscriptDumpPath(agentId: string): string {
+  return `cloud-agent-transcripts/${agentId}.jsonl`;
 }
 
 /** What a cloud agent answers with when its transcript is asked for. */
 export interface CloudAgentDumpApi {
-  getTranscriptDump(args: { bcId: string }): Promise<{ status: string; lineCount: number; jsonl: string } | null>;
+  getTranscriptDump(args: { agentId: string }): Promise<{ status: string; lineCount: number; jsonl: string } | null>;
 }
 
 /** What dumping a transcript needs: the agent's API, the box's file writer, and which agent. */
 interface TranscriptDumpDeps {
   readonly api: CloudAgentDumpApi;
   readonly writeBoxFile: (path: string, data: Uint8Array) => Promise<unknown>;
-  readonly bcId: string;
+  readonly agentId: string;
 }
 
 /** A transcript's JSON lines as the bytes the box file is written with. */
@@ -32,11 +32,11 @@ function transcriptBytes(jsonl: string): Uint8Array {
 export async function dumpCloudAgentTranscript(
   deps: TranscriptDumpDeps,
 ): Promise<{ status: string; lineCount: number; file?: { path: string; sizeBytes: number } } | null> {
-  const transcript = await deps.api.getTranscriptDump({ bcId: deps.bcId });
+  const transcript = await deps.api.getTranscriptDump({ agentId: deps.agentId });
   if (transcript == null) return null;
   // A transcript with nothing in it is not a file worth writing.
   if (transcript.lineCount === 0) return { status: transcript.status, lineCount: 0 };
-  const targetPath = cloudAgentTranscriptDumpPath(deps.bcId);
+  const targetPath = cloudAgentTranscriptDumpPath(deps.agentId);
   const bytes = transcriptBytes(transcript.jsonl);
   await deps.writeBoxFile(targetPath, bytes);
   return { status: transcript.status, lineCount: transcript.lineCount, file: { path: targetPath, sizeBytes: bytes.byteLength } };

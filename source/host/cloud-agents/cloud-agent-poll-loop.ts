@@ -72,8 +72,8 @@ export class CloudAgentCompletionPoller {
     for (const cancel of [...this.active.values()]) cancel()
   }
 
-  async awaitCompletion(bcId: string, options?: { waitForRestart?: boolean }): Promise<CloudAgentCompletion> {
-    if (this.disposed) return stoppedWatchResult(bcId)
+  async awaitCompletion(agentId: string, options?: { waitForRestart?: boolean }): Promise<CloudAgentCompletion> {
+    if (this.disposed) return stoppedWatchResult(agentId)
 
     const client = this.getClient()
     const maxWaitMs = this.options.maxWaitMs ?? CLOUD_AGENT_MAX_WAIT_MS
@@ -88,7 +88,7 @@ export class CloudAgentCompletionPoller {
       let poll: { dispose(): void } | undefined
       const outOfTime = (): CloudAgentCompletion => ({
         status: "error",
-        text: `The Slate agent (${bcId}) is still running after ${Math.round(maxWaitMs / 60_000)} minutes. It keeps running on the VM; check the Slate cloud agents dashboard for the result.`,
+        text: `The Slate agent (${agentId}) is still running after ${Math.round(maxWaitMs / 60_000)} minutes. It keeps running on the VM; check the Slate cloud agents dashboard for the result.`,
       })
       const finish = (result: CloudAgentCompletion): void => {
         if (settled) return
@@ -117,7 +117,7 @@ export class CloudAgentCompletionPoller {
           let detailed: DetailedComposer | undefined
           try {
             detailed = (await client.getBackgroundComposerInfo(
-              { bcId, includeDiff: false, doNotThrowIfSetupNotFinished: true },
+              { bcId: agentId, includeDiff: false, doNotThrowIfSetupNotFinished: true },
               { timeoutMs: CLOUD_AGENT_POLL_RPC_TIMEOUT_MS },
             )).composer
           } catch (error) {
@@ -141,11 +141,11 @@ export class CloudAgentCompletionPoller {
             if (now >= deadline) finish(outOfTime())
             return
           }
-          finish(buildWatchResult(bcId, status, detailed))
+          finish(buildWatchResult(agentId, status, detailed))
         } catch {
           finish({
             status: "error",
-            text: `The Slate agent (${bcId}) status check failed unexpectedly. Check the Slate cloud agents dashboard for the result.`,
+            text: `The Slate agent (${agentId}) status check failed unexpectedly. Check the Slate cloud agents dashboard for the result.`,
           })
         }
       }
@@ -154,11 +154,11 @@ export class CloudAgentCompletionPoller {
         const started = this.options.completionPolling.start(pollOnce)
         poll = started
         if (settled) started.dispose()
-        else this.active.set(started, () => finish(stoppedWatchResult(bcId)))
+        else this.active.set(started, () => finish(stoppedWatchResult(agentId)))
       } catch {
         finish({
           status: "error",
-          text: `The Slate agent (${bcId}) status watcher could not start. Check the Slate cloud agents dashboard for the result.`,
+          text: `The Slate agent (${agentId}) status watcher could not start. Check the Slate cloud agents dashboard for the result.`,
         })
       }
     })

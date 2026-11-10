@@ -93,14 +93,14 @@ export function formatDiffStats(detailed?: DetailedComposer): string | undefined
   return summary.length === 0 ? undefined : `Changes: ${summary.join(", ")}.`
 }
 
-export function buildWatchResult(bcId: string, status: CloudAgentRunStatus, detailed?: DetailedComposer) {
+export function buildWatchResult(agentId: string, status: CloudAgentRunStatus, detailed?: DetailedComposer) {
   const normalized = normalizeCloudAgentRunStatus(status)
   const composer = detailed?.composer
   const summary = detailed?.summary?.trim()
   const prUrl = composer?.prUrl || detailed?.prs?.find(pr => pr.prUrl)?.prUrl || ""
 
   if (normalized === "error" || normalized === "expired") {
-    const lines = [`The Slate agent (${bcId}) ${normalized === "expired" ? "expired" : "errored"} before finishing.`]
+    const lines = [`The Slate agent (${agentId}) ${normalized === "expired" ? "expired" : "errored"} before finishing.`]
     const limit = resolveSlateLimitError(detailed)
     if (limit !== null) lines.push("", limit)
     if (summary) lines.push("", summary)

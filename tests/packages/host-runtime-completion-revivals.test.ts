@@ -183,7 +183,7 @@ describe("reviving a conversation for a finished subagent", () => {
 
   it("clears the wakes that settled, runs the revival, and reports what it came to", async () => {
     const world1 = world();
-    world1.revivals.pendingSubagentCompletions.set("agent-1", [subagentDone({ subagentType: "cursor-agent", quietOrigin: quiet }), subagentDone({ subagentAgentId: "sub-2" })]);
+    world1.revivals.pendingSubagentCompletions.set("agent-1", [subagentDone({ subagentType: "slate-agent", quietOrigin: quiet }), subagentDone({ subagentAgentId: "sub-2" })]);
     await world1.revivals.reviveForSubagentCompletions("agent-1");
     // A cloud agent's wake is tracked as one; a local subagent's as another.
     assert.deepEqual(world1.named("clearSettledPendingWake").map((call) => (call.args[0] as { kind: string; workId: string })), [
@@ -191,7 +191,7 @@ describe("reviving a conversation for a finished subagent", () => {
       { agentId: "agent-1", kind: "subagent", workId: "sub-2" },
     ]);
     assert.deepEqual(world1.named("reportSubagentRevival")[0]?.args, [
-      { parentAgentId: "agent-1", outcome: "delivered", sentMessageCount: 2, completionCount: 2, subagentType: "cursor-agent", isQuietOrigin: false },
+      { parentAgentId: "agent-1", outcome: "delivered", sentMessageCount: 2, completionCount: 2, subagentType: "slate-agent", isQuietOrigin: false },
     ]);
     assert.equal(world1.revivals.pendingSubagentCompletions.size, 0);
     assert.equal(world1.revivals.revivingSubagentAgentIds.size, 0);

@@ -24,7 +24,7 @@ const SLATE_SEND_MESSAGE_TOOL_DESCRIPTION = [
   "Share meaningful progress after a result, decision, blocker, or plan change. Combine routine mechanics and retries, and do not leave the user waiting through a long task.",
   "Choose text for conversation. Put images that accompany words on the same text message, and do not use Markdown image syntax. Use attachment for a standalone image, video, or other file. File URLs must be absolute; HTTPS links are accepted.",
   "Use reply_to to thread a reply. A slate-msg reference link jumps to an earlier message without starting a thread; include one only when it helps.",
-  "Use slate-agent with its bcId to refer to a remote Slate agent. In visible text, use its name or say remote agent; never paste an agent URL or identifier.",
+  "Use slate-agent with its agentId to refer to a remote Slate agent. In visible text, use its name or say remote agent; never paste an agent URL or identifier.",
   "Use widget sparingly for a consequential choice or ambiguity only the user can resolve. Ask a natural question and offer one to six verified, real choices. Add help text when it clarifies the choice; each option may have a value, description, and style. Enable allowCustom only when a typed answer is useful. Enable dismissOnMoveOn only for a low-stakes question. After sending a widget, stop. If the user dismisses it, treat that as a decline and do not ask again.",
   "Use secret-request for credentials. It opens a masked secure input; never ask the user to paste a secret into chat, and do not expect to see its value.",
   "When an operating-system permission prompt is needed, attempt the action and let the system show it. For a login, SSO, second factor, CAPTCHA, or payment that only the user can complete, use request_box_help.",
@@ -39,7 +39,7 @@ export interface SlateOutgoingMessage extends Record<string, unknown> {
 
 export interface SendMessageDependencies<Context> {
   readonly isAwaitingUserSelection?: () => boolean;
-  readonly resolveCloudAgentTitle?: (ctx: Context, bcId: string) => Promise<string | undefined>;
+  readonly resolveCloudAgentTitle?: (ctx: Context, agentId: string) => Promise<string | undefined>;
   readonly getIngestAttachment: () => ((sourcePath: string) => Promise<string>) | undefined;
   readonly resolveBoxAttachment?: (ctx: Context, sourcePath: string) => Promise<string | null>;
   readonly readMediaDimensions?: (sourcePath: string) => Promise<{ width: number; height: number } | null>;
@@ -163,12 +163,12 @@ async function composeSlateAgentReference<Context>(
   input: SendMessageInput,
   dependencies: SendMessageDependencies<Context>,
 ): Promise<SlateOutgoingMessage> {
-  const bcId = input.bcId ?? "";
-  if (bcId.length === 0) throw new SlateToolInputError("bcId is required for a slate-agent message");
+  const agentId = input.agentId ?? "";
+  if (agentId.length === 0) throw new SlateToolInputError("agentId is required for a slate-agent message");
 
   let title: string | undefined;
   try {
-    title = (await dependencies.resolveCloudAgentTitle?.(ctx, bcId))?.trim() || undefined;
+    title = (await dependencies.resolveCloudAgentTitle?.(ctx, agentId))?.trim() || undefined;
   } catch {
     title = undefined;
   }
@@ -176,7 +176,7 @@ async function composeSlateAgentReference<Context>(
   const replyTo = replyAddress(input);
   return {
     type: "slate-agent",
-    bcId,
+    agentId,
     ...(title === undefined ? {} : { title }),
     ...(replyTo === undefined ? {} : { reply_to: replyTo }),
   };

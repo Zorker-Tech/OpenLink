@@ -18,7 +18,7 @@ function appendOneFollowupLabel(
   if (conversationId == null || conversationId === "" || requestId == null || requestId === "") return;
 
   const messages = executor.getMessages();
-  if (messages.length === 0 || messages.some((message) => message.providerOptions?.cursor?.inferenceReason === "agent-summarization")) return;
+  if (messages.length === 0 || messages.some((message) => message.providerOptions?.slate?.inferenceReason === "agent-summarization")) return;
 
   const previousRequest = mostRecentRequestByConversation.get(conversationId);
   if (previousRequest !== requestId) mostRecentRequestByConversation.set(conversationId, requestId);

@@ -152,7 +152,7 @@ export class CompletionRevivals {
       pendingByConversation: this.pendingSubagentCompletions,
       clearSettledWake: completion => this.tm.pendingWakes.clearSettledPendingWake({
         agentId,
-        kind: completion.subagentType === "cursor-agent" ? "cloud-agent" : "subagent",
+        kind: completion.subagentType === "slate-agent" ? "cloud-agent" : "subagent",
         workId: completion.subagentAgentId,
       }),
       run: async completions => {

@@ -58,8 +58,8 @@ export interface ShellCommandActionInteropHandle {
   createStoredOutput(stdout: string, stderr: string, exitCode: number): SlateStoredShellResult;
 }
 
-type ShellActionUserInfoInput = Omit<InteropUserInfoInput, "cursorRules" | "mode"> & {
-  readonly rules?: InteropUserInfoInput["cursorRules"]
+type ShellActionUserInfoInput = Omit<InteropUserInfoInput, "rules" | "mode"> & {
+  readonly rules?: InteropUserInfoInput["rules"]
   readonly mode: SlateModeValue
 }
 
@@ -87,7 +87,7 @@ export function renderShellActionUserInfo(
   input: ShellActionUserInfoInput,
 ): string {
   const { rules, mode, ...rest } = input;
-  return renderInteropUserInfo({ ...rest, cursorRules: rules, mode: toInteropAgentMode(mode) });
+  return renderInteropUserInfo({ ...rest, rules, mode: toInteropAgentMode(mode) });
 }
 
 /** Projects Slate mode before reading the model-visible notes settings. */
@@ -236,7 +236,7 @@ export function adaptShellCommandAction(action: SlateShellCommandActionPayload):
     providerOptionsForPromptPlacement(placement) {
       return placement === undefined
         ? undefined
-        : { providerOptions: { cursor: { composer2CloudTestingSectionsPlacement: placement } } };
+        : { providerOptions: { slate: { composer2CloudTestingSectionsPlacement: placement } } };
     },
     createTurn: (ctx, stateHandler) => stateHandler.createShellTurn(ctx, shellInvocation),
     run(ctx, resourceAccessor) {

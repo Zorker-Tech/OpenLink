@@ -179,7 +179,7 @@ export async function requestPromptSuggestion(
       role: "user",
       content: promptSuggestionUserMessage(readsLargerContext),
       providerOptions: {
-        cursor: {
+        slate: {
           inferenceReason: "prompt-suggestion",
           featureType: "promptSuggestion",
         },

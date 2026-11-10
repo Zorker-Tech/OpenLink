@@ -77,7 +77,7 @@ function realTurn(append: unknown[], mode: unknown = "user-message"): unknown {
   return turn;
 }
 function resumeInput(content: unknown, contracts?: Record<string, unknown>) {
-  const assistant = { role: "assistant", content, ...(contracts === undefined ? {} : { providerOptions: { cursor: { pendingToolExecutionContracts: contracts } } }) };
+  const assistant = { role: "assistant", content, ...(contracts === undefined ? {} : { providerOptions: { slate: { pendingToolExecutionContracts: contracts } } }) };
   return JSON.stringify(assistant);
 }
 const tool = { name: "outer", toolIdentifier: "outer", execute: async () => ({ content: [] }) };

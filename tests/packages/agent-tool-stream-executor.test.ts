@@ -222,7 +222,7 @@ test("a call that succeeds is answered with what the model reads", async () => {
   assert.equal(content[0]?.toolCallId, "call-1")
   assert.equal(content[0]?.toolName, "Read")
   assert.equal(Array.isArray(content[0]?.experimental_content), true)
-  const kept = (result.providerOptions as { cursor: { highLevelToolCallResult: { isError: boolean } } }).cursor.highLevelToolCallResult
+  const kept = (result.providerOptions as { slate: { highLevelToolCallResult: { isError: boolean } } }).slate.highLevelToolCallResult
   assert.equal(kept.isError, false)
 })
 
@@ -232,7 +232,7 @@ test("a call that fails is answered with the failure and its messages", async ()
     descriptor: { toolCallId: "call-1", toolName: "Read", args: {} },
     tools: [failing],
   })
-  const kept = (result.providerOptions as { cursor: { highLevelToolCallResult: { isError: boolean; rawErrorMessages: string[] } } }).cursor.highLevelToolCallResult
+  const kept = (result.providerOptions as { slate: { highLevelToolCallResult: { isError: boolean; rawErrorMessages: string[] } } }).slate.highLevelToolCallResult
   assert.equal(kept.isError, true)
   assert.deepEqual(kept.rawErrorMessages, ["the file is gone"])
 })
@@ -248,7 +248,7 @@ test("a retryable failure is answered with its classification", async () => {
     tools: [retryable],
     record: (_ctx, _result, _name, classification) => { recorded.push(classification) },
   })
-  const kept = (result.providerOptions as { cursor: { highLevelToolCallResult: { isError: boolean } } }).cursor.highLevelToolCallResult
+  const kept = (result.providerOptions as { slate: { highLevelToolCallResult: { isError: boolean } } }).slate.highLevelToolCallResult
   assert.equal(kept.isError, true)
   assert.deepEqual(recorded, [ToolErrorClassification.PROVIDER_ERROR])
 })
@@ -532,7 +532,7 @@ test("a failure keeps the messages its causes carry, once each", async () => {
     descriptor: { toolCallId: "call-1", toolName: "Read", args: {} },
     tools: [failing],
   })
-  const kept = (result.providerOptions as { cursor: { highLevelToolCallResult: { rawErrorMessages?: string[] } } }).cursor.highLevelToolCallResult
+  const kept = (result.providerOptions as { slate: { highLevelToolCallResult: { rawErrorMessages?: string[] } } }).slate.highLevelToolCallResult
   assert.deepEqual(kept.rawErrorMessages, ["outer", "inner"])
 })
 
@@ -557,9 +557,9 @@ test("telemetry is refined from the arguments once they are complete", async () 
 test("summarized reasoning is replayed as the redacted form, or dropped", async () => {
   const { executor } = streamExecutor(
     [
-      { type: "reasoning", textDelta: "thought", providerOptions: { cursor: { isAlreadySummarizedThinking: true, modelName: "model-x" } } },
+      { type: "reasoning", textDelta: "thought", providerOptions: { slate: { isAlreadySummarizedThinking: true, modelName: "model-x" } } },
       { type: "reasoning-signature", signature: "sig-1" },
-      { type: "reasoning", textDelta: "", providerOptions: { cursor: { isAlreadySummarizedThinking: true } } },
+      { type: "reasoning", textDelta: "", providerOptions: { slate: { isAlreadySummarizedThinking: true } } },
       { type: "reasoning-signature", signature: "sig-2" },
       { type: "reasoning", textDelta: "plain thought" },
       { type: "text-delta", textDelta: "the answer" },
@@ -574,7 +574,7 @@ test("summarized reasoning is replayed as the redacted form, or dropped", async 
   await consumeStream(stream)
   const response = await stream.response
   assert.deepEqual(response.messages[0]?.content, [
-    { type: "redacted-reasoning", data: "sig-1", providerOptions: { cursor: { modelName: "model-x" } } },
+    { type: "redacted-reasoning", data: "sig-1", providerOptions: { slate: { modelName: "model-x" } } },
     { type: "reasoning", text: "plain thought" },
     { type: "text", text: "the answer" },
   ])

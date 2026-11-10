@@ -26,7 +26,7 @@ import { toRedactedCoreMessage } from "../../source/packages/redaction/message-r
 
 const message = (role: string, text: string, options: { isSummary?: boolean } = {}): SelfSummaryMessage =>
   toRedactedCoreMessage(
-    { role, content: text, ...(options.isSummary === true ? { providerOptions: { cursor: { isSummary: true } } } : {}) },
+    { role, content: text, ...(options.isSummary === true ? { providerOptions: { slate: { isSummary: true } } } : {}) },
     PrivacyMode.NO_STORAGE,
   ) as never
 
@@ -45,7 +45,7 @@ test("a summary is not a user message unless the caller wants it to count", () =
   assert.equal(findLastUserMessageIndex(messages, { includeSummaryMessages: true }), 1)
 
   const truthyMarker = toRedactedCoreMessage(
-    { role: "user", content: "an earlier summary", providerOptions: { cursor: { isSummary: "marked" } } },
+    { role: "user", content: "an earlier summary", providerOptions: { slate: { isSummary: "marked" } } },
     PrivacyMode.NO_STORAGE,
   ) as SelfSummaryMessage
   assert.equal(findLastUserMessageIndex([messages[0]!, truthyMarker]), 0)

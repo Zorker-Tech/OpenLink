@@ -39,7 +39,7 @@ interface ParsedPendingMessage {
   readonly role: string
   readonly content: unknown
   readonly providerOptions?: {
-    readonly cursor?: {
+    readonly slate?: {
       readonly pendingToolCallStartedAtMs?: unknown
       readonly highLevelToolCallResult?: unknown
     } | undefined
@@ -48,10 +48,10 @@ interface ParsedPendingMessage {
 
 function elapsedForPendingCall(pendingMessage: {
   readonly providerOptions?: {
-    readonly cursor?: { readonly pendingToolCallStartedAtMs?: unknown } | undefined
+    readonly slate?: { readonly pendingToolCallStartedAtMs?: unknown } | undefined
   } | undefined
 }): number | undefined {
-  const startedAt = pendingMessage.providerOptions?.cursor?.pendingToolCallStartedAtMs
+  const startedAt = pendingMessage.providerOptions?.slate?.pendingToolCallStartedAtMs
   if (typeof startedAt !== "number" || !Number.isFinite(startedAt)) return undefined
   return Math.max(0, Date.now() - startedAt)
 }
@@ -153,7 +153,7 @@ export function buildInterruptedPendingToolCallMessages(
         role: "tool",
         content: resultParts,
         providerOptions: {
-          cursor: {
+          slate: {
             highLevelToolCallResult: {
               output: resultParts.map(result => result.result),
               isError: rawErrorMessages.length > 0,

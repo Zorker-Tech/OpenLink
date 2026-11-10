@@ -15,10 +15,10 @@ import { PrivacyCapability } from "../../source/packages/redaction/classificatio
 // the harness
 // ---------------------------------------------------------------------------------------------
 
-const plan = (content: string, options: { name?: string; composerId?: string } = {}): DurablePlan => ({
+const plan = (content: string, options: { name?: string; agentId?: string } = {}): DurablePlan => ({
   content: { unwrap: () => content },
   ...(options.name === undefined ? {} : { name: options.name }),
-  ...(options.composerId === undefined ? {} : { composerId: options.composerId }),
+  ...(options.agentId === undefined ? {} : { agentId: options.agentId }),
 })
 
 const enrichments = (overrides: Partial<DurableBlockEnrichments> = {}): DurableBlockEnrichments => ({
@@ -97,17 +97,17 @@ test("the transcript block does not carry a second blank line of its own", () =>
 // ---------------------------------------------------------------------------------------------
 
 test("the plan is carried as a file the model can read", () => {
-  const enrich = enrichments({ currentPlan: plan("the plan body", { name: "my-plan", composerId: "composer-1" }) })
+  const enrich = enrichments({ currentPlan: plan("the plan body", { name: "my-plan", agentId: "composer-1" }) })
   const appended = appendDurableBlocks("external", renderDurableBlocks("external", enrich))
   assert.match(appended, /10\. Current plan mode progress:/)
-  assert.match(appended, /<file_contents path="cursor-plan:\/\/composer-1\/my-plan\.plan\.md" isFullFile="true">\nthe plan body\n<\/file_contents>/)
+  assert.match(appended, /<file_contents path="slate-plan:\/\/composer-1\/my-plan\.plan\.md" isFullFile="true">\nthe plan body\n<\/file_contents>/)
 })
 
 test("a plan with no name is the plan, and one already named as a plan file is not named twice", () => {
   const unnamed = appendDurableBlocks("external", renderDurableBlocks("external", enrichments({ currentPlan: plan("body") })))
-  assert.match(unnamed, /cursor-plan:\/\/\/plan\.plan\.md/)
+  assert.match(unnamed, /slate-plan:\/\/\/plan\.plan\.md/)
   const named = appendDurableBlocks("external", renderDurableBlocks("external", enrichments({ currentPlan: plan("body", { name: "already.plan.md" }) })))
-  assert.match(named, /cursor-plan:\/\/\/already\.plan\.md/)
+  assert.match(named, /slate-plan:\/\/\/already\.plan\.md/)
 })
 
 test("a plan with nothing in it is not carried", () => {
@@ -128,7 +128,7 @@ test("a plan is unwrapped as content the platform may keep", () => {
 })
 
 test("one compactor wants the plan as a plan of its own", () => {
-  const enrich = enrichments({ currentPlan: plan("the plan body", { composerId: "composer-1" }) })
+  const enrich = enrichments({ currentPlan: plan("the plan body", { agentId: "composer-1" }) })
   const appended = appendDurableBlocks("xai-compaction", renderDurableBlocks("xai-compaction", enrich))
   assert.match(appended, /<current_plan>\nthe plan body\n<\/current_plan>/)
   assert.equal(appended.includes("file_contents"), false)

@@ -4,10 +4,10 @@ function counterpartProviderOptions(value: unknown): Record<string, unknown> | u
     return undefined;
   }
   const providers = value.providerOptions;
-  if (providers === null || typeof providers !== "object" || !("cursor" in providers)) {
+  if (providers === null || typeof providers !== "object" || !("slate" in providers)) {
     return undefined;
   }
-  const options = providers.cursor;
+  const options = providers.slate;
   return options !== null && typeof options === "object"
     ? options as Record<string, unknown>
     : undefined;

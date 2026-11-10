@@ -28,7 +28,7 @@ export async function listCloudAgents(
     .map((item) => {
       const id = String(item.bcId ?? "");
       return {
-        bcId: id,
+        agentId: id,
         name: String(item.name ?? ""),
         status: mapRunStatus(item.status),
         branchName: String(item.branchName ?? ""),
@@ -52,7 +52,7 @@ export async function getCloudAgent(client: CloudAgentClient, rawId: string) {
   if (run == null) return null;
 
   return {
-    bcId: id,
+    agentId: id,
     name: run.name ?? "",
     status: mapRunStatus(run.status),
     branchName: resolveBranchName(detailed),
@@ -70,7 +70,7 @@ export async function getCloudAgent(client: CloudAgentClient, rawId: string) {
 export async function replyToCloudAgent(
   client: CloudAgentClient,
   args: {
-    readonly bcId: string;
+    readonly agentId: string;
     readonly prompt: string;
     readonly images?: readonly { readonly data: Uint8Array; readonly path?: string; readonly mimeType?: string }[];
     readonly interrupt?: boolean;
@@ -80,7 +80,7 @@ export async function replyToCloudAgent(
 ): Promise<{ readonly runId: string | undefined }> {
   const requestedModel = buildCloudAgentRequestedModel(args.modelId, args.modelParams);
   const response = await client.addAsyncFollowupBackgroundComposer({
-    bcId: args.bcId,
+    bcId: args.agentId,
     followupConversationAction: buildCloudAgentConversationAction(buildCloudAgentUserMessage({
       prompt: args.prompt,
       ...(args.images === undefined ? {} : { images: args.images }),
@@ -92,24 +92,24 @@ export async function replyToCloudAgent(
   return { runId: response.runId };
 }
 
-export async function pauseCloudAgent(client: CloudAgentClient, bcId: string): Promise<void> {
-  await client.pauseBackgroundComposer({ bcId, source: CLOUD_AGENT_REQUEST_SOURCE });
+export async function pauseCloudAgent(client: CloudAgentClient, agentId: string): Promise<void> {
+  await client.pauseBackgroundComposer({ bcId: agentId, source: CLOUD_AGENT_REQUEST_SOURCE });
 }
 
-export async function renameCloudAgent(client: CloudAgentClient, bcId: string, name: string): Promise<void> {
-  await client.renameBackgroundComposer({ bcId, newName: name });
+export async function renameCloudAgent(client: CloudAgentClient, agentId: string, name: string): Promise<void> {
+  await client.renameBackgroundComposer({ bcId: agentId, newName: name });
 }
 
-export async function setCloudAgentArchived(client: CloudAgentClient, bcId: string, archived: boolean): Promise<void> {
-  await client.archiveBackgroundComposer({ bcId, unarchive: !archived, source: CLOUD_AGENT_REQUEST_SOURCE });
+export async function setCloudAgentArchived(client: CloudAgentClient, agentId: string, archived: boolean): Promise<void> {
+  await client.archiveBackgroundComposer({ bcId: agentId, unarchive: !archived, source: CLOUD_AGENT_REQUEST_SOURCE });
 }
 
-export async function deleteCloudAgent(client: CloudAgentClient, bcId: string): Promise<void> {
-  await client.deleteBackgroundComposer({ bcId });
+export async function deleteCloudAgent(client: CloudAgentClient, agentId: string): Promise<void> {
+  await client.deleteBackgroundComposer({ bcId: agentId });
 }
 
-export async function listCloudAgentArtifacts(client: CloudAgentClient, bcId: string) {
-  const response = await client.listBackgroundComposerArtifacts({ bcId });
+export async function listCloudAgentArtifacts(client: CloudAgentClient, agentId: string) {
+  const response = await client.listBackgroundComposerArtifacts({ bcId: agentId });
   return response.artifacts.map((artifact) => ({ path: artifact.absolutePath, sizeBytes: Number(artifact.sizeBytes) }));
 }
 
@@ -118,15 +118,15 @@ export async function getCloudAgentTranscriptDump(
   convertConversation: (conversation: unknown) => readonly unknown[],
   rawId: string,
 ) {
-  const bcId = rawId.trim();
-  if (bcId.length === 0) return null;
+  const agentId = rawId.trim();
+  if (agentId.length === 0) return null;
 
-  const conversation = await client.getBackgroundComposerConversation({ bcId });
+  const conversation = await client.getBackgroundComposerConversation({ bcId: agentId });
   const dump = buildTranscriptJsonl(conversation.conversation, convertConversation);
   let status = "unknown";
   try {
     const response = await client.getBackgroundComposerInfo({
-      bcId,
+      bcId: agentId,
       includeDiff: false,
       doNotThrowIfSetupNotFinished: true,
     });
@@ -139,10 +139,10 @@ export async function getCloudAgentTranscriptDump(
 
 export async function getCloudAgentInfo(
   client: CloudAgentClient,
-  bcId: string,
+  agentId: string,
   includeFiles: boolean,
 ) {
-  const id = bcId.trim();
+  const id = agentId.trim();
   if (id.length === 0) return null;
 
   let response: Awaited<ReturnType<CloudAgentClient["getBackgroundComposerInfo"]>>;
@@ -169,7 +169,7 @@ export async function getCloudAgentInfo(
   ]);
 
   return {
-    bcId: id,
+    agentId: id,
     status: mapRunStatus(composer?.status),
     name: composer?.name ?? "",
     prompt: detailed?.prompt?.text ?? "",
@@ -201,9 +201,9 @@ export async function fetchCloudAgentLivePrState(
   }
 }
 
-export async function fetchCloudAgentFileChanges(client: CloudAgentClient, bcId: string) {
+export async function fetchCloudAgentFileChanges(client: CloudAgentClient, agentId: string) {
   try {
-    const response = await client.getOptimizedDiffDetails({ bcId, excludeBeforeAfterDiffs: true });
+    const response = await client.getOptimizedDiffDetails({ bcId: agentId, excludeBeforeAfterDiffs: true });
     const files: { path: string; added: number; removed: number }[] = [];
     for (const diff of response.diff?.diffs ?? []) {
       const file = toFileChange(diff);

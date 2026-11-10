@@ -68,7 +68,7 @@ test("project mode removes counterpart root-changing tools at the adapter bounda
   } as never)
   const rendered = renderInteropUserInfo({
     mode: AgentMode.PROJECT,
-    cursorRules: [new CursorRule({
+    rules: [new CursorRule({
       fullPath: "/repo/.slate/rules/style.md",
       content: "Use the workspace formatter.",
       source: CursorRuleSource.USER,

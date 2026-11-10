@@ -4,8 +4,8 @@ export function isInteropSummaryPromptMessage(message: unknown): boolean {
   const fields = message as {
     readonly role?: unknown
     readonly providerOptions?: {
-      readonly cursor?: { readonly isSummary?: unknown } | undefined
+      readonly slate?: { readonly isSummary?: unknown } | undefined
     } | undefined
   }
-  return fields.role === "user" && fields.providerOptions?.cursor?.isSummary === true
+  return fields.role === "user" && fields.providerOptions?.slate?.isSummary === true
 }

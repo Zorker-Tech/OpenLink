@@ -23,7 +23,7 @@ const messageObject = z.object({
   reply_to: replyAddressField,
   channel: channelField,
   widget: widgetField,
-  bcId: slateAgentIdField,
+  agentId: slateAgentIdField,
   secret: secretRequestField,
 });
 

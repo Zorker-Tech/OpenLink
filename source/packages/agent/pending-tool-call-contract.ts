@@ -57,7 +57,7 @@ type IdentityResolver = (input: {
 
 interface ContractCarrier {
   readonly providerOptions?: {
-    readonly cursor?: {
+    readonly slate?: {
       readonly pendingToolExecutionContracts?: unknown
     }
   }
@@ -113,7 +113,7 @@ function readContractShape(value: unknown): PendingToolExecutionContract | undef
 export function readPendingToolExecutionContracts(
   message: ContractCarrier,
 ): Map<string, PendingToolExecutionContract> {
-  const stored = message.providerOptions?.cursor?.pendingToolExecutionContracts
+  const stored = message.providerOptions?.slate?.pendingToolExecutionContracts
   const contracts = new Map<string, PendingToolExecutionContract>()
   if (stored === undefined || stored === null || typeof stored !== "object") {
     return contracts
@@ -190,12 +190,12 @@ export function enrichPendingToolCallJson(
     const message = JSON.parse(pendingJson) as Record<string, unknown> & {
       content?: unknown
       providerOptions?: Record<string, unknown> & {
-        cursor?: Record<string, unknown>
+        slate?: Record<string, unknown>
       }
     }
     // Contracts already on the message are kept: an earlier turn's calls are still pending.
     const contracts: Record<string, unknown> = {
-      ...(message.providerOptions?.cursor?.pendingToolExecutionContracts as
+      ...(message.providerOptions?.slate?.pendingToolExecutionContracts as
         | Record<string, unknown>
         | undefined) ?? {},
     }
@@ -215,11 +215,11 @@ export function enrichPendingToolCallJson(
       }
     }
     const previousStartedAtMs =
-      message.providerOptions?.cursor?.pendingToolCallStartedAtMs
+      message.providerOptions?.slate?.pendingToolCallStartedAtMs
     message.providerOptions = {
       ...message.providerOptions,
-      cursor: {
-        ...message.providerOptions?.cursor,
+      slate: {
+        ...message.providerOptions?.slate,
         // A call that already has a start time keeps it; the first one is the truth.
         ...(input.pendingToolCallStartedAtMs !== undefined
           ? {

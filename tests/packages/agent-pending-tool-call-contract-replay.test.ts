@@ -35,7 +35,7 @@ const build = (input: { toolCallId?: string; toolName?: string; args?: unknown; 
 describe("the contracts a pending tool call carries", () => {
   it("reads back only whole contracts stored under their own key", () => {
     const whole = build();
-    const message = { providerOptions: { cursor: { pendingToolExecutionContracts: {
+    const message = { providerOptions: { slate: { pendingToolExecutionContracts: {
       "call-1": whole,
       "call-2": whole,
       "call-3": { toolCallId: "call-3", outerToolName: "Read" },
@@ -56,10 +56,10 @@ describe("the contracts a pending tool call carries", () => {
   it("writes the contracts onto the pending message and keeps the first start time", () => {
     const pending = JSON.stringify({ role: "user", content: [{ type: "tool-call", toolCallId: "call-1", toolName: "Read", args: { path: "/a" } }] });
     const enriched = JSON.parse(enrichPendingToolCallJson(pending, { resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: ["Read"], pendingToolCallStartedAtMs: 1_000 }));
-    assert.equal(enriched.providerOptions.cursor.pendingToolCallStartedAtMs, 1_000);
-    assert.equal(enriched.providerOptions.cursor.pendingToolExecutionContracts["call-1"].toolIdentifier, "read");
-    const alreadyStarted = JSON.parse(enrichPendingToolCallJson(JSON.stringify({ role: "user", content: [], providerOptions: { cursor: { pendingToolCallStartedAtMs: 500 } } }), { resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: [], pendingToolCallStartedAtMs: 1_000 }));
-    assert.equal(alreadyStarted.providerOptions.cursor.pendingToolCallStartedAtMs, 500, "the first start time is the truth");
+    assert.equal(enriched.providerOptions.slate.pendingToolCallStartedAtMs, 1_000);
+    assert.equal(enriched.providerOptions.slate.pendingToolExecutionContracts["call-1"].toolIdentifier, "read");
+    const alreadyStarted = JSON.parse(enrichPendingToolCallJson(JSON.stringify({ role: "user", content: [], providerOptions: { slate: { pendingToolCallStartedAtMs: 500 } } }), { resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: [], pendingToolCallStartedAtMs: 1_000 }));
+    assert.equal(alreadyStarted.providerOptions.slate.pendingToolCallStartedAtMs, 500, "the first start time is the truth");
     assert.equal(enrichPendingToolCallJson("not json", { resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: [] }), "not json");
   });
 });

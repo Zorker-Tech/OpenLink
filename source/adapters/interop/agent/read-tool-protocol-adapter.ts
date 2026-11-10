@@ -88,13 +88,13 @@ function decodeToolSuccess(value: unknown): ReadToolSuccessModel | undefined {
   if (success === undefined) return undefined
   const originalModel = modelByInteropSuccess.get(success)
   if (originalModel !== undefined) return originalModel
-  const relatedCursorRules = Array.isArray(success.relatedCursorRules)
+  const relatedRules = Array.isArray(success.relatedCursorRules)
     ? success.relatedCursorRules.flatMap(rule => {
       const decoded = decodeRule(rule)
       return decoded === undefined ? [] : [decoded]
     })
     : []
-  const relatedCursorRulePaths = Array.isArray(success.relatedCursorRulePaths)
+  const relatedRulePaths = Array.isArray(success.relatedCursorRulePaths)
     ? success.relatedCursorRulePaths.filter((path): path is string => typeof path === "string")
     : []
   const readRange = decodeRange(success.readRange)
@@ -105,8 +105,8 @@ function decodeToolSuccess(value: unknown): ReadToolSuccessModel | undefined {
     exceededLimit: booleanField(success, "exceededLimit"),
     totalLines: numberField(success, "totalLines"),
     fileSize: numberField(success, "fileSize"),
-    relatedCursorRules,
-    relatedCursorRulePaths,
+    relatedRules,
+    relatedRulePaths,
     ...(readRange === undefined ? {} : { readRange }),
     ...(typeof success.includeLineNumbers === "boolean" ? { includeLineNumbers: success.includeLineNumbers } : {}),
     ...(output === undefined ? {} : { output }),
@@ -150,9 +150,9 @@ function encodeToolSuccess(success: ReadToolSuccessModel): ReadToolSuccess {
     path: success.path,
     ...(readRange === undefined ? {} : { readRange }),
     ...(success.includeLineNumbers === undefined ? {} : { includeLineNumbers: success.includeLineNumbers }),
-    ...(success.relatedCursorRulePaths === undefined ? {} : { relatedCursorRulePaths: success.relatedCursorRulePaths }),
-    ...(success.relatedCursorRules === undefined ? {} : {
-      relatedCursorRules: success.relatedCursorRules.map(rule => new CursorRule({
+    ...(success.relatedRulePaths === undefined ? {} : { relatedCursorRulePaths: success.relatedRulePaths }),
+    ...(success.relatedRules === undefined ? {} : {
+      relatedCursorRules: success.relatedRules.map(rule => new CursorRule({
         ...(rule.fullPath === undefined ? {} : { fullPath: rule.fullPath }),
         content: rule.content,
       })),

@@ -1,5 +1,5 @@
 export const SEND_MESSAGE_TYPES = ["text", "attachment", "widget", "slate-agent", "secret-request"] as const;
-export const SEND_MESSAGE_TYPE_DESCRIPTION = "text for chat messages, attachment for actual files or standalone media, widget for an interactive question with selectable options, slate-agent to reference a Slate cloud agent by its bcId (renders as a card that opens the agent in Slate on click), secret-request to ask the user for a credential through a secure masked input (never a chat paste).";
+export const SEND_MESSAGE_TYPE_DESCRIPTION = "text for chat messages, attachment for actual files or standalone media, widget for an interactive question with selectable options, slate-agent to reference a Slate cloud agent by its agentId (renders as a card that opens the agent in Slate on click), secret-request to ask the user for a credential through a secure masked input (never a chat paste).";
 
 export type SendMessageType = typeof SEND_MESSAGE_TYPES[number];
 
@@ -12,7 +12,7 @@ export interface SendMessageInput {
   readonly reply_to?: string | undefined;
   readonly channel?: string | undefined;
   readonly widget?: unknown;
-  readonly bcId?: string | undefined;
+  readonly agentId?: string | undefined;
   readonly secret?: { readonly label: string; readonly description?: string | undefined; readonly connector: string; readonly field: string } | undefined;
 }
 

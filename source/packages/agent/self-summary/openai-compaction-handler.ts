@@ -27,7 +27,7 @@ import {
 } from "../../agent-summarization/pipeline.ts"
 import { prepareMessagesForCompaction } from "../../agent-summarization/prepare-messages.ts"
 import { collectAttachedSkillBlocksFromConversation } from "../../../adapters/interop/agent/compaction-skill-message-adapter.ts"
-import { SUMMARIZATION_CURSOR_PROVIDER_OPTIONS } from "../../agent-summarization/summarization-handler.ts"
+import { SUMMARIZATION_PROVIDER_OPTIONS } from "../../agent-summarization/summarization-handler.ts"
 import type { Context } from "../../context/context.ts"
 import { createLogger, createSpan } from "../../context/index.ts"
 import { createCounter, createHistogram } from "../../metrics/index.ts"
@@ -162,7 +162,7 @@ export class OpenAICompactionHandler {
         _privacyMode: privacyAnchor._privacyMode,
         role: "user",
         content: safeString(OPENAI_COMPACTION_PROMPT),
-        providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
+        providerOptions: SUMMARIZATION_PROVIDER_OPTIONS,
       },
     ]
     const unredacted = (message: RedactedCoreMessage) =>
@@ -212,7 +212,7 @@ ${raw.text}`
       message: toRedactedCoreMessage({
         role: "user",
         content: wrappedText,
-        providerOptions: { cursor: { isSummary: true } },
+        providerOptions: { slate: { isSummary: true } },
       }, privacyMode),
       summaryTextLength: wrappedText.length,
     }
@@ -293,8 +293,8 @@ function textLengthOf(message: RedactedCoreMessage): number {
 }
 
 function isCompactionSummary(message: RedactedCoreMessage): boolean {
-  const pipelineOptions = message.providerOptions as { cursor?: { isSummary?: unknown } } | undefined
-  return pipelineOptions?.cursor?.isSummary === true
+  const pipelineOptions = message.providerOptions as { slate?: { isSummary?: unknown } } | undefined
+  return pipelineOptions?.slate?.isSummary === true
 }
 
 function isRequestMessage(message: RedactedCoreMessage): boolean {

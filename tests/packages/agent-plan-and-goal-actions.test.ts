@@ -220,7 +220,7 @@ test("the plan boundary turns omitted and explicit modes into host-owned choices
     executionMode: AgentMode.ASK,
     planFileContent: redacted("# Plan"),
     planFilePath: redacted("/workspace/plan.md"),
-    planFileUri: redacted("cursor-plan://plan.md"),
+    planFileUri: redacted("slate-plan://plan.md"),
     planId: "plan-42",
     kickoffMessageId: "kickoff-1",
   })
@@ -230,7 +230,7 @@ test("the plan boundary turns omitted and explicit modes into host-owned choices
   assert.equal(askMode.schema, "slate.agent-action.execute-plan")
   assert.equal(askMode.planText, "# Plan")
   assert.equal(askMode.path, "/workspace/plan.md")
-  assert.equal(askMode.sourceUri, "cursor-plan://plan.md")
+  assert.equal(askMode.sourceUri, "slate-plan://plan.md")
   assert.equal(askMode.id, "plan-42")
   assert.equal(askMode.messageId, "kickoff-1")
 })
