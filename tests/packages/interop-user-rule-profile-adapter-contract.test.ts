@@ -6,7 +6,7 @@ import { adaptInteropUserRuleProfile, getGeneratedUserRulesForModel } from "../.
 test("the adapter suppresses guidance for a raw training tag", () => {
   assert.deepEqual(adaptInteropUserRuleProfile(
     { isComposerMatterhorn: true, isRawTrainingSlug: true },
-    { enableComposer2CustomUserRules: true, enableTahomaUserRuleIntervention: true },
+    { enableGeneratedUserRules: true, enableTahomaUserRuleIntervention: true },
   ), {
     ruleSet: "suppressed",
     includeFinalResponseGuidance: false,
@@ -19,7 +19,7 @@ test("model and feature records resolve to a Slate-owned rule profile", () => {
   assert.deepEqual(adaptInteropUserRuleProfile(
     { isComposerMatterhorn: true },
     {
-      enableComposer2CustomUserRules: true,
+      enableGeneratedUserRules: true,
       enableMatterhornPromptTweaks: true,
       enableGrepBroadGlobGuard: true,
       enableTahomaUserRuleIntervention: true,
@@ -40,7 +40,7 @@ test("model and feature records resolve to a Slate-owned rule profile", () => {
 test("tool-aware options are omitted when their matching behavior is disabled", () => {
   assert.deepEqual(adaptInteropUserRuleProfile(
     {},
-    { enableComposer2CustomUserRules: true, enableMatterhornPromptTweaks: true },
+    { enableGeneratedUserRules: true, enableMatterhornPromptTweaks: true },
     { shellToolName: "", awaitToolName: "Wait", grepToolName: "Search" },
   ), {
     ruleSet: "general",
@@ -53,7 +53,7 @@ test("tool-aware options are omitted when their matching behavior is disabled", 
 test("generated guidance keeps its order and tool names after adaptation", () => {
   const rules = getGeneratedUserRulesForModel(
     { isComposerMatterhorn: true },
-    { enableComposer2CustomUserRules: true, enableMatterhornPromptTweaks: true },
+    { enableGeneratedUserRules: true, enableMatterhornPromptTweaks: true },
     { shellToolName: "Run", awaitToolName: "Wait" },
   )
   assert.match(rules[0] ?? "", /Treat the user's request/)

@@ -76,7 +76,7 @@ interface UserInfoDisplayOptions {
 interface UserInfoFeatureFlags {
   readonly dropCustomPromptContext?: boolean | undefined
   readonly shiftDsv3McpFilesInstructionsToUserMsg?: boolean | undefined
-  readonly backgroundComposerMultiPrs?: boolean | undefined
+  readonly cloudAgentMultiPrs?: boolean | undefined
   readonly cloudAgentStaleBuildGitRefs?: string | undefined
   readonly enableAgentChatLinks?: boolean | undefined
   readonly protectLoopSkillDescription?: boolean | undefined
@@ -85,7 +85,7 @@ interface UserInfoFeatureFlags {
   readonly enableMCPFileSystem?: boolean | undefined
   readonly enableTahomaUserRuleIntervention?: boolean | undefined
   readonly enableVegaFrontendUserRuleIntervention?: boolean | undefined
-  readonly enableComposer2CustomUserRules?: boolean | undefined
+  readonly enableGeneratedUserRules?: boolean | undefined
   readonly enableMatterhornPromptTweaks?: boolean | undefined
   readonly enableGrepBroadGlobGuard?: boolean | undefined
   readonly slateCloudTestingInSystemPrompt?: boolean | undefined
@@ -318,7 +318,7 @@ function UserInfoComponent({ props }: { readonly props: UserInfoProps }): Prompt
         branchPrefix: props.branchPrefix,
         branchSuffix: props.branchSuffix,
         preferCurrentBranchInMultiPrMode: props.preferCurrentBranchInMultiPrMode,
-        allowMultipleBranches: props.featureFlags?.backgroundComposerMultiPrs ?? false,
+        allowMultipleBranches: props.featureFlags?.cloudAgentMultiPrs ?? false,
         toolInfo: props.toolInfo,
         staleBuildGitRefs: props.featureFlags?.cloudAgentStaleBuildGitRefs,
       }),

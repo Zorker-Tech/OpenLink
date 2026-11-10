@@ -2848,8 +2848,8 @@
     },
     "packages/agent/actions/user-message-action/user-message-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.75,
-      "refreshReason": "The main user-message path now consumes versioned SlateUserMessageActionPayload and SlateUserMessage values; only request context, pending-tool resolutions and imported history remain in a compatibility sidecar.",
+      "overlap": 0.7362301101591188,
+      "refreshReason": "User-info assembly now reads Slate model capabilities and cloud-agent testing flags.",
       "evidence": "The main handler consumes SlateUserMessageActionPayload and SlateUserMessage directly. agent-action-handlers.test.ts passes 16/16, including ordered earlier turns and privacy-tagged listener updates; prompt projection verifies text and selected-media redaction. Existing prepended-message bounds, duplicate suppression, user-info refresh and reminder suites remain covered. Work-host typecheck and the full Node 24 suite pass 9991/9991."
     },
     "host/cloud-agents/cloud-agent-tool.ts": {

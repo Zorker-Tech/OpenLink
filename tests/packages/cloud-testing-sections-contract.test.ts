@@ -22,7 +22,7 @@ test("the interop adapter converts the external prompt version into a Slate capa
 
 const eligible = {
   modelInfo: { modelName: "model-a", usesShellLessCloudPrompt: true, isSlateProductPrompt: true },
-  enableComposer2IntelligentTestingPromptSection: true,
+  enableCloudAgentIntelligentTestingPromptSection: true,
   backgroundAgentSource: "other" as const,
   agentType: AgentType.BACKGROUND,
   enableCloudTesting: true,

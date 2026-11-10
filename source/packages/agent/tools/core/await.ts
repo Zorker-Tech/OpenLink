@@ -25,6 +25,7 @@
  * costs a full re-read of the conversation.
  */
 
+import { LEGACY_PROMPT_VERSION } from "../../../../adapters/interop/agent/prompt-version-adapter.ts"
 import { RE2JS } from "re2js"
 import { z } from "zod"
 
@@ -491,7 +492,7 @@ function renderAwaitResult(output: AwaitResultView): string {
 }
 
 /** The prompt versions whose wait advice this tool knows, checked before any description is built. */
-const KNOWN_PROMPT_VERSIONS = ["cursor-0226", "dsv3-1205", "dsv3-1018", "gpt5-codex", "codex-cloud", "latest", "haiku"]
+const KNOWN_PROMPT_VERSIONS = [LEGACY_PROMPT_VERSION, "dsv3-1205", "dsv3-1018", "gpt5-codex", "codex-cloud", "latest", "haiku"]
 
 /** The description the model is given for this tool, by prompt version and by how it is configured. */
 function awaitDescriptionFor(

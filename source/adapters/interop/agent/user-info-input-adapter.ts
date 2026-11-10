@@ -81,7 +81,7 @@ export type InteropUserInfoInput = CoreInput & {
   readonly mode?: AgentMode | undefined
   readonly modelInfo?: UserInfoInteropModelInfo | undefined
   readonly backgroundAgentSource?: BackgroundComposerSource | undefined
-  readonly enableComposer2IntelligentTestingPromptSection?: boolean | undefined
+  readonly enableCloudAgentIntelligentTestingPromptSection?: boolean | undefined
   readonly enableCloudTesting?: boolean | undefined
   readonly priorUserInfoCloudTestingSectionsPlacement?: string | undefined
   readonly subagentType?: { readonly type?: { readonly case?: string | undefined } | undefined } | undefined
@@ -296,7 +296,7 @@ export function renderInteropUserInfo(input: InteropUserInfoInput): string {
     mcpMetaToolOptions: _mcpMetaToolOptions,
     mcpFileSystemOptions: _mcpFileSystemOptions,
     backgroundAgentSource: _backgroundAgentSource,
-    enableComposer2IntelligentTestingPromptSection: _enableComposer2IntelligentTestingPromptSection,
+    enableCloudAgentIntelligentTestingPromptSection: _enableCloudAgentIntelligentTestingPromptSection,
     enableCloudTesting: _enableCloudTesting,
     priorUserInfoCloudTestingSectionsPlacement: _priorPlacement,
     subagentType: _subagentType,

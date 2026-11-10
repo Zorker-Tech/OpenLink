@@ -3,6 +3,7 @@
 import type { SlateUserRuleProfile, UserRuleToolNames } from "../../../packages/agent/prompts/user-rule-profile-contract.ts"
 import { buildGeneratedUserRules } from "../../../packages/agent/prompts/custom-user-rules.ts"
 import { slateModelCapabilitiesFromInterop } from "./model-capabilities-adapter.ts"
+import { slateFeatureFlagsFromInterop } from "./model-feature-flags-adapter.ts"
 
 type Fields = Record<string, unknown>
 
@@ -37,7 +38,7 @@ export function adaptInteropUserRuleProfile(
     }
   }
 
-  const flagValue = fieldsOf(featureFlags).enableComposer2CustomUserRules
+  const flagValue = slateFeatureFlagsFromInterop(featureFlags)?.enableGeneratedUserRules
   const customRulesEnabled = flagValue === undefined
     ? options.defaultCustomRulesWhenUnspecified === true
     : flagValue === true

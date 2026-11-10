@@ -73,8 +73,8 @@ const SLATE_DIR_GITIGNORE_CONTENT = [
   "!plugins/",
   "!plugins/**",
   "# Built-in Slate skills",
-  "!skills-cursor/",
-  "!skills-cursor/**",
+  "!skills-builtin/",
+  "!skills-builtin/**",
   "# User's personal skills",
   "!skills/",
   "!skills/**",
@@ -87,7 +87,7 @@ const SLATE_DIR_GITIGNORE_CONTENT = [
   "# Subagent state/transcripts",
   "!subagents/",
   "!subagents/**",
-  "# User-level cursor rules",
+  "# User-level Slate rules",
   "!rules/",
   "!rules/**",
 ].join("\n");
@@ -147,10 +147,10 @@ function bucketForCount(count: number): string {
   return "11+";
 }
 
-async function ensurePlatformGitignore(cursorDir: string): Promise<void> {
-  const ignorePath = join(cursorDir, ".gitignore");
+async function ensurePlatformGitignore(configDir: string): Promise<void> {
+  const ignorePath = join(configDir, ".gitignore");
   const blockText = `${SLATE_DIR_GITIGNORE_MANAGED_START}\n${SLATE_DIR_GITIGNORE_CONTENT}\n${SLATE_DIR_GITIGNORE_MANAGED_END}\n`;
-  await mkdir(cursorDir, { recursive: true });
+  await mkdir(configDir, { recursive: true });
   let currentText: string | undefined;
   try { currentText = await readFile(ignorePath, "utf-8"); }
   catch (error: unknown) { if ((error as { code?: unknown } | null)?.code !== "ENOENT") throw error; }
