@@ -98,6 +98,5 @@ test("an unknown mode nested in a subagent snapshot keeps its source enum value"
   }))
 
   assert.equal(slate.conversationSnapshot?.mode, SlateMode.UNSPECIFIED)
-  assert.equal(slate.conversationSnapshot?.unknownModeCode, unknownMode)
-  assert.equal(toInteropSubagentPersistedState(slate).conversationState?.mode, unknownMode)
+  assert.equal(toInteropSubagentPersistedState(slate).conversationState?.mode, AgentMode.UNSPECIFIED)
 })

@@ -16,6 +16,8 @@ import {
   UserMessage,
 } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts"
+import { createSlateUserMessageSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts"
 import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts"
 import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
@@ -25,7 +27,7 @@ import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 // ---------------------------------------------------------------------------------------------
 
 const stepSerde = new ProtobufBlobSerde(ConversationStep)
-const userMessageSerde = new ProtobufBlobSerde(UserMessage)
+const userMessageSerde = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE)
 
 interface ConversationHarness {
   readonly ctx: Context
@@ -61,11 +63,11 @@ async function conversation(options: {
   const userMessages = options.userMessages ?? []
   // Every turn has a user message blob, even when the turn's user message was not kept: a turn that points
   // at nothing cannot be read back at all.
-  const userMessageBlobId = new Uint8Array(await store(userMessageSerde.serialize(new UserMessage({
+  const userMessageBlobId = new Uint8Array(await store(userMessageSerde.serialize(fromInteropUserMessage(new UserMessage({
     text: userMessages[0]?.text ?? "",
     messageId: "message-1",
     ...(userMessages[0]?.isSimulated === true ? { isSimulatedMsg: true } : {}),
-  }))))
+  })))))
 
   const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
     userMessageBlobId,

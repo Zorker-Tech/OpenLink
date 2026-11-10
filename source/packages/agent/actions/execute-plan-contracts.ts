@@ -32,7 +32,6 @@ export interface SlateExecutePlanActionPayload extends PlanFileReference {
   /** Historical request context and numeric modes remain isolated until their ports migrate. */
   readonly compatibility?: {
     readonly requestContext?: unknown
-    readonly legacyModeCode?: number
     readonly legacyPayload?: Readonly<Record<string, unknown>>
   }
 }
@@ -52,10 +51,6 @@ export function isSlateExecutePlanActionPayload(value: unknown): value is SlateE
   if (payload.compatibility === null || typeof payload.compatibility !== "object") return false
   const compatibility = payload.compatibility as Record<string, unknown>
   return (compatibility.requestContext === undefined || typeof compatibility.requestContext === "object") &&
-    (compatibility.legacyModeCode === undefined || (
-      Number.isInteger(compatibility.legacyModeCode) &&
-      Number(compatibility.legacyModeCode) >= -2_147_483_648 && Number(compatibility.legacyModeCode) <= 2_147_483_647
-    )) &&
     (compatibility.legacyPayload === undefined || (
       typeof compatibility.legacyPayload === "object" && compatibility.legacyPayload !== null && !Array.isArray(compatibility.legacyPayload)
     ))
@@ -68,7 +63,6 @@ export interface PlanExecutionMessageInput {
   readonly planPath: string
   readonly planTitle: string
   readonly executionMode: PlanExecutionMode
-  readonly legacyModeCode?: number
   readonly rootProject: boolean
   readonly planId: string | undefined
   readonly listenerPrivacyMode: PrivacyMode

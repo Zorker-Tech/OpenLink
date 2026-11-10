@@ -2682,9 +2682,6 @@ These images can be copied for use in other locations.
           branchName: repo.branchName,
         })),
         ...(this.slateMode === undefined ? {} : { mode: this.slateMode }),
-        ...(this.conversationStateStructure.unknownModeCode === undefined
-          ? {}
-          : { unknownModeCode: this.conversationStateStructure.unknownModeCode }),
         ...(this.agentType === undefined ? {} : { agentType: this.agentType }),
         ...(this.activeBranchName === undefined ? {} : { activeBranchName: this.activeBranchName }),
         ...(this.goalState === undefined ? {} : { goalState: this.goalState }),
@@ -2966,7 +2963,6 @@ These images can be copied for use in other locations.
     if (this.slateMode === mode) return;
     this.slateMode = mode;
     this.conversationStateStructure.mode = mode;
-    delete this.conversationStateStructure.unknownModeCode;
   }
 
   hasAgentTypeChangedFromPersistedState(): boolean {

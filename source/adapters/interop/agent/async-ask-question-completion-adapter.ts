@@ -20,7 +20,6 @@ const FULL_ACCESS = PrivacyCapability.UNSAFE_ALWAYS_ALLOWED
 export interface ContinuationMessageSource {
   readonly selectedContext?: SlateSelectedContextState
   readonly mode?: SlateUserMessage["mode"] | undefined
-  readonly compatibility?: SlateUserMessage["compatibility"]
   readonly bestOfNGroupId?: unknown
   readonly tryUseBestOfNPromotion?: unknown
 }
@@ -66,11 +65,7 @@ export function createQuestionnaireContinuation(
     ...(source.selectedContext === undefined
       ? {}
       : { selectedContext: toInteropSelectedContextState(source.selectedContext) }),
-    mode: source.mode === undefined
-      ? AgentMode.UNSPECIFIED
-      : source.compatibility?.legacyModeCode === undefined
-        ? toInteropAgentMode(source.mode)
-        : source.compatibility.legacyModeCode as UserMessage["mode"],
+    mode: source.mode === undefined ? AgentMode.UNSPECIFIED : toInteropAgentMode(source.mode),
     isSimulatedMsg: true,
     ...(source.bestOfNGroupId === undefined ? {} : { bestOfNGroupId: source.bestOfNGroupId as string }),
     ...(source.tryUseBestOfNPromotion === undefined ? {} : { tryUseBestOfNPromotion: source.tryUseBestOfNPromotion as boolean }),

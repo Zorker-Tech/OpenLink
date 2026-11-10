@@ -39,12 +39,14 @@ import {
 import { SelectedContext, SelectedCursorCommand } from "../../source/adapters/interop/proto/generated/agent/v1/selected_context_pb.ts";
 import { AgentSkill } from "../../source/adapters/interop/proto/generated/agent/v1/agent_skills_pb.ts";
 import { ProtobufBlobSerde } from "../../source/adapters/interop/agent/protobuf-blob-serde-adapter.ts";
+import { createSlateUserMessageSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts";
+import { fromInteropUserMessage } from "../../source/adapters/interop/agent/user-message-action-protocol-adapter.ts";
 import { createSlateAgentConversationTurn } from "../../source/packages/agent/conversation-turn-state.ts";
 import { slateConversationTurnSerde } from "../../source/adapters/interop/agent/agent-conversation-state-serdes-adapter.ts";
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts";
 
 const stepSerde = new ProtobufBlobSerde(ConversationStep);
-const userMessageSerde = new ProtobufBlobSerde(UserMessage);
+const userMessageSerde = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE);
 
 interface TurnSpec {
   userText?: string;
@@ -93,7 +95,7 @@ async function conversation(options: { turns: readonly TurnSpec[]; rootPromptTex
       steps.push(await store(stepSerde.serialize(step)));
     }
     const userMessage = turnSpec.userMessage ?? new UserMessage({ text: turnSpec.userText ?? "", messageId: "message-" + turnHandles.length });
-    const userMessageBlobId = new Uint8Array(await store(userMessageSerde.serialize(userMessage)));
+    const userMessageBlobId = new Uint8Array(await store(userMessageSerde.serialize(fromInteropUserMessage(userMessage))));
     const turnBytes = slateConversationTurnSerde.serialize(createSlateAgentConversationTurn({
       userMessageBlobId,
       stepBlobIds: steps,

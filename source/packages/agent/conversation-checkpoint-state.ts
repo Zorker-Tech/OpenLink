@@ -200,10 +200,6 @@ export interface SlateConversationCheckpointV2 {
   readonly goal?: SlateCheckpointGoal
   readonly isRootConversation?: boolean
   readonly completedQuestionCallIds: readonly string[]
-  readonly compatibility?: {
-    readonly legacyModeCode?: number
-    readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
-  }
 }
 
 /** Creates the canonical, valid empty root for Slate's durable conversation store. */
@@ -482,7 +478,7 @@ function isGoal(value: unknown): boolean {
 function isStateRecord(value: unknown): value is SlateConversationCheckpointV2 {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "promptMessageBlobIds", "todoBlobIds", "pendingOperationIds", "tokenUsage", "summaryBlobId", "activePlanBlobId",
-    "turnBlobIds", "workspaceUris", "mode", "unknownModeCode", "summaryArchiveBlobId", "legacyFileContentBlobIds",
+    "turnBlobIds", "workspaceUris", "mode", "summaryArchiveBlobId", "legacyFileContentBlobIds",
     "summaryArchiveBlobIds", "turnTimings", "fileContentBlobIds", "subagents", "selfSummaryCount", "readPaths",
     "activeBranchName", "planRegistry", "trackedRepositories", "agentKind", "communicationHistory", "subagentThreads",
     "communicationFinalSummary", "conversationStartedAtMs", "conversationTimeZone", "communicationCompletedSubtitle",
@@ -515,14 +511,6 @@ function isStateRecord(value: unknown): value is SlateConversationCheckpointV2 {
       !isTextList(value.completedQuestionCallIds)) return false
   if (value.tokenUsage !== undefined && !isTokenUsage(value.tokenUsage)) return false
   if (value.mode !== undefined && (!isText(value.mode) || !SLATE_MODES.has(value.mode))) return false
-  if (value.compatibility !== undefined) {
-    const compatibility = value.compatibility
-    if (!isRecord(compatibility) || !hasOnlyKeys(compatibility, ["legacyModeCode", "legacyUnknownFields"]) ||
-        (compatibility.legacyModeCode !== undefined &&
-          (!isEnumCode(compatibility.legacyModeCode) || value.mode !== "unspecified")) ||
-        (compatibility.legacyUnknownFields !== undefined &&
-          (!Array.isArray(compatibility.legacyUnknownFields) || !compatibility.legacyUnknownFields.every(isUnknownField)))) return false
-  }
   return true
 }
 

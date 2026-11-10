@@ -205,7 +205,6 @@ test("legacy subagent blobs upgrade to Slate while preserving enum values and ne
   assert.equal(imported.executionEnvironment, "unspecified")
   assert.equal(imported.compatibility?.legacyEnvironmentCode, 987)
   assert.equal(imported.compatibility?.legacyUnknownFields?.length, 4)
-  assert.equal(imported.conversationSnapshot?.unknownModeCode, 987654)
   assert.equal(imported.subagentType?.kind, "custom")
   assert.equal(imported.subagentType?.customName, "helper")
 
@@ -215,7 +214,7 @@ test("legacy subagent blobs upgrade to Slate while preserving enum values and ne
   assert.equal(runnerView.environment, 987)
   assert.equal(runnerView.createdTimestampMs, BigInt(30))
   assert.equal(runnerView.lastUsedTimestampMs, BigInt(40))
-  assert.equal(runnerView.conversationState?.mode, 987654)
+  assert.equal(runnerView.conversationState?.mode, AgentMode.UNSPECIFIED)
   assert.equal(runnerView.cloudSubagent?.bcId, "worker-1")
   assert.equal(SubagentPersistedState.runtime.bin.listUnknownFields(runnerView).length, 1)
   assert.equal(ConversationStateStructure.runtime.bin.listUnknownFields(runnerView.conversationState!).length, 1)

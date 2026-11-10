@@ -264,7 +264,7 @@ test("simulation and custom-mode redacted fields keep their classifications in S
   assertRedacted(restored.modeIntent.mode.pluginSnapshotToken, "snapshot", "plugin_snapshot_token", DataClassification.CREDENTIALS)
 })
 
-test("an unknown persisted mode uses Slate's fallback without losing the stored code", () => {
+test("an unknown persisted mode maps to unspecified", () => {
   const message = new UserMessage({
     text: "hello",
     messageId: "message-1",
@@ -275,8 +275,7 @@ test("an unknown persisted mode uses Slate's fallback without losing the stored 
   const roundTripped = toInteropUserMessage(slate)
 
   assert.equal(slate.mode, SlateMode.UNSPECIFIED)
-  assert.equal(slate.compatibility?.legacyModeCode, 987654)
-  assert.equal(roundTripped.mode, 987654)
+  assert.equal(roundTripped.mode, AgentMode.UNSPECIFIED)
 })
 
 test("copying a Slate user message does not retain caller-owned byte or context arrays", () => {
@@ -633,69 +632,4 @@ test("plan execution title redaction survives the versioned Slate storage envelo
   assert.equal(title.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "Private plan")
   assert.equal(title.__classification, DataClassification.CODE)
   assert.equal(title.__fieldName, "plan_title")
-})
-
-test("user-message privacy metadata and unknown legacy fields survive the migration write", () => {
-  const selectedContext = new SelectedContext()
-  SelectedContext.runtime.bin.onUnknownField(selectedContext, 101, 0, new Uint8Array([7]))
-  const legacy = new UserMessage({ text: "legacy", messageId: "message-legacy", selectedContext })
-  UserMessage.runtime.bin.onUnknownField(legacy, 100, 0, new Uint8Array([9]))
-  const legacyBytes = legacy.toBinary()
-  const serde = createSlateUserMessageSerde(PrivacyMode.NO_STORAGE)
-  const imported = serde.deserialize(legacyBytes)
-  assert.equal(imported.compatibility?.legacyUnknownFields?.length, 2)
-
-  const redacted = {
-    ...imported,
-    text: createRedactedString("private prompt", DataClassification.CODE, "text", PrivacyMode.NO_STORAGE),
-  }
-  const rewritten = serde.serialize(redacted)
-  const decoded = serde.deserialize(rewritten)
-  if (typeof decoded.text === "string") assert.fail("expected redacted user-message text")
-  assert.equal(decoded.text.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED), "private prompt")
-  assert.equal(decoded.text.__classification, DataClassification.CODE)
-  assert.equal(decoded.text.__fieldName, "text")
-
-  const restored = deserializeSlateUserMessageInterop(rewritten)
-  assert.equal(restored.getType().runtime.bin.listUnknownFields(restored).length, 1)
-  assert.equal(restored.selectedContext?.getType().runtime.bin.listUnknownFields(restored.selectedContext).length, 1)
-})
-
-test("unknown fields inside legacy user-message metadata survive Slate conversion", () => {
-  const info = new ExecutePlanInfo({ planId: "plan-1", planTitle: "Plan" })
-  ExecutePlanInfo.runtime.bin.onUnknownField(info, 101, 0, new Uint8Array([7]))
-  const actor = new TriggeringUserInfo({ authId: "actor-1", userId: 7 })
-  TriggeringUserInfo.runtime.bin.onUnknownField(actor, 102, 0, new Uint8Array([8]))
-  const subscriptionDisplay = new SubscriptionEventDisplay({ displayLabel: "PR" })
-  SubscriptionEventDisplay.runtime.bin.onUnknownField(subscriptionDisplay, 103, 0, new Uint8Array([9]))
-  const simulation = new UserMessage_SimulatedMessageMetadata({
-    title: "Task",
-    subscriptionEventDisplay: subscriptionDisplay,
-  })
-  UserMessage_SimulatedMessageMetadata.runtime.bin.onUnknownField(simulation, 104, 0, new Uint8Array([10]))
-  const submittedMode = new SubmittedCustomMode({ id: "mode-1", label: "Mode", source: CustomModeSource.PLUGIN_SKILL })
-  SubmittedCustomMode.runtime.bin.onUnknownField(submittedMode, 105, 0, new Uint8Array([11]))
-  const intent = new CustomModeIntent({ intent: { case: "enter", value: submittedMode } })
-  CustomModeIntent.runtime.bin.onUnknownField(intent, 106, 0, new Uint8Array([12]))
-  const legacy = new UserMessage({
-    text: "Start this plan",
-    messageId: "kickoff",
-    triggeringUserInfo: actor,
-    executePlanInfo: info,
-    simulatedMessageMetadata: simulation,
-    customModeIntent: intent,
-  })
-
-  const slate = fromInteropUserMessage(legacy)
-  assert.deepEqual(slate.planExecution, { id: "plan-1", title: "Plan" })
-  assert.equal(slate.compatibility?.legacyUnknownFields?.length, 6)
-
-  const restored = toInteropUserMessage(slate)
-  assert.deepEqual(restored.executePlanInfo?.getType().runtime.bin.listUnknownFields(restored.executePlanInfo).map(field => [...field.data]), [[7]])
-  assert.deepEqual(restored.triggeringUserInfo?.getType().runtime.bin.listUnknownFields(restored.triggeringUserInfo).map(field => [...field.data]), [[8]])
-  assert.deepEqual(restored.simulatedMessageMetadata?.getType().runtime.bin.listUnknownFields(restored.simulatedMessageMetadata).map(field => [...field.data]), [[10]])
-  assert.deepEqual(restored.simulatedMessageMetadata?.subscriptionEventDisplay?.getType().runtime.bin.listUnknownFields(restored.simulatedMessageMetadata.subscriptionEventDisplay).map(field => [...field.data]), [[9]])
-  assert.deepEqual(restored.customModeIntent?.getType().runtime.bin.listUnknownFields(restored.customModeIntent).map(field => [...field.data]), [[12]])
-  if (restored.customModeIntent?.intent.case !== "enter") assert.fail("expected custom-mode entry")
-  assert.deepEqual(restored.customModeIntent.intent.value.getType().runtime.bin.listUnknownFields(restored.customModeIntent.intent.value).map(field => [...field.data]), [[11]])
 })

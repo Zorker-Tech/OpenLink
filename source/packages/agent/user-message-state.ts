@@ -1,6 +1,5 @@
 /** Slate's product record for a user message while it is becoming a conversation turn. */
 import type { HookContextEntry } from "../hooks-carriers/hook-additional-context.ts"
-import type { SlateCheckpointUnknownField } from "./conversation-checkpoint-state.ts"
 import { SlateMode } from "./mode-processing.ts"
 import {
   cloneSlateSelectedContextState,
@@ -19,13 +18,6 @@ export type { SlateUserMessageText } from "./user-message-metadata-state.ts"
 
 export interface SlateUserMessageHookContext extends Omit<HookContextEntry, "text"> {
   text: SlateUserMessageText
-}
-
-export interface SlateUserMessageCompatibility {
-  /** Numeric mode values read from old persisted messages until a Slate transition replaces them. */
-  readonly legacyModeCode?: number
-  /** Unknown legacy fields kept only so old persisted messages can be rewritten without data loss. */
-  readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
 }
 
 export const SlateSimulatedMessageReason = {
@@ -114,7 +106,6 @@ export interface SlateUserMessage {
   hookContexts: readonly SlateUserMessageHookContext[]
   modeIntent?: SlateCustomModeIntent
   projectDetails?: SlateProjectConversationDetails
-  compatibility?: SlateUserMessageCompatibility
 }
 
 /** Product input accepted at the Agent turn boundary before turn-owned defaults are applied. */
@@ -154,29 +145,11 @@ function copyProjectDetails(
       }
 }
 
-function copyCompatibility(
-  compatibility: SlateUserMessageCompatibility | undefined,
-): SlateUserMessageCompatibility | undefined {
-  if (compatibility === undefined) return undefined
-  return {
-    ...(compatibility.legacyModeCode === undefined ? {} : { legacyModeCode: compatibility.legacyModeCode }),
-    ...(compatibility.legacyUnknownFields === undefined
-      ? {}
-      : {
-          legacyUnknownFields: compatibility.legacyUnknownFields.map(field => ({
-            ...field,
-            path: field.path.map(step => ({ ...step })),
-          })),
-        }),
-  }
-}
-
 /** Copies mutable byte arrays and every nested selected-context attachment. */
 export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessage {
   const projectDetails = message.projectDetails === undefined
     ? undefined
     : copyProjectDetails(message.projectDetails)
-  const compatibility = copyCompatibility(message.compatibility)
   return {
     text: message.text,
     messageId: message.messageId,
@@ -205,7 +178,6 @@ export function cloneSlateUserMessage(message: SlateUserMessage): SlateUserMessa
     hookContexts: message.hookContexts.map(context => ({ ...context })),
     ...(message.modeIntent === undefined ? {} : { modeIntent: cloneSlateCustomModeIntent(message.modeIntent) }),
     ...(projectDetails === undefined ? {} : { projectDetails }),
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 

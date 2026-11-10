@@ -18,7 +18,7 @@ function ownTaskSnapshot(
     turns: value.turns.map(turn => new Uint8Array(turn)),
   }
   if (modeWasPersisted) return snapshot
-  const { mode: _mode, unknownModeCode: _unknownModeCode, ...withoutMode } = snapshot
+  const { mode: _mode, ...withoutMode } = snapshot
   return withoutMode
 }
 

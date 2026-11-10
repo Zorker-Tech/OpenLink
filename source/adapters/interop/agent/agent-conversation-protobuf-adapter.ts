@@ -118,7 +118,7 @@ export async function deriveInteropConversationStateFromStructure<Context>(
 
 /** Projects the runner snapshot into the complete Slate v2 durable conversation schema. */
 export function encodeInteropAgentConversationCheckpoint(checkpoint: ConversationStateStructure): Uint8Array {
-  const conversation = slateConversationCheckpointFromInterop(checkpoint, [])
+  const conversation = slateConversationCheckpointFromInterop(checkpoint)
   if (!isSlateConversationCheckpointV2(conversation)) {
     throw new TypeError("Conversation checkpoint cannot be represented by Slate's version 2 schema")
   }

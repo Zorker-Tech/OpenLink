@@ -35,17 +35,14 @@ import {
 
 type Any = any
 
-function decodeExecutionMode(value: unknown): { readonly mode: PlanExecutionMode; readonly legacyModeCode?: number } {
-  if (value === undefined || value === AgentMode.UNSPECIFIED || value === AgentMode.AGENT || value === "agent") return { mode: "agent" }
-  if (value === AgentMode.ASK || value === "ask" || value === "chat") return { mode: "chat" }
-  if (value === AgentMode.MULTITASK || value === "multitask") return { mode: "multitask" }
-  const isLegacyEnumCode = typeof value === "number" && Number.isInteger(value) &&
-    value >= -2_147_483_648 && value <= 2_147_483_647
-  return { mode: "unspecified", ...(isLegacyEnumCode ? { legacyModeCode: value } : {}) }
+function decodeExecutionMode(value: unknown): PlanExecutionMode {
+  if (value === undefined || value === AgentMode.UNSPECIFIED || value === AgentMode.AGENT || value === "agent") return "agent"
+  if (value === AgentMode.ASK || value === "ask" || value === "chat") return "chat"
+  if (value === AgentMode.MULTITASK || value === "multitask") return "multitask"
+  return "unspecified"
 }
 
-export function toInteropAgentMode(mode: PlanExecutionMode, legacyModeCode?: number): AgentMode {
-  if (legacyModeCode !== undefined) return legacyModeCode as AgentMode
+export function toInteropAgentMode(mode: PlanExecutionMode): AgentMode {
   if (mode === "agent") return AgentMode.AGENT
   if (mode === "chat") return AgentMode.ASK
   if (mode === "multitask") return AgentMode.MULTITASK
@@ -63,16 +60,15 @@ export function decodeExecutePlanAction(value: unknown): PlanExecutionRequest {
   const planFileContent = action.planFileContent?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   const planFilePath = action.planFilePath?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
   const planFileUri = action.planFileUri?.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
-  const { mode, legacyModeCode } = decodeExecutionMode(action.executionMode)
+  const mode = decodeExecutionMode(action.executionMode)
   const requestContext = action.requestContext
   const legacyPayload = value !== null && typeof value === "object"
     ? value as Readonly<Record<string, unknown>>
     : undefined
-  const compatibility = requestContext === undefined && legacyModeCode === undefined && legacyPayload === undefined
+  const compatibility = requestContext === undefined && legacyPayload === undefined
     ? undefined
     : {
         ...(requestContext === undefined ? {} : { requestContext }),
-        ...(legacyModeCode === undefined ? {} : { legacyModeCode }),
         ...(legacyPayload === undefined ? {} : { legacyPayload }),
       }
   return {
@@ -106,7 +102,7 @@ export function createPlanExecutionMessage(input: PlanExecutionMessageInput) {
     text: input.text,
     messageId: input.messageId,
     selectedContext,
-    mode: toInteropAgentMode(input.executionMode, input.legacyModeCode),
+    mode: toInteropAgentMode(input.executionMode),
     ...(input.rootProject ? { projectDetails: new ProjectDetails() } : {}),
     isSimulatedMsg: true,
     simulatedMsgReason: SimulatedMsgReason.PLAN_EXECUTION,

@@ -187,11 +187,9 @@ export function createBackgroundCompletionUserMessage(input: {
     selectedContext,
     mode: input.mode !== undefined
       ? toInteropAgentMode(input.mode)
-      : sourceMessage?.compatibility?.legacyModeCode !== undefined
-        ? sourceMessage.compatibility.legacyModeCode as AgentMode
-        : sourceMessage === undefined
-          ? AgentMode.AGENT
-          : toInteropAgentMode(sourceMessage.mode),
+      : sourceMessage === undefined
+        ? AgentMode.AGENT
+        : toInteropAgentMode(sourceMessage.mode),
     isSimulatedMsg: true,
     simulatedMsgReason: SimulatedMsgReason.BACKGROUND_TASK_COMPLETION,
     ...(input.metadata === undefined ? {} : { simulatedMessageMetadata: input.metadata as never }),

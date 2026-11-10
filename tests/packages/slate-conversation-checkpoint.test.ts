@@ -2,6 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 
 import {
+  AgentMode,
   BackgroundTaskCompletionReason,
   CloudSubagentReference,
   CommunicateUpdateHistoryEntry,
@@ -109,7 +110,7 @@ test("Slate checkpoint v2 owns all conversation fields and round-trips nested st
     plan: new Uint8Array([8]),
     turns: [new Uint8Array([9, 10])],
     previousWorkspaceUris: ["file:///workspace", "file:///repo"],
-    mode: 987 as never,
+    mode: AgentMode.AGENT,
     summaryArchive: new Uint8Array([11]),
     fileStates: { "/repo/legacy.ts": new Uint8Array([12]) },
     summaryArchives: [new Uint8Array([13])],
@@ -122,7 +123,7 @@ test("Slate checkpoint v2 owns all conversation fields and round-trips nested st
       "child-custom": new SubagentPersistedState({
         conversationState: new ConversationStateStructure({
           turns: [new Uint8Array([17])],
-          mode: 96 as never,
+          mode: AgentMode.AGENT,
           readPaths: ["/nested/ exact.ts "],
           subagentThreads: { "nested-call": "nested-thread" },
         }),
