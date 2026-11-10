@@ -251,7 +251,7 @@ export class ExecutePlanActionHandler extends AbstractUserMessageActionHandler {
           enableComposer2IntelligentTestingPromptSection: configAny.enableComposer2IntelligentTestingPromptSection,
           priorUserInfoCloudTestingSectionsPlacement,
         }),
-        providerOptions: { slate: { requestContextCompleteness, userInfoSummarizationEpoch: currentSummarizationEpoch, omitCloudWorkerProcedure, ...(userInfoCloudTestingSectionsPlacement !== undefined ? { composer2CloudTestingSectionsPlacement: userInfoCloudTestingSectionsPlacement } : {}) } },
+        providerOptions: { slate: { requestContextCompleteness, userInfoSummarizationEpoch: currentSummarizationEpoch, omitCloudWorkerProcedure, ...(userInfoCloudTestingSectionsPlacement !== undefined ? { cloudTestingSectionsPlacement: userInfoCloudTestingSectionsPlacement } : {}) } },
       });
     }
     const effectivePriorMessages = didReplaceUserInfo ? priorMessages.slice(1) : priorMessages;

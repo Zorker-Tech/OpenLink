@@ -1,3 +1,4 @@
+import { isSlatePlaygroundBackend } from "../../adapters/interop/slate-backend/backend-host-policy.ts";
 /**
  * The presigned address a store read or write is given.
  *
@@ -158,19 +159,10 @@ function isLocalBackend(backendUrl: string): boolean {
   return trimmed !== "" && (trimmed.includes("localhost") || trimmed.includes("lclhst.build"));
 }
 
-function isPlaygroundBackend(backendUrl: string): boolean {
-  try {
-    const hostname = new URL(backendUrl).hostname.toLowerCase();
-    return hostname === "playground.cursor.sh" || hostname.endsWith(".playground.cursor.sh");
-  } catch {
-    return false;
-  }
-}
-
 /** Which store hosts this backend's presigned addresses may name: its own, its playground's, or the default S3 endpoints. */
 export function validatorForBackend(backendUrl: string): (url: URL) => void {
   if (isLocalBackend(backendUrl)) return localDevAddressValidator();
-  if (isPlaygroundBackend(backendUrl)) return allowlisting(PLAYGROUND_STORE_HOSTS);
+  if (isSlatePlaygroundBackend(backendUrl)) return allowlisting(PLAYGROUND_STORE_HOSTS);
   return assertBcsStoreAddress();
 }
 

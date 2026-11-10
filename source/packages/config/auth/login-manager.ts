@@ -4,7 +4,7 @@ import { pollAuthenticationStatus } from "./login-polling.ts";
 import {
   resolveApiBaseUrl,
   resolveWebsiteUrl,
-  type CursorTokens,
+  type SlateTokens,
   type ExchangeApiKeyOptions,
   type LoginLinkHandler,
   type LoginManagerOptions,
@@ -31,7 +31,7 @@ export class LoginManager {
     };
   }
 
-  waitForResult(metadata: LoginMetadata, signal?: AbortSignal): Promise<CursorTokens | null> {
+  waitForResult(metadata: LoginMetadata, signal?: AbortSignal): Promise<SlateTokens | null> {
     return pollAuthenticationStatus({
       uuid: metadata.uuid,
       verifier: metadata.verifier,
@@ -40,11 +40,11 @@ export class LoginManager {
     });
   }
 
-  loginWithApiKey(apiKey: string, options?: ExchangeApiKeyOptions): Promise<CursorTokens | null> {
+  loginWithApiKey(apiKey: string, options?: ExchangeApiKeyOptions): Promise<SlateTokens | null> {
     return exchangeApiKeyForTokens(apiKey, { endpoint: options?.endpoint ?? this.apiUrl });
   }
 
-  async login(linkHandler: LoginLinkHandler, signal?: AbortSignal): Promise<CursorTokens | null> {
+  async login(linkHandler: LoginLinkHandler, signal?: AbortSignal): Promise<SlateTokens | null> {
     const { metadata, loginUrl } = this.startLogin();
     await linkHandler.openUrl(loginUrl);
     return await this.waitForResult(metadata, signal);

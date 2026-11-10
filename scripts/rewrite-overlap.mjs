@@ -104,7 +104,7 @@ const EXEMPT = [
   ["adapters/interop/agent/local-read-executor-adapter.ts", "interop adapter: maps generated file-read requests and results to Slate read outcomes"],
   ["adapters/interop/agent/local-shell-stream-executor-adapter.ts", "interop adapter: encodes Slate shell events and handoff outcomes as generated stream messages"],
   ["adapters/interop/agent/shell-terminal-watch-adapter.ts", "interop adapter: decodes generated read and conversation messages for the Slate shell-watch ports"],
-  ["adapters/interop/cursor-backend/slate-cloud-agent-client-adapter.ts", "interop adapter: binds generated cloud-agent and dashboard services to Slate client ports"],
+  ["adapters/interop/slate-backend/slate-cloud-agent-client-adapter.ts", "interop adapter: binds generated cloud-agent and dashboard services to Slate client ports"],
   ["adapters/interop/agent/web-fetch-tool-adapter.ts", "interop adapter: encodes Slate web-fetch policy outcomes as generated Agent tool messages"],
   ["adapters/interop/agent/prompt-context-usage-snapshot-adapter.ts", "interop adapter: serializes usage snapshots and projects their privacy and wire type metadata"],
   ["adapters/interop/agent/redacted-prompt-token-details-adapter.ts", "interop adapter: maps Slate prompt-usage values to generated redacted storage messages"],
@@ -247,7 +247,7 @@ const EXEMPT = [
   ["adapters/interop/inference/routed-provider-session-adapter.ts", "interop adapter: handles external provider credentials, request protocols and stream responses"],
   ["adapters/interop/inference/slate-inference-session-adapter.ts", "interop adapter: projects Slate session requests to generated inference and attached-media services"],
   ["adapters/interop/agent/workspace-file-write-adapter.ts", "interop adapter: constructs counterpart write-executor messages from Slate workspace-file writes"],
-  ["adapters/interop/cursor-backend/mcp-dashboard-client-adapter.ts", "interop adapter: constructs the counterpart dashboard client behind Slate MCP service ports"],
+  ["adapters/interop/slate-backend/mcp-dashboard-client-adapter.ts", "interop adapter: constructs the counterpart dashboard client behind Slate MCP service ports"],
   ["adapters/interop/mcp/host-service-adapter.ts", "interop adapter: maps counterpart account, catalog and auth responses to Slate MCP host views"],
   ["adapters/interop/telemetry/analytics-client-adapter.ts", "interop adapter: constructs the counterpart analytics client and projects optional log authentication"],
   ["adapters/interop/agent/hook-context-adapter.ts", "interop adapter: maps Slate hook context entries to and from the counterpart hook-context message"],
@@ -309,11 +309,11 @@ const EXEMPT = [
   ["host/transcript/client-side-tool-v2-producer.ts", "interop adapter: creates counterpart renderer tool messages and their wire envelope"],
   ["shared/rpc/client-side-tool-v2-transport.ts", "interop adapter: encodes and decodes counterpart client-side tool protobuf messages"],
   ["packages/agent-store-sync/sync-client-config.ts", "adapter data: counterpart client values required for agent-store interoperability"],
-  ["shared/node/cursor-backend/account-mcp.ts", "adapter: external account MCP service requests"],
-  ["shared/node/cursor-backend/backend-mcp-exec.ts", "adapter: external backend MCP execution protocol"],
-  ["shared/node/cursor-backend/cursor-generate-image.ts", "adapter: external image-generation service messages"],
-  ["shared/node/cursor-backend/cursor-inference.ts", "adapter: the counterpart inference transport and endpoint resolution"],
-  ["shared/node/cursor-backend/rpc-tracing.ts", "adapter: tracing metadata for external Connect RPC calls"],
+  ["shared/node/slate-backend/account-mcp.ts", "adapter: external account MCP service requests"],
+  ["shared/node/slate-backend/backend-mcp-exec.ts", "adapter: external backend MCP execution protocol"],
+  ["shared/node/slate-backend/slate-generate-image.ts", "adapter: external image-generation service messages"],
+  ["shared/node/slate-backend/slate-backend-client.ts", "adapter: the counterpart inference transport and endpoint resolution"],
+  ["shared/node/slate-backend/rpc-tracing.ts", "adapter: tracing metadata for external Connect RPC calls"],
   ["host/automations/slate-automation-cloud-trigger.ts", "interop adapter: maps Slate-owned automation triggers to the counterpart cloud trigger schema"],
   ["host/agents/isolation/conversation-blob-gc.ts", "interop adapter: walks counterpart agent protobuf descriptors to find referenced blob records"],
   ["host/transcript/agent-transcript/trace-format.ts", "interop adapter: projects counterpart conversation messages into transcript trace entries"],
@@ -326,7 +326,7 @@ const EXEMPT = [
   ["adapters/interop/plugin-marketplace/mcp-marketplace-adapter.ts", "interop adapter: projects dashboard plugin records and published source links into Slate-owned marketplace inputs"],
   ["adapters/interop/plugin-marketplace/installed-plugin-dashboard-adapter.ts", "interop adapter: constructs external dashboard request messages and projects service responses into the Slate plugin-dashboard port"],
   ["adapters/interop/plugin-marketplace/plugin-manifest-adapter.ts", "interop adapter: parses external plugin and marketplace manifest formats into plugin-install values"],
-  ["adapters/interop/cursor-backend/summary-origin-marker-adapter.ts", "interop adapter: reads the counterpart provider's summary-origin marker"],
+  ["adapters/interop/slate-backend/summary-origin-marker-adapter.ts", "interop adapter: reads the counterpart provider's summary-origin marker"],
   ["packages/agent/context/image-data-hydration.ts", "interop adapter: maps generated selected-image variants to the host blob store"],
   ["adapters/interop/agent/selected-image-blob-adapter.ts", "interop adapter: maps generated selected-image variants to the host blob store"],
   ["adapters/interop/agent/protobuf-blob-serde-adapter.ts", "interop adapter: packs generated protobuf messages into the host blob-store interface"],
@@ -725,13 +725,13 @@ export function sourceOf(entry) {
     return "adapters/interop/egress-tunnel/websocket-client-adapter.ts";
   }
   if (source === "host/automations/slate-automation-cloud-trigger.ts") {
-    return "adapters/interop/cursor-backend/slate-automation-cloud-trigger-adapter.ts";
+    return "adapters/interop/slate-backend/slate-automation-cloud-trigger-adapter.ts";
   }
   return source
     .replace(/^packages\/proto\//, "adapters/interop/proto/")
     .replace(/^packages\/redacted-protos\//, "adapters/interop/redacted-protos/")
     .replace(/^packages\/chat-inference-proto\//, "adapters/interop/chat-inference-proto/")
-    .replace(/^shared\/node\/cursor-backend\//, "adapters/interop/cursor-backend/");
+    .replace(/^shared\/node\/slate-backend\//, "adapters/interop/slate-backend/");
 }
 
 const SPLIT_SOURCE_GROUPS = new Map([
@@ -939,7 +939,7 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ["packages/agent/self-summary/self-summary.ts", [
     "packages/agent/self-summary/self-summary-message-window.ts",
     "packages/agent/self-summary/self-summary-trigger-policy.ts",
-    "adapters/interop/cursor-backend/summary-origin-marker-adapter.ts",
+    "adapters/interop/slate-backend/summary-origin-marker-adapter.ts",
   ]],
   ["host/extensions/inference/cursor-session.ts", [
     "adapters/interop/inference/slate-inference-session-adapter.ts",
@@ -1282,7 +1282,7 @@ const SPLIT_SOURCE_GROUPS = new Map([
     "adapters/interop/agent/box-store-service-adapter.ts",
   ]],
   ["host/mcp/mcp-service.ts", [
-    "adapters/interop/cursor-backend/mcp-dashboard-client-adapter.ts",
+    "adapters/interop/slate-backend/mcp-dashboard-client-adapter.ts",
     "adapters/interop/mcp/host-service-adapter.ts",
   ]],
   ["packages/agent/prompts/testing/parent.ts", [
@@ -1390,7 +1390,7 @@ const SPLIT_SOURCE_GROUPS = new Map([
   ]],
   ["packages/agent/actions/user-message-action/synthetic-user-message.ts", [
     "packages/agent/actions/user-message-action/notification-message-classifier.ts",
-    "adapters/interop/cursor-backend/summary-origin-marker-adapter.ts",
+    "adapters/interop/slate-backend/summary-origin-marker-adapter.ts",
   ]],
   ["host/memory/project-membership.ts", [
     "host/memory/project-membership-contracts.ts",
@@ -1753,7 +1753,7 @@ const SPLIT_SOURCE_GROUPS = new Map([
     "host/cloud-agents/cloud-agent-view-mappers.ts",
     "host/cloud-agents/cloud-agent-manager-queries.ts",
     "host/cloud-agents/cloud-agent-manager-launch.ts",
-    "adapters/interop/cursor-backend/slate-cloud-agent-client-adapter.ts",
+    "adapters/interop/slate-backend/slate-cloud-agent-client-adapter.ts",
   ]],
   ["host/workflows/workflow-store.ts", [
     "host/workflows/workflow-store-contracts.ts",

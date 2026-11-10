@@ -1,7 +1,7 @@
 /** Project the generated box lifecycle RPCs onto the host-owned lifecycle port. */
 
 import { SlateBotService } from "../proto/generated/aiserver/v1/slate_bot_connect.ts";
-import { createSlateCursorBackendClient } from "../cursor-backend/cursor-inference.ts";
+import { createSlateBackendClient } from "../slate-backend/slate-backend-client.ts";
 import type { BoxLifecycleBackend, BoxLifecycleOutcome } from "../../../host/boxes/box-lifecycle/box-lifecycle-service.ts";
 
 export interface BoxLifecycleAuth {
@@ -33,7 +33,7 @@ export function createBoxLifecycleBackendFromClient(client: BoxLifecycleWireClie
 }
 
 export function createBoxLifecycleBackend(auth: BoxLifecycleAuth): BoxLifecycleBackend {
-  const client = createSlateCursorBackendClient(SlateBotService, {
+  const client = createSlateBackendClient(SlateBotService, {
     getAccessToken: auth.getAccessToken,
     getMachineId: auth.getMachineId,
   }) as unknown as BoxLifecycleWireClient;

@@ -44,7 +44,7 @@ const USER_DRIVEN_INTERACTIVE_CHILD_LEAD = "The user is actively driving this Pr
 const USER_DRIVEN_INTERACTIVE_CHILD_ACKNOWLEDGEMENT_USER_QUERY_BASE = `${USER_DRIVEN_INTERACTIVE_CHILD_LEAD} Record the taskResult for coordination, but do not message the user or take over the child thread. If no coordinator bookkeeping is required, end without further action.`;
 const SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_BASE = "Briefly inform the user about the task result and perform any follow-up actions (if needed).";
 const SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY = `<user_query>${SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_BASE}</user_query>`;
-const COMPOSER_SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY = `<user_query>${SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_BASE} If there's no follow-ups needed, don't explicitly say that.</user_query>`;
+const LEGACY_MODEL_SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY = `<user_query>${SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY_BASE} If there's no follow-ups needed, don't explicitly say that.</user_query>`;
 
 export interface BackgroundCompletionFormatOptions {
   readonly timeZone?: string;
@@ -62,7 +62,7 @@ export function neutralizeBackgroundTaskDetailCloseTags(detail: string): string 
 }
 
 export function getShellNotificationAcknowledgementUserQuery(modelInfo: BackgroundCompletionFormatOptions["modelInfo"]): string {
-  if (modelInfo?.isComposer1 || modelInfo?.isComposer15 || modelInfo?.isComposer2 || modelInfo?.isComposerMatterhorn) return COMPOSER_SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY;
+  if (modelInfo?.isComposer1 || modelInfo?.isComposer15 || modelInfo?.isComposer2 || modelInfo?.isComposerMatterhorn) return LEGACY_MODEL_SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY;
   return SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY;
 }
 

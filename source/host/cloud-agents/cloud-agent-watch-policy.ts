@@ -12,7 +12,7 @@ export const TEAM_ADMIN_POLICY_REQUEST_TIMEOUT_MS = 10_000
 
 export type CloudAgentRunStatus = "unspecified" | "creating" | "running" | "finished" | "error" | "expired" | number
 
-export interface DetailedComposer {
+export interface DetailedCloudAgent {
   readonly composer?: {
     readonly status?: CloudAgentRunStatus
     readonly prUrl?: string
@@ -74,13 +74,13 @@ export function availableEnvironmentsNote(environments: readonly SavedEnvironmen
   return ` Available: ${listed}${hidden > 0 ? ` (+${hidden} more; set environment.id to launch one that isn't listed)` : ""}.`
 }
 
-export function resolveSlateLimitError(detailed: DetailedComposer | null | undefined): string | null {
+export function resolveSlateLimitError(detailed: DetailedCloudAgent | null | undefined): string | null {
   const details = detailed?.permanentError?.details
   if (details?.additionalInfo?.rateLimitReason !== "slate_included_limit") return null
   return [details.title, details.detail].map(value => value.trim()).filter(Boolean).join("\n")
 }
 
-export function formatDiffStats(detailed?: DetailedComposer): string | undefined {
+export function formatDiffStats(detailed?: DetailedCloudAgent): string | undefined {
   const composer = detailed?.composer
   if (composer === undefined) return undefined
   const summary: string[] = []
@@ -93,7 +93,7 @@ export function formatDiffStats(detailed?: DetailedComposer): string | undefined
   return summary.length === 0 ? undefined : `Changes: ${summary.join(", ")}.`
 }
 
-export function buildWatchResult(agentId: string, status: CloudAgentRunStatus, detailed?: DetailedComposer) {
+export function buildWatchResult(agentId: string, status: CloudAgentRunStatus, detailed?: DetailedCloudAgent) {
   const normalized = normalizeCloudAgentRunStatus(status)
   const composer = detailed?.composer
   const summary = detailed?.summary?.trim()

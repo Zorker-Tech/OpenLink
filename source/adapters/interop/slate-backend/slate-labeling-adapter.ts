@@ -4,7 +4,7 @@ import {
   AgentFollowupCategorizationRequest,
   AgentPostTurnLabelingRequest,
 } from "../proto/generated/aiserver/v1/inference_pb.ts";
-import { createSlateCursorBackendClient, type SlateInferenceOptions } from "./cursor-inference.ts";
+import { createSlateBackendClient, type SlateInferenceOptions } from "./slate-backend-client.ts";
 import type {
   FollowupClassificationInput,
   LabelingClient,
@@ -34,6 +34,6 @@ export function adaptSlateInferenceLabelingClient(client: InferenceLabelingClien
 }
 
 export function createSlateInferenceLabelingClient(options: Omit<SlateInferenceOptions, "backendUrl">): LabelingClient {
-  const client = createSlateCursorBackendClient(InferenceService, options) as unknown as InferenceLabelingClient;
+  const client = createSlateBackendClient(InferenceService, options) as unknown as InferenceLabelingClient;
   return adaptSlateInferenceLabelingClient(client);
 }

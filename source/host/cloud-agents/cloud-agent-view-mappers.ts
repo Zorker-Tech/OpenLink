@@ -1,5 +1,5 @@
 import { SLATE_WEBSITE_ORIGIN } from "../transcript/agent-run-error.ts";
-import type { DetailedComposer } from "./cloud-agent-poll-loop.ts";
+import type { DetailedCloudAgent } from "./cloud-agent-poll-loop.ts";
 import type { CloudAgentPrState } from "./cloud-agent-manager-contracts.ts";
 
 const RUN_STATUS_NAMES = ["creating", "running", "finished", "error", "expired"] as const;
@@ -16,13 +16,13 @@ export function mapRunStatus(status: unknown): string {
 }
 
 export function resolvePrUrl(
-  detailed?: DetailedComposer & { readonly prs?: readonly { readonly prUrl?: string }[] },
+  detailed?: DetailedCloudAgent & { readonly prs?: readonly { readonly prUrl?: string }[] },
 ): string {
   return detailed?.composer?.prUrl || detailed?.prs?.find((pullRequest) => pullRequest.prUrl)?.prUrl || "";
 }
 
 export function resolveBranchName(
-  detailed?: DetailedComposer & { readonly prs?: readonly { readonly branchName?: string }[] },
+  detailed?: DetailedCloudAgent & { readonly prs?: readonly { readonly branchName?: string }[] },
 ): string {
   return detailed?.composer?.branchName || detailed?.prs?.find((pullRequest) => pullRequest.branchName)?.branchName || "";
 }
@@ -43,8 +43,8 @@ export function mapProtoPrStatus(status: unknown): Exclude<CloudAgentPrState, "n
 }
 
 export function resolvePr(
-  detailed?: DetailedComposer & {
-    readonly composer?: DetailedComposer["composer"] & { readonly prStatus?: unknown };
+  detailed?: DetailedCloudAgent & {
+    readonly composer?: DetailedCloudAgent["composer"] & { readonly prStatus?: unknown };
     readonly prs?: readonly { readonly prUrl?: string; readonly pullNumber?: number; readonly prStatus?: unknown }[];
   },
 ): { readonly state: CloudAgentPrState; readonly number: number | null } {

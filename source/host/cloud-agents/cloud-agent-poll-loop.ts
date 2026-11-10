@@ -2,7 +2,7 @@
 
 import type { DeadlinePolicy } from "../extensions/scheduling.ts"
 import { buildWatchResult, cloudAgentRateLimitPauseMs, normalizeCloudAgentRunStatus } from "./cloud-agent-watch-policy.ts"
-import type { Clock, DetailedComposer } from "./cloud-agent-watch-policy.ts"
+import type { Clock, DetailedCloudAgent } from "./cloud-agent-watch-policy.ts"
 
 export {
   availableEnvironmentsNote,
@@ -22,7 +22,7 @@ export {
   TEAM_ADMIN_POLICY_REQUEST_TIMEOUT_MS,
   TEAM_ADMIN_POLICY_TTL_MS,
 } from "./cloud-agent-watch-policy.ts"
-export type { Clock, CloudAgentRunStatus, DetailedComposer, SavedEnvironment, SavedEnvironmentClient } from "./cloud-agent-watch-policy.ts"
+export type { Clock, CloudAgentRunStatus, DetailedCloudAgent, SavedEnvironment, SavedEnvironmentClient } from "./cloud-agent-watch-policy.ts"
 
 export const CLOUD_AGENT_MAX_WAIT_MS = 5 * 60 * 60_000
 export const CLOUD_AGENT_POLL_INTERVAL_MS = 10_000
@@ -62,7 +62,7 @@ export class CloudAgentCompletionPoller {
       getBackgroundComposerInfo(
         request: { bcId: string; includeDiff: false; doNotThrowIfSetupNotFinished: true },
         options: { timeoutMs: number },
-      ): Promise<{ composer?: DetailedComposer }>
+      ): Promise<{ composer?: DetailedCloudAgent }>
     },
   ) {}
 
@@ -114,7 +114,7 @@ export class CloudAgentCompletionPoller {
             return
           }
 
-          let detailed: DetailedComposer | undefined
+          let detailed: DetailedCloudAgent | undefined
           try {
             detailed = (await client.getBackgroundComposerInfo(
               { bcId: agentId, includeDiff: false, doNotThrowIfSetupNotFinished: true },

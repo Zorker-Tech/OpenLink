@@ -11,7 +11,7 @@ import type { ExitWebSocket } from "../../source/shared/node/egress-tunnel/exit-
 import { createGatewayRequestDispatch, GATEWAY_COMMAND_FAILED, GATEWAY_TRANSPORT_FAILED, GATEWAY_UNREACHABLE } from "../../source/coordinator/gateway/gateway-request-dispatcher.ts";
 import { FileWorkflowStore, LEGACY_WORKFLOWS_DIRNAME, MANAGED_SKILLS_CHANGE_DEBOUNCE_MS } from "../../source/host/workflows/workflow-store.ts";
 import { NOTIFY_STREAM_STALL_MS } from "../../source/host/extensions/notify-bus/extension.ts";
-import { createSlateRpcTracingInterceptor, SLATE_RPC_TRACE_WINDOW_DURATION_MS } from "../../source/adapters/interop/cursor-backend/rpc-tracing.ts";
+import { createSlateRpcTracingInterceptor, SLATE_RPC_TRACE_WINDOW_DURATION_MS } from "../../source/adapters/interop/slate-backend/rpc-tracing.ts";
 import { DEFAULT_SLATE_COMPUTER_ID, SSE_RECONNECT_MAX_MS, SSE_RECONNECT_MIN_MS } from "../../source/host/local-exec/local-exec-provider.ts";
 import { DNS_PROBE_MIN_INTERVAL_MS, DNS_PROBE_TIMEOUT_MS, GENERAL_CONTROL_HOSTNAME } from "../../source/coordinator/gateway/gateway-dns-diagnostics.ts";
 

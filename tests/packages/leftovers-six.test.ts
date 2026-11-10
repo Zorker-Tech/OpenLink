@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 
 import { COORDINATOR_CANCELLED, COORDINATOR_CONTROL_CHANNEL, COORDINATOR_PROTOCOL_VERSION, COORDINATOR_UNKNOWN_METHOD } from "../../source/shared/rpc/coordinator-port.ts";
 import { MAIN_METHOD_TABLE, MAIN_RPC_CONTRACT_NAME, MAIN_RPC_EVENT_FAMILY } from "../../source/shared/rpc/main.ts";
-import { ACCOUNT_MCP_RPC_TIMEOUT_MS } from "../../source/adapters/interop/cursor-backend/account-mcp.ts";
+import { ACCOUNT_MCP_RPC_TIMEOUT_MS } from "../../source/adapters/interop/slate-backend/account-mcp.ts";
 import { startSearchIndexWorker } from "../../source/host/extensions/content-search/search-index-worker.ts";
 import { AuthNetworkError, generateAuthParams, LoginManager } from "../../source/packages/config/auth/login.ts";
 

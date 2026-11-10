@@ -39,7 +39,7 @@ describe("Slate directory traversal", () => {
     const walked = traversal.walk(createContext(), {
       root,
       excludeGlobs: ["dist"],
-      cursorIgnoreFiles: [],
+      workspaceIgnoreFiles: [],
       source: "ls",
     });
     assert.deepEqual(await linesOf(walked.lines), ["README.md", "src/a.ts", "src/b.ts"]);
@@ -79,7 +79,7 @@ describe("Slate directory traversal", () => {
     const walked = traversal.walk(context, {
       root,
       excludeGlobs: [],
-      cursorIgnoreFiles: [],
+      workspaceIgnoreFiles: [],
       source: "ls",
     });
 

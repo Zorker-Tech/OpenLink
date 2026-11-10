@@ -14,7 +14,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { errorLogTag } from "../../shared/errors/summary.ts";
-import { getSlateInferenceBackendUrl } from "../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { getSlateInferenceBackendUrl } from "../../adapters/interop/slate-backend/slate-backend-client.ts";
 import { getSlateClientVersion } from "../../shared/node/slate-client-metadata.ts";
 import { SlateProductAnalytics } from "../../shared/node/analytics/product-analytics.ts";
 import { setTurnTraceHostBundleVersion } from "../send-trace-host.ts";

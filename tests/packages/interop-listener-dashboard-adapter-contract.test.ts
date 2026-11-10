@@ -6,7 +6,7 @@ import {
   GetSlackInstallUrlRequest,
   GetSlackUserSettingsRequest,
 } from "../../source/adapters/interop/proto/generated/aiserver/v1/dashboard_pb.ts"
-import { adaptListenerDashboardClient } from "../../source/adapters/interop/cursor-backend/listener-integrations-dashboard.ts"
+import { adaptListenerDashboardClient } from "../../source/adapters/interop/slate-backend/listener-integrations-dashboard.ts"
 
 test("listener dashboard reads call their matching counterpart methods with typed empty requests", async () => {
   const calls: Array<[string, object]> = []

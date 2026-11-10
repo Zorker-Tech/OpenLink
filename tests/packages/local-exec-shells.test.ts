@@ -19,7 +19,7 @@ import { createContext } from "../../source/packages/context/context.ts"
 test("the fallback runtime policies allow everything until a test supplies a decision", async () => {
   const ignore = new EmptyWorkspaceIgnorePolicy()
   assert.equal(await ignore.isIgnoredByAny("/repo/a.ts"), false)
-  assert.deepEqual(await ignore.listCursorIgnoreFilesByRoot("/repo"), [])
+  assert.deepEqual(await ignore.listWorkspaceIgnoreFilesByRoot("/repo"), [])
   assert.deepEqual(await ignore.getRepoBlockExcludeGlobs("/repo"), [])
 
   const permissions = new PermissiveLocalExecAuthorization()

@@ -64,5 +64,5 @@ export async function connectCardsFor(dependencies: ConnectCardNeeds): Promise<s
   for (const platform of disconnected) dependencies.emit({ type: "listener-connect", platform, reason: CARD_REASON });
   const names = spokenNames(dependencies, disconnected);
   const verb = disconnected.length === 1 ? "isn't" : "aren't";
-  return `${names} ${verb} connected to the user's Cursor account yet, so this routine won't fire until they connect. The connect card is already in the chat${RESUME_NOTE}`;
+  return `${names} ${verb} connected to the user's Slate account yet, so this routine won't fire until they connect. The connect card is already in the chat${RESUME_NOTE}`;
 }

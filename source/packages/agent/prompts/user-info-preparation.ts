@@ -49,7 +49,7 @@ export type PriorUserInfoMessage = Parameters<typeof fromRedactedCoreMessage>[0]
       readonly userInfoSummarizationEpoch?: unknown
       readonly omitCloudWorkerProcedure?: unknown
       readonly isSummary?: unknown
-      readonly composer2CloudTestingSectionsPlacement?: unknown
+      readonly cloudTestingSectionsPlacement?: unknown
     } | undefined
   } | undefined
 }
@@ -172,7 +172,7 @@ export function getFirstUserInfoCloudTestingSectionsPlacement(priorMessages: rea
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
   const placement = parseCloudTestingSectionsPlacementMetadata(
-    firstMsg.providerOptions?.slate?.composer2CloudTestingSectionsPlacement,
+    firstMsg.providerOptions?.slate?.cloudTestingSectionsPlacement,
   )
   if (placement !== undefined) return placement
   return getFirstUserInfoMessageContent(priorMessages) !== undefined ? "user_info" : undefined

@@ -1,4 +1,4 @@
-import { parseAccountMcpConfigJson, type createAccountMcpWriter } from "../cursor-backend/account-mcp.ts"
+import { parseAccountMcpConfigJson, type createAccountMcpWriter } from "../slate-backend/account-mcp.ts"
 import type { McpAccountWriterPort } from "../../../shared/node/mcp/mcp-manager.ts"
 import type { McpCatalogInstallPort } from "../../../shared/node/mcp/mcp-catalog-flow.ts"
 

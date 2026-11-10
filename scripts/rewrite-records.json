@@ -878,8 +878,9 @@
     },
     "host/runner/conversation-state.ts": {
       "claim": "rewritten",
-      "overlap": 0.685640362225097,
-      "evidence": "tests/packages/host-runner-conversation-state-contract.test.ts adds 17 direct contracts for message selection, prompt notes, await classification, usage sanitation, stream failures, model resolution tracking, and summary configuration. A 16-group read-only baseline probe matched behavior after aliasing the former provider model ids; an isolated mutation sweep caught 10/10 changes."
+      "overlap": 0.6675291073738681,
+      "evidence": "tests/packages/host-runner-conversation-state-contract.test.ts adds 17 direct contracts for message selection, prompt notes, await classification, usage sanitation, stream failures, model resolution tracking, and summary configuration. A 16-group read-only baseline probe matched behavior after aliasing the former provider model ids; an isolated mutation sweep caught 10/10 changes.",
+      "refreshReason": "Summary-family model detection now comes from the Slate backend model-id adapter."
     },
     "host/extensions/session/session-materialization.ts": {
       "claim": "rewritten",
@@ -941,8 +942,9 @@
     },
     "packages/cursor-config/auth/login.ts": {
       "claim": "rewritten",
-      "overlap": 0.6750369276218612,
-      "evidence": "tests/packages/host-login-contract.test.ts adds 10 contracts for verifier/challenge construction, browser-open ordering, abort, 404 polling, three-failure stop, MDM denial, token validation, API-key exchange status/error mapping, and proxy credential redaction. A 4-path read-only baseline probe matched challenge construction, token polling, API-key exchange and LoginManager orchestration; an isolated mutation sweep caught 12/12 changes."
+      "overlap": 0.6336779911373708,
+      "evidence": "tests/packages/host-login-contract.test.ts adds 10 contracts for verifier/challenge construction, browser-open ordering, abort, 404 polling, three-failure stop, MDM denial, token validation, API-key exchange status/error mapping, and proxy credential redaction. A 4-path read-only baseline probe matched challenge construction, token polling, API-key exchange and LoginManager orchestration; an isolated mutation sweep caught 12/12 changes.",
+      "refreshReason": "Login endpoints now come from the Slate-named backend endpoint adapter, with external hosts confined there."
     },
     "host/extensions/session/conversation-size-limits.ts": {
       "claim": "rewritten",
@@ -1485,7 +1487,7 @@
     "host/extensions/inference/slate-labeling.ts": {
       "claim": "rewritten",
       "overlap": 0.6290726817042607,
-      "evidence": "tests/packages/host-inference-providers-and-labeling.test.ts pins follow-up deduplication, summarization/empty skips, post-turn labeling, request projection, failure diagnostics and the wrapper surface; host-inference-labeling-adapter-contract.test.ts pins wire mapping at the adapter; turn-settle and inference service/session tests cover callers. Wire request types and proto conversion now stay in adapters/interop/cursor-backend; host code owns its labeling DTOs. Focused suites pass 49/49 and work-host typecheck passes."
+      "evidence": "tests/packages/host-inference-providers-and-labeling.test.ts pins follow-up deduplication, summarization/empty skips, post-turn labeling, request projection, failure diagnostics and the wrapper surface; host-inference-labeling-adapter-contract.test.ts pins wire mapping at the adapter; turn-settle and inference service/session tests cover callers. Wire request types and proto conversion now stay in adapters/interop/slate-backend; host code owns its labeling DTOs. Focused suites pass 49/49 and work-host typecheck passes."
     },
     "host/extensions/session/session-profile-files.ts": {
       "claim": "rewritten",
@@ -1509,8 +1511,8 @@
     },
     "packages/agent/prompts/user-info-rule-sections.ts": {
       "claim": "rewritten",
-      "overlap": 0.4720670391061452,
-      "refreshReason": "Renamed the extra user-rule input to a Slate-owned general name as part of the prompt-profile boundary refactor, then remeasured the grouped rule renderer.",
+      "overlap": 0.46089385474860334,
+      "refreshReason": "Rule directory detection now uses Slate workspace conventions plus the external workspace adapter.",
       "evidence": "Prompt, rule-section, user-info and action-handler contracts pass 62/62; Work-host typecheck passes. Contracts pin generated-rule ordering, section ordering and omission, rule counts, user-info rerender behavior, and the Slate-owned PromptRuleDescriptor renderer."
     },
     "packages/agent/context-processing-path-trust.ts": {
@@ -1576,8 +1578,9 @@
     },
     "host/automations/listener-integrations.automations.ts": {
       "claim": "rewritten",
-      "overlap": 0.6086956521739131,
-      "evidence": "tests/packages/interop-listener-dashboard-adapter-contract.test.ts pins each generated dashboard request to its matching adapter call; the adapter, host aggregation, automations extension and gateway suites pass 29/29. Generated request types and the counterpart dashboard URL now live in interop; host aggregation uses the injected dashboard port. The external-schema allowlist drops this host module, and typecheck passes."
+      "overlap": 0.591304347826087,
+      "evidence": "tests/packages/interop-listener-dashboard-adapter-contract.test.ts pins each generated dashboard request to its matching adapter call; the adapter, host aggregation, automations extension and gateway suites pass 29/29. Generated request types and the counterpart dashboard URL now live in interop; host aggregation uses the injected dashboard port. The external-schema allowlist drops this host module, and typecheck passes.",
+      "refreshReason": "Dashboard integration URL now carries a Slate-owned export name while the external host stays in the backend adapter."
     },
     "host/extensions/teach-recording/extension.ts": {
       "claim": "rewritten",
@@ -1749,8 +1752,9 @@
     },
     "host/ports/telemetry.ts": {
       "claim": "rewritten",
-      "overlap": 0.6776556776556777,
-      "evidence": "Four direct contracts pin error projection, trimmed identity tags, the complete no-op telemetry surface and stable stage catalogs. The telemetry port, transcript and telemetry-service suites pass 24/24; work-host typecheck passes. Catalog values, error details and the no-op port are separated into Slate-owned modules."
+      "overlap": 0.663003663003663,
+      "evidence": "Four direct contracts pin error projection, trimmed identity tags, the complete no-op telemetry surface and stable stage catalogs. The telemetry port, transcript and telemetry-service suites pass 24/24; work-host typecheck passes. Catalog values, error details and the no-op port are separated into Slate-owned modules.",
+      "refreshReason": "Process crash telemetry now names Slate binaries instead of the former product binaries."
     },
     "host/transcript/slate-upgrade-resume-store.ts": {
       "claim": "rewritten",
@@ -1995,8 +1999,9 @@
     },
     "host/attachments/generate-image-service.ts": {
       "claim": "rewritten",
-      "overlap": 0.734375,
-      "evidence": "Image-generation and backend-client suites pass 12/12, pinning model selection, max mode, request-id forwarding, reference images, decoded bytes, MIME preservation and separate generation/persistence failures. Work-host typecheck passes. The service now uses a Slate-owned runner contract rather than deriving its type from the Cursor adapter."
+      "overlap": 0.7109375,
+      "evidence": "Image-generation and backend-client suites pass 12/12, pinning model selection, max mode, request-id forwarding, reference images, decoded bytes, MIME preservation and separate generation/persistence failures. Work-host typecheck passes. The service now uses a Slate-owned runner contract rather than deriving its type from the Cursor adapter.",
+      "refreshReason": "Image generation now binds through the Slate-named backend adapter."
     },
     "packages/local-exec/utils/edit-block-handler.ts": {
       "claim": "rewritten",
@@ -2407,8 +2412,9 @@
     },
     "packages/agent/prompts/user-info-available-skills.ts": {
       "claim": "rewritten",
-      "overlap": 0.7357594936708861,
-      "evidence": "Prompt construction and prompt-token tracking suites pass 61/61. Mutations that admit invocation-disabled skills, combine structured and legacy sources, and hide skills from the desktop subagent are caught. The same builder supplies the prompt section, token estimate and budget strategy. Slate-owned inputs use workspaceRules/displayWorkspaceRules. Measured overlap is 0.7357594936708861 against 632 baseline pairs."
+      "overlap": 0.7183544303797469,
+      "evidence": "Prompt construction and prompt-token tracking suites pass 61/61. Mutations that admit invocation-disabled skills, combine structured and legacy sources, and hide skills from the desktop subagent are caught. The same builder supplies the prompt section, token estimate and budget strategy. Slate-owned inputs use workspaceRules/displayWorkspaceRules. Measured overlap is 0.7357594936708861 against 632 baseline pairs.",
+      "refreshReason": "Skill directory markers now use Slate workspace conventions plus the external workspace adapter."
     },
     "packages/agent/prompts/user-info-preparation.ts": {
       "claim": "rewritten",
@@ -2418,8 +2424,8 @@
     },
     "packages/agent/prompts/composer2-cloud-testing-sections.ts": {
       "claim": "rewritten",
-      "overlap": 0.7142857142857143,
-      "refreshReason": "Cloud testing prompt props now type the optional subagent identity as SlateSubagentType instead of the generated oneof shape.",
+      "overlap": 0.6979591836734694,
+      "refreshReason": "Cloud testing prompt sections now use Slate-owned cloud-agent type names.",
       "evidence": "prompts.test passes 40/40, and the thread policy and interop projection contracts pass 3/3. The `slack_thread` value is mapped to `thread` only in interop, and a wrong mapping is caught. The testing prompt now consumes Slate subagent values. Measured overlap is 0.7142857142857143 against 490 baseline pairs."
     },
     "host/boxes/box-env.ts": {
@@ -2687,8 +2693,8 @@
     },
     "packages/agent/tools/subagent-model-force-policy.ts": {
       "claim": "rewritten",
-      "overlap": 0.5,
-      "refreshReason": "Replaced three free-standing declaration pairs with a canonical Slate policy value list and a frozen compatibility object, preserving the public keys, value order and literals.",
+      "overlap": 0.4,
+      "refreshReason": "The request-based force policy now uses Slate agent vocabulary.",
       "evidence": "agent-leaves.test.ts and the subagent run, preparation and runtime suites pass 179/179 under Node 24. The public policy values and invalid-value guard are covered. Measured overlap is 0.5 against 10 baseline pairs."
     },
     "host/runner/turn-agent-composition.ts": {
@@ -2851,8 +2857,8 @@
     },
     "packages/agent/actions/execute-plan-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.7828947368421053,
-      "refreshReason": "The handler now consumes the versioned SlateExecutePlanActionPayload and Slate plan-mode vocabulary; only historical request context and unknown mode codes remain in the compatibility sidecar.",
+      "overlap": 0.7723684210526316,
+      "refreshReason": "Plan execution now reads and writes Slate provider-option and cloud-testing placement names.",
       "evidence": "Plan action adapter, handler, plan-file restoration, todo, simulated-turn, mode and unknown-code round-trip tests pass. The handler validates the Slate payload, decodes request context through its boundary adapter, preserves unknown numeric modes on the stored message, and retains saved-plan fallback and file restoration. Work-host typecheck and the full Node 24 suite pass 9991/9991. Measured overlap is 0.7828947368421053 against 1520 baseline pairs."
     },
     "packages/agent-summarization/durable-blocks.ts": {

@@ -1,7 +1,7 @@
 import type { CatalogModel } from "../../shared/agents/model-catalog.ts";
 import type {
   Clock,
-  DetailedComposer,
+  DetailedCloudAgent,
   PollingPolicy,
   SavedEnvironmentClient,
 } from "./cloud-agent-poll-loop.ts";
@@ -12,9 +12,9 @@ export const CLOUD_AGENT_REQUEST_SOURCE = "slate";
 export interface CloudAgentClient extends SavedEnvironmentClient {
   startBackgroundComposerFromSnapshot(request: Record<string, unknown>): Promise<{ composer?: { bcId?: string } }>;
   getBackgroundComposerInfo(request: Record<string, unknown>, options?: { timeoutMs: number }): Promise<{
-    composer?: DetailedComposer & {
+    composer?: DetailedCloudAgent & {
       prompt?: { text?: string };
-      composer?: DetailedComposer["composer"] & {
+      composer?: DetailedCloudAgent["composer"] & {
         bcId?: string;
         name?: string;
         isArchived?: boolean;

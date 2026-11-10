@@ -12,6 +12,8 @@
  * guess: the longest description that fits the budget is the one used.
  */
 
+import { SLATE_SKILLS_DIRECTORY } from "../workspace-conventions.ts"
+import { EXTERNAL_PLUGIN_CACHE_SKILLS_MARKER, EXTERNAL_SKILL_DIRECTORY_MARKERS } from "../../../adapters/interop/workspace/external-workspace-directories-adapter.ts"
 import { renderContent } from "../../prompt-jsx/index.ts"
 import type { PromptNode } from "../../prompt-jsx/index.ts"
 import { estimateStringTokenCount } from "../utils/token-estimate.ts"
@@ -258,17 +260,13 @@ function getOmittedSkillDirectories(skills: readonly SkillCatalogItem[]): string
 
 /** The directories a skill's own tree is listed under, as the model would look them up. */
 const SKILL_PATH_MARKERS = [
-  "/.cursor/skills/",
-  "/.cursor/skills-cursor/",
-  "/.agents/skills/",
-  "/.claude/skills/",
-  "/.codex/skills/",
-  "/.claude/plugins/",
+  `/${SLATE_SKILLS_DIRECTORY}/`,
+  ...EXTERNAL_SKILL_DIRECTORY_MARKERS,
 ] as const
 
 /** The skills directory of the plugin cache a path sits in, when it sits in one. */
 function pluginCacheSkillsDirectory(normalizedPath: string): string | undefined {
-  const cacheMarker = "/.cursor/plugins/cache/"
+  const cacheMarker = EXTERNAL_PLUGIN_CACHE_SKILLS_MARKER
   const cacheIndex = normalizedPath.indexOf(cacheMarker)
   if (cacheIndex === -1) return undefined
   const skillsIndex = normalizedPath.indexOf("/skills/", cacheIndex)

@@ -1,4 +1,5 @@
 /** Names and statuses emitted by the remote MCP provider, kept at the boundary where they are interpreted. */
+export const APP_CONTROL_MCP_SERVER_ID = "cursor-app-control"
 export const BROWSER_EXTENSION_MCP_PROVIDER_ID = "cursor-browser-extension"
 export const IDE_BROWSER_MCP_PROVIDER_ID = "cursor-ide-browser"
 export const ENVIRONMENT_CONTROL_MCP_PROVIDER_ID = "cursor-dev-control"
@@ -6,7 +7,7 @@ export const CUSTOM_USER_TOOLS_PROVIDER_ID = "custom-user-tools"
 
 export const NON_AUTHENTICATABLE_MCP_PROVIDER_IDS = new Set([
   "cursor-app-control",
-  "cursor-backend-control",
+  "slate-backend-control",
   BROWSER_EXTENSION_MCP_PROVIDER_ID,
   IDE_BROWSER_MCP_PROVIDER_ID,
   ENVIRONMENT_CONTROL_MCP_PROVIDER_ID,

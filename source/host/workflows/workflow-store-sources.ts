@@ -1,3 +1,5 @@
+import { SLATE_RULES_DIRECTORY } from "../../packages/agent/workspace-conventions.ts";
+import { EXTERNAL_RULE_DIRECTORIES } from "../../adapters/interop/workspace/external-workspace-directories-adapter.ts";
 import { dirname, join } from "node:path";
 import { readFileSync, readdirSync, statSync, type Dirent } from "node:fs";
 import { parseWorkflowFile, type WorkflowRecord } from "../../shared/workflow-model.ts";
@@ -18,6 +20,8 @@ import { StatKeyedParseCache } from "./stat-keyed-parse-cache.ts";
 import { GlobalWorkflowLibrary, type GlobalWorkflowRecord } from "./workflow-library.ts";
 import { LEGACY_WORKFLOW_FILENAME } from "../../shared/workflow-model.ts";
 import { LEGACY_WORKFLOWS_DIRNAME, type LocalSkillFile } from "./workflow-store-contracts.ts";
+
+const PROJECT_RULE_DIRECTORIES = [SLATE_RULES_DIRECTORY, ...EXTERNAL_RULE_DIRECTORIES];
 
 interface PluginSkillFacts {
   readonly name: string;
@@ -201,17 +205,19 @@ export function discoverLocalSkillFiles(homeDir: string, cwd: string): LocalSkil
     addIfPresent(join(directory, ".claude", "CLAUDE.md"), `${directory}/.claude/CLAUDE.md`, "Claude memory");
   }
 
-  let rules: Dirent[] = [];
-  try {
-    rules = readdirSync(join(cwd, ".cursor", "rules"), { withFileTypes: true });
-  } catch {
-    // Project rules are optional.
-  }
-  for (const entry of rules) {
-    if (!entry.isFile() || !/\.(mdc|md)$/i.test(entry.name)) continue;
-    const file = join(cwd, ".cursor", "rules", entry.name);
-    const fallbackName = entry.name.replace(/\.(mdc|md)$/i, "");
-    addIfPresent(file, `.cursor/rules/${entry.name}`, fallbackName);
+  for (const ruleDirectory of PROJECT_RULE_DIRECTORIES) {
+    let rules: Dirent[] = [];
+    try {
+      rules = readdirSync(join(cwd, ruleDirectory), { withFileTypes: true });
+    } catch {
+      // Project rules are optional.
+    }
+    for (const entry of rules) {
+      if (!entry.isFile() || !/\.(mdc|md)$/i.test(entry.name)) continue;
+      const file = join(cwd, ruleDirectory, entry.name);
+      const fallbackName = entry.name.replace(/\.(mdc|md)$/i, "");
+      addIfPresent(file, `${ruleDirectory}/${entry.name}`, fallbackName);
+    }
   }
   return found;
 }

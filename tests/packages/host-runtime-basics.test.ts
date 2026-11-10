@@ -18,7 +18,7 @@ import { buildHostShellArgs } from "../../source/host/boxes/box-shell-command.ts
 import { assertPathOutsideProtectedRoots, SlateProtectedPathError } from "../../source/host/boxes/protected-path-guard.ts";
 import { augmentWatchResultWithTranscriptDump, cloudAgentTranscriptDumpPath, dumpCloudAgentTranscript, formatCloudAgentDumpCompletionLine } from "../../source/host/cloud-agents/cloud-agent-transcript-dump.ts";
 import { GROUP_MAX_MEMBERS, getSlateGroupPath, isSlateGroupDir, normalizeMemberIds, normalizeRemoteMembers, readSlateGroupConfig, writeSlateGroupConfig } from "../../source/host/groups/group-store.ts";
-import { createSlateMobilePushSender } from "../../source/adapters/interop/cursor-backend/mobile-push-adapter.ts";
+import { createSlateMobilePushSender } from "../../source/adapters/interop/slate-backend/mobile-push-adapter.ts";
 import { SlateMobilePushNotifier, SLATE_MOBILE_PUSH_FOCUS_FRESHNESS_MS, type MobilePushInput } from "../../source/host/notifications/mobile-push-notifier.ts";
 import { createSlateTransport } from "../../source/host/ports/transport.ts";
 import { bucketClockSkewDeltaMs, sanitizeCrossClockDurationMs, SEND_DISPATCH_MAX_PLAUSIBLE_MS } from "../../source/host/runner/clock-skew-guard.ts";

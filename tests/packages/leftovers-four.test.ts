@@ -11,7 +11,7 @@ import { SLATE_LOG_KEY, TELEMETRY_DROPPED_EVENT, TELEMETRY_DROP_REASONS } from "
 import { classifyAttachment, classifyMimeType, classifyPathLike, countAttachmentKinds } from "../../source/shared/media/attachment-summary.ts";
 import { MCP_ERROR_RESULT_CLASS } from "../../source/shared/node/mcp/mcp-diagnostics.ts";
 import { SlateMcpListingSummaries } from "../../source/shared/node/mcp/mcp-listing-summaries.ts";
-import { LIST_TOOLS_TIMEOUT_MS, SlateBackendMcpExecError } from "../../source/adapters/interop/cursor-backend/backend-mcp-exec.ts";
+import { LIST_TOOLS_TIMEOUT_MS, SlateBackendMcpExecError } from "../../source/adapters/interop/slate-backend/backend-mcp-exec.ts";
 import { HIDDEN_ENTRY_REPAIR_VERSION } from "../../source/host/extensions/session/session-maintenance.ts";
 
 describe("the agents the platform runs for itself", () => {

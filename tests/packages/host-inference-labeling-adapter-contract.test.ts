@@ -5,7 +5,7 @@ import {
   AgentFollowupCategorizationRequest,
   AgentPostTurnLabelingRequest,
 } from "../../source/adapters/interop/proto/generated/aiserver/v1/inference_pb.ts";
-import { adaptSlateInferenceLabelingClient } from "../../source/adapters/interop/cursor-backend/slate-labeling-adapter.ts";
+import { adaptSlateInferenceLabelingClient } from "../../source/adapters/interop/slate-backend/slate-labeling-adapter.ts";
 
 describe("Slate inference labeling wire adapter", () => {
   it("projects host follow-up values into the backend request and returns its answer", async () => {

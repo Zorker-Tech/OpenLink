@@ -7,7 +7,7 @@ import {
   microsoftTeamsCloudTrigger,
   pagerDutyCloudTrigger,
   sentryCloudTrigger,
-} from "../../source/adapters/interop/cursor-backend/slate-automation-cloud-trigger-adapter.ts"
+} from "../../source/adapters/interop/slate-backend/slate-automation-cloud-trigger-adapter.ts"
 import type { LinearTrigger, MicrosoftTeamsTrigger, PagerDutyTrigger, SentryTrigger } from "../../source/shared/automations.ts"
 
 function teamsOf(trigger: ReturnType<typeof microsoftTeamsCloudTrigger>) {

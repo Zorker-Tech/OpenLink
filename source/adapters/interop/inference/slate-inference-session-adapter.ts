@@ -1,12 +1,12 @@
 import type { InferenceReason } from "../proto/generated/aiserver/v1/inference_pb.ts";
 import {
-  createCursorInferencePromptSession,
+  createSlateInferencePromptSession,
   createSlateAttachedMediaUrlProvider,
   resolveSlateRunPrivacyMode,
   type RequestLineage,
   type SlateInferenceOptions,
-} from "../cursor-backend/cursor-inference.ts";
-import { createSlateInferenceLabelingClient } from "../cursor-backend/slate-labeling-adapter.ts";
+} from "../slate-backend/slate-backend-client.ts";
+import { createSlateInferenceLabelingClient } from "../slate-backend/slate-labeling-adapter.ts";
 import type { LabelingClient } from "../../../host/extensions/inference/slate-labeling-contracts.ts";
 import type {
   SlateInferenceSessionInteropPort,
@@ -25,7 +25,7 @@ export interface SlateInferenceCredentials {
   readonly getMachineId: () => Promise<string> | string;
 }
 
-export type SlateInferenceBackendSessionOptions = Parameters<typeof createCursorInferencePromptSession>[0];
+export type SlateInferenceBackendSessionOptions = Parameters<typeof createSlateInferencePromptSession>[0];
 
 export interface SlateInferenceAdapterFactories {
   readonly resolvePrivacyMode?: (options: Omit<SlateInferenceOptions, "backendUrl">) => Promise<unknown> | unknown;
@@ -63,7 +63,7 @@ export function createSlateInferenceSessionInteropAdapter(
   const backend = backendCredentials(credentials);
   const media = (factories.createAttachedMediaUrlProvider ?? createSlateAttachedMediaUrlProvider)(backend);
   const privacyMode = factories.resolvePrivacyMode ?? resolveSlateRunPrivacyMode;
-  const promptSession = factories.createPromptSession ?? createCursorInferencePromptSession;
+  const promptSession = factories.createPromptSession ?? createSlateInferencePromptSession;
   const labelingClient = factories.createLabelingClient ?? createSlateInferenceLabelingClient;
   return {
     resolvePrivacyMode: () => privacyMode(backend),

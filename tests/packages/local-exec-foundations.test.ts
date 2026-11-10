@@ -232,7 +232,7 @@ test("a command that could kill itself is refused as a rejected promise with the
 // ---------------------------------------------------------------------------------------------
 
 const ignoreService = {
-  listCursorIgnoreFilesByRoot: async () => [],
+  listWorkspaceIgnoreFilesByRoot: async () => [],
   getRepoBlockExcludeGlobs: async () => [],
   isRepoBlocked: () => false,
 }

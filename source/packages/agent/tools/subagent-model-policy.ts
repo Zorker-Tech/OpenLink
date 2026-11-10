@@ -7,7 +7,7 @@
  * picker may pick, but only within the family.
  */
 
-const policyValues = ["none", "parent_pin", "request_based_composer"] as const
+const policyValues = ["none", "parent_pin", "request_based_agent"] as const
 
 export type SubagentModelForcePolicy = (typeof policyValues)[number]
 

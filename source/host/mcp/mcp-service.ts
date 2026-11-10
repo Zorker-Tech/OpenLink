@@ -9,11 +9,11 @@
  * one change that is not a mutation of the account's servers but still tells the host to look again.
  */
 
-import { createAccountMcpWriter, fetchAccountMcpServers, fetchEffectiveUserPlugins, type AccountMcpClient, type AccountMcpDependencies } from "../../adapters/interop/cursor-backend/account-mcp.ts";
+import { createAccountMcpWriter, fetchAccountMcpServers, fetchEffectiveUserPlugins, type AccountMcpClient, type AccountMcpDependencies } from "../../adapters/interop/slate-backend/account-mcp.ts";
 import { createMcpAccountWriterAdapters } from "../../adapters/interop/agent/mcp-catalog-install-adapter.ts";
-import { createDashboardSlateBackendMcpExec, type DashboardMcpExecClient } from "../../adapters/interop/cursor-backend/backend-mcp-exec.ts";
-import { createMcpDashboardClient } from "../../adapters/interop/cursor-backend/mcp-dashboard-client-adapter.ts";
-import { getSlateInferenceBackendUrl } from "../../adapters/interop/cursor-backend/cursor-inference.ts";
+import { createDashboardSlateBackendMcpExec, type DashboardMcpExecClient } from "../../adapters/interop/slate-backend/backend-mcp-exec.ts";
+import { createMcpDashboardClient } from "../../adapters/interop/slate-backend/mcp-dashboard-client-adapter.ts";
+import { getSlateInferenceBackendUrl } from "../../adapters/interop/slate-backend/slate-backend-client.ts";
 import { isEffectivePluginInstalled, uninstallClearedInstallRecord } from "../../shared/mcp.ts";
 import type { McpRuntimeConfig } from "../../shared/node/mcp/mcp-definition-source.ts";
 import type { SlateMcpAccountDisplay, SlateMcpDisplayRow } from "../../shared/node/mcp/mcp-display-runtime.ts";

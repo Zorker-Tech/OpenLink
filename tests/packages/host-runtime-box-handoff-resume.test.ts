@@ -213,7 +213,7 @@ describe("what a resume says", () => {
     const slack = world();
     await slack.resume.resumeAfterListenerConnect("agent-1", "slack");
     assert.match(String(slack.lastPrompt()), /\[Slack is now connected/);
-    assert.match(String(slack.lastPrompt()), /\/invite @Cursor/);
+    assert.match(String(slack.lastPrompt()), /\/invite @Slate/);
     const github = world();
     await github.resume.resumeAfterListenerConnect("agent-1", "github");
     assert.match(String(github.lastPrompt()), /\[GitHub is now connected/);
@@ -277,9 +277,9 @@ describe("the whole resume prompts are stable", () => {
     await mcp.resume.resumeAfterMcpAuth("agent-1", "github", "work");
     assert.equal(hashOf(mcp.lastPrompt()), "f6d46189a561332dd0f7813a2d34b8a332fd8f4c7bc68310341cda3e0357034f");
     for (const [platform, expected] of [
-      ["slack", "c761889544e837ba8db8e24703967d0d81ee8ae0e395f79e38bd5c867dc3f943"],
-      ["github", "88ccbed58d21c79551c62964db39ff9422a6c5ff131d0223b173712118fbb4ca"],
-      ["teams", "88ccbed58d21c79551c62964db39ff9422a6c5ff131d0223b173712118fbb4ca"],
+      ["slack", "e2c9b59d1490303782ebaade4828c2fc9d7a2020fc92b17e35e46b3b7c48907d"],
+      ["github", "b9ae01492db4f3c8990d09b9ed12859ec75ce6ede40c4a11cc6f410cde7d2b37"],
+      ["teams", "b9ae01492db4f3c8990d09b9ed12859ec75ce6ede40c4a11cc6f410cde7d2b37"],
     ]) {
       const listener = world();
       await listener.resume.resumeAfterListenerConnect("agent-1", platform as string);

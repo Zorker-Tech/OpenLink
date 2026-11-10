@@ -1,3 +1,4 @@
+import { LOCAL_CLI_MODE_ENV } from "../../../packages/config/request.ts";
 import { randomUUID } from "node:crypto";
 
 import type { DeadlinePolicy } from "../../../host/extensions/scheduling.ts";
@@ -74,7 +75,7 @@ export function createBootstrapChecksum(machineId: string, now = Date.now()): st
 }
 
 function includeLocalCommandLineMode(headers: Headers, env: NodeJS.ProcessEnv): void {
-  if (env.CURSOR_AGENT_CLI_LOCAL_MODE === "true") headers.set("local-cli-mode", "true");
+  if (env[LOCAL_CLI_MODE_ENV] === "true") headers.set("local-cli-mode", "true");
 }
 
 function requestHeaders(machineId: string, accessToken: string | undefined, env: NodeJS.ProcessEnv | undefined): Headers {

@@ -1,7 +1,7 @@
 import type { Context } from "../context/context.ts";
 
 export interface LsIgnoreService {
-  listCursorIgnoreFilesByRoot(root: string): Promise<readonly string[]>;
+  listWorkspaceIgnoreFilesByRoot(root: string): Promise<readonly string[]>;
   getRepoBlockExcludeGlobs(root: string): Promise<readonly string[]>;
   isRepoBlocked(path: string): Promise<boolean> | boolean;
 }
@@ -12,7 +12,7 @@ export interface LsTraversalRuntime {
     args: {
       root: string;
       excludeGlobs: readonly string[];
-      cursorIgnoreFiles: readonly string[];
+      workspaceIgnoreFiles: readonly string[];
       sandboxPolicy?: unknown;
       source: "ls";
     },

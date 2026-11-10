@@ -20,20 +20,20 @@ export async function resolveForcedSubagentModel(input: ForcedSubagentModelInput
     case SubagentModelForcePolicy.RequestBasedComposer: {
       if (input.forceModelId === undefined) return undefined
       const requestedModel = input.userRequestedModelId
-      const selectedComposerModel = requestedModel !== undefined
+      const selectedAgentModel = requestedModel !== undefined
         && isBuiltInSubagentModelId(requestedModel)
         && !input.isModelBlocked(requestedModel)
         && input.isModelValid(requestedModel)
         && await input.isMaxModeCompatible(requestedModel)
         ? requestedModel
         : undefined
-      if (selectedComposerModel !== undefined) {
+      if (selectedAgentModel !== undefined) {
         return input.logForcedModel({
-          candidateModelId: selectedComposerModel,
+          candidateModelId: selectedAgentModel,
           modelResolutionReason: "force_model_user_agent_selection",
           reasonDetails: {
             forceModelId: input.forceModelId,
-            userSelectedForcedComposerModelId: selectedComposerModel,
+            userSelectedForcedAgentModelId: selectedAgentModel,
             subagentModelForcePolicy: input.subagentModelForcePolicy,
           },
         })

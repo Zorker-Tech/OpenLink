@@ -48,7 +48,7 @@ export function evaluateUserInfoRefresh(input: UserInfoRefreshEvaluationInput): 
 
   const signals = [
     {
-      reason: "agent_type_or_composer_rules_change",
+      reason: "agent_type_or_rules_change",
       active: shouldRerenderUserInfo(
         input.hasExistingNonSystemMessages,
         input.priorMessages,

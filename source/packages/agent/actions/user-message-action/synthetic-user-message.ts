@@ -12,7 +12,7 @@
  */
 
 import { SYSTEM_NOTIFICATION_TAG } from "../../../constants/system-notification.ts";
-import { hasCounterpartSummaryOrigin } from "../../../../adapters/interop/cursor-backend/summary-origin-marker-adapter.ts";
+import { hasCounterpartSummaryOrigin } from "../../../../adapters/interop/slate-backend/summary-origin-marker-adapter.ts";
 import {
   getUserMessageTextContent,
   isNotificationOnlyUserMessage,

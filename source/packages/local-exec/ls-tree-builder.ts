@@ -134,14 +134,14 @@ export async function buildLocalDirectoryTree<Node>(args: {
   const tree = directoryNode({ path: root, completed: true, makeNode: makeDirectory });
   directories.set(root, tree);
   const state = { charactersUsed: root.length, budgetExceeded: false };
-  const [cursorIgnoreFiles, repositoryGlobs] = await Promise.all([
-    args.ignoreService.listCursorIgnoreFilesByRoot(args.root),
+  const [workspaceIgnoreFiles, repositoryGlobs] = await Promise.all([
+    args.ignoreService.listWorkspaceIgnoreFilesByRoot(args.root),
     args.ignoreService.getRepoBlockExcludeGlobs(args.root),
   ]);
   const walked = args.traversal.walk(args.context, {
     root: args.root,
     excludeGlobs: [...args.ignoreGlobs, ...repositoryGlobs],
-    cursorIgnoreFiles,
+    workspaceIgnoreFiles,
     ...(args.sandboxPolicy === undefined ? {} : { sandboxPolicy: args.sandboxPolicy }),
     source: "ls",
   });

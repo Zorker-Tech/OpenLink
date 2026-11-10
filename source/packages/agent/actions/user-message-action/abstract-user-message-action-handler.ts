@@ -611,11 +611,11 @@ function trailingToolBatchHasFailure(turnMessages: readonly CoreMessageLike[]): 
     }
     const highLevelResult = (
       turnMessage.providerOptions as {
-        readonly cursor?: {
+        readonly slate?: {
           readonly highLevelToolCallResult?: { readonly isError?: unknown };
         };
       } | undefined
-    )?.cursor?.highLevelToolCallResult;
+    )?.slate?.highLevelToolCallResult;
     if (highLevelResult?.isError !== false) {
       return true;
     }

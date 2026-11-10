@@ -1,7 +1,7 @@
 /** Build the counterpart analytics client and keep credential outages from suppressing log delivery. */
 
 import { AnalyticsService } from "../proto/generated/aiserver/v1/analytics_connect.ts"
-import { createSlateCursorBackendClient } from "../cursor-backend/cursor-inference.ts"
+import { createSlateBackendClient } from "../slate-backend/slate-backend-client.ts"
 import type { StructuredLogClient } from "../../../shared/observability/structured-log-transport.ts"
 
 export interface AnalyticsClientCredentials {
@@ -21,7 +21,7 @@ export async function telemetryAuthToken(
 }
 
 export function createAnalyticsTelemetryClient(credentials: AnalyticsClientCredentials): StructuredLogClient {
-  return createSlateCursorBackendClient(AnalyticsService, {
+  return createSlateBackendClient(AnalyticsService, {
     getAccessToken: request => telemetryAuthToken(credentials.getAccessToken, request),
     getMachineId: credentials.getMachineId,
   }) as unknown as StructuredLogClient

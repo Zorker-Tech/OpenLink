@@ -1,10 +1,12 @@
+import { resolveSlateBackendApiUrl, resolveSlateBackendWebsiteUrl } from "../../../adapters/interop/slate-backend/backend-endpoints.ts";
+
 /** The token pair and the sign-in options shared by the login entry points. */
 export interface LoginMetadata {
   readonly uuid: string;
   readonly verifier: string;
 }
 
-export interface CursorTokens {
+export interface SlateTokens {
   readonly accessToken: string;
   readonly refreshToken: string;
 }
@@ -23,16 +25,12 @@ export interface ExchangeApiKeyOptions {
   readonly endpoint?: string;
 }
 
-function withoutTrailingSlashes(url: string): string {
-  return url.replace(/\/+$/, "");
-}
-
 export function resolveWebsiteUrl(url?: string): string {
-  return withoutTrailingSlashes(url ?? process.env.CURSOR_WEBSITE_URL ?? "https://cursor.com");
+  return resolveSlateBackendWebsiteUrl(url);
 }
 
 export function resolveApiBaseUrl(url?: string): string {
-  return withoutTrailingSlashes(url ?? process.env.CURSOR_API_BASE_URL ?? "https://api2.cursor.sh");
+  return resolveSlateBackendApiUrl(url);
 }
 
 export class AuthNetworkError extends Error {

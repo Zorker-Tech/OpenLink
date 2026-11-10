@@ -2,7 +2,7 @@ import { parseJwtPayload } from "../../shared/node/slate-token.ts"
 import {
   getAccountIdentityBackendUrl,
   readAccountName,
-} from "../../adapters/interop/cursor-backend/account-name-adapter.ts"
+} from "../../adapters/interop/slate-backend/account-name-adapter.ts"
 import { displayNameFrom, nonEmpty } from "./user-full-name-policy.ts"
 
 export { displayNameFrom, nonEmpty } from "./user-full-name-policy.ts"

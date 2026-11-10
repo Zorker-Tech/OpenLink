@@ -5,9 +5,9 @@ import {
   SIGN_IN_POLICY_VIOLATION_ERROR,
 } from "./mdm-sign-in-policy.ts";
 import { proxyFetch } from "./proxy-fetch.ts";
-import { AuthNetworkError, resolveApiBaseUrl, type CursorTokens, type ExchangeApiKeyOptions } from "./login-contracts.ts";
+import { AuthNetworkError, resolveApiBaseUrl, type SlateTokens, type ExchangeApiKeyOptions } from "./login-contracts.ts";
 
-function tokenPair(value: unknown): value is CursorTokens {
+function tokenPair(value: unknown): value is SlateTokens {
   return typeof value === "object"
     && value !== null
     && "accessToken" in value
@@ -20,7 +20,7 @@ function tokenPair(value: unknown): value is CursorTokens {
 export async function exchangeApiKeyForTokens(
   apiKey: string,
   options?: ExchangeApiKeyOptions,
-): Promise<CursorTokens | null> {
+): Promise<SlateTokens | null> {
   const exchangeUrl = `${resolveApiBaseUrl(options?.endpoint)}/auth/exchange_user_api_key`;
   const organizationHeaders = await mdmSignInPolicyHeaders();
   try {

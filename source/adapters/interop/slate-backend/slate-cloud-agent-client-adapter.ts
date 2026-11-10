@@ -1,7 +1,7 @@
 /** Binds the cloud-agent and dashboard service schemas to Slate's cloud-agent ports. */
 import { BackgroundComposerService } from "../proto/generated/aiserver/v1/background_composer_connect.ts"
 import { DashboardService } from "../proto/generated/aiserver/v1/dashboard_connect.ts"
-import { createSlateCursorBackendClient } from "./cursor-inference.ts"
+import { createSlateBackendClient } from "./slate-backend-client.ts"
 import type {
   CloudAgentClient,
   DashboardClient,
@@ -19,9 +19,9 @@ function clientOptions(bindings: ClientBindings) {
 }
 
 export function createSlateCloudAgentClient(bindings: ClientBindings): CloudAgentClient {
-  return createSlateCursorBackendClient(BackgroundComposerService, clientOptions(bindings)) as unknown as CloudAgentClient
+  return createSlateBackendClient(BackgroundComposerService, clientOptions(bindings)) as unknown as CloudAgentClient
 }
 
 export function createSlateCloudAgentDashboardClient(bindings: ClientBindings): DashboardClient {
-  return createSlateCursorBackendClient(DashboardService, clientOptions(bindings)) as unknown as DashboardClient
+  return createSlateBackendClient(DashboardService, clientOptions(bindings)) as unknown as DashboardClient
 }

@@ -17,7 +17,7 @@ import {
   wrapPromptSessionWithSlateFollowupLabeling,
 } from "../../source/host/extensions/inference/slate-labeling.ts";
 import { createProviderPromptSession, runRoutedProviderText } from "../../source/host/extensions/inference/provider-session.ts";
-import { createCursorInferencePromptSession } from "../../source/adapters/interop/cursor-backend/cursor-inference.ts";
+import { createSlateInferencePromptSession } from "../../source/adapters/interop/slate-backend/slate-backend-client.ts";
 import { boxLifecycleExtension } from "../../source/host/boxes/box-lifecycle/extension.ts";
 import { BoxLifecycleService } from "../../source/host/boxes/box-lifecycle/box-lifecycle-service.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
@@ -185,13 +185,13 @@ describe("the routed providers", () => {
     const options = { getAccessToken: async () => "token", getMachineId: async () => "machine", requestedModel: { modelId: "m" } } as never;
     // The platform's own backend is the one provider the platform calls its own: it answers with what was asked of it.
     settings.setInferenceProvider("slate");
-    assert.equal((createCursorInferencePromptSession(options) as { getModelId(): string }).getModelId(), "m");
+    assert.equal((createSlateInferencePromptSession(options) as { getModelId(): string }).getModelId(), "m");
     // Every other provider is one of its own, and the session says which model it runs.
     settings.setInferenceProvider("claude-code");
-    assert.equal((createCursorInferencePromptSession(options) as { getModelId(): string }).getModelId(), "claude-code");
+    assert.equal((createSlateInferencePromptSession(options) as { getModelId(): string }).getModelId(), "claude-code");
     setEnv("SLATE_OPENROUTER_MODEL", "anthropic/claude-x");
     settings.setInferenceProvider("openrouter");
-    assert.equal((createCursorInferencePromptSession(options) as { getModelId(): string }).getModelId(), "anthropic/claude-x");
+    assert.equal((createSlateInferencePromptSession(options) as { getModelId(): string }).getModelId(), "anthropic/claude-x");
   });
 });
 

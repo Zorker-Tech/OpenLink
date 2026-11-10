@@ -7,7 +7,7 @@
 
 import { AiService } from "../proto/generated/aiserver/v1/aiserver_connect.ts";
 import { GenerateImageReferenceImage, RunGenerateImageRequest, type RunGenerateImageResponse } from "../proto/generated/aiserver/v1/aiserver_pb.ts";
-import { createSlateCursorBackendClient, type SlateInferenceOptions } from "./cursor-inference.ts";
+import { createSlateBackendClient, type SlateInferenceOptions } from "./slate-backend-client.ts";
 
 export class SlateGenerateImageError extends Error {}
 
@@ -35,8 +35,8 @@ export interface SlateGenerateImageOptions extends Omit<SlateInferenceOptions, "
   readonly client?: GenerateImageClient;
 }
 
-export function createCursorGenerateImageService(options: SlateGenerateImageOptions) {
-  const client = options.client ?? createSlateCursorBackendClient(AiService, options);
+export function createSlateImageGenerator(options: SlateGenerateImageOptions) {
+  const client = options.client ?? createSlateBackendClient(AiService, options);
   return async (_context: unknown, description: string, referenceImages?: readonly GenerateImageReferenceImageInput[]) => {
     const response = await client.runGenerateImage(new RunGenerateImageRequest({
       description,

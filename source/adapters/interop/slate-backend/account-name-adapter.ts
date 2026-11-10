@@ -7,9 +7,9 @@ import {
   type GetMeResponse,
 } from "../proto/generated/aiserver/v1/dashboard_pb.ts"
 import {
-  createSlateCursorBackendClient,
+  createSlateBackendClient,
   getSlateInferenceBackendUrl,
-} from "./cursor-inference.ts"
+} from "./slate-backend-client.ts"
 
 export interface AccountNameParts {
   readonly givenName: string | undefined
@@ -50,7 +50,7 @@ function createGetMeClient(accessToken: string, getMachineId: () => Promise<stri
       readonly getMe: MethodInfoUnary<GetMeRequest, GetMeResponse>
     }
   }
-  return createSlateCursorBackendClient(service, {
+  return createSlateBackendClient(service, {
     getAccessToken: async () => accessToken,
     getMachineId,
   })

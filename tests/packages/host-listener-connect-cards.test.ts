@@ -28,7 +28,7 @@ describe("a listener that is not connected yet", () => {
   it("gets a card for the platform it needs, and the agent is told how to speak of it", async () => {
     const { answer, cards } = await surface({ platforms: ["slack"], connected: async () => false });
     assert.deepEqual(cards, [{ platform: "slack", reason: "so this routine can fire" }]);
-    assert.match(answer ?? "", /^slack isn't connected to the user's Cursor account yet, so this routine won't fire until they connect\./);
+    assert.match(answer ?? "", /^slack isn't connected to the user's Slate account yet, so this routine won't fire until they connect\./);
     assert.match(answer ?? "", /say so in your own words, but don't paste a link or send them to settings/);
   });
 

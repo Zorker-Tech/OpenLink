@@ -86,7 +86,7 @@ describe("classifying a backend failure", () => {
   });
 
   it("reports the inference error type header and the request id", () => {
-    const classified = classifyError(connectError(Code.Unknown, [], "no details", { "x-cursor-inference-request-error-type": "context_length_exceeded" }), { requestId: "req-1" });
+    const classified = classifyError(connectError(Code.Unknown, [], "no details", { "x-slate-backend-client-request-error-type": "context_length_exceeded" }), { requestId: "req-1" });
     assert.equal(classified.displayInfo?.inferenceRequestErrorType, "context_length_exceeded");
     assert.equal(classified.requestId, "req-1");
     assert.equal(classified instanceof RetriableError, true);

@@ -4,7 +4,7 @@ import { test } from "node:test"
 import {
   readAccountName,
   type GetMeClient,
-} from "../../source/adapters/interop/cursor-backend/account-name-adapter.ts"
+} from "../../source/adapters/interop/slate-backend/account-name-adapter.ts"
 import {
   GetMeRequest,
   GetMeResponse,

@@ -26,6 +26,7 @@ import { createSlateRpcTracingInterceptor } from "./rpc-tracing.ts";
 import { SlateSettingsStore } from "../../../shared/node/settings/slate-settings-store.ts";
 import { getSlateRootDir } from "../../../host/host-paths.ts";
 import { createProviderPromptSession } from "../../../host/extensions/inference/provider-session.ts";
+import { LOCAL_CLI_MODE_ENV } from "../../../packages/config/request.ts";
 
 export const PRIVACY_MODE_CACHE_MAX_AGE_MS = 5 * 60_000;
 export const PRIVACY_MODE_FALLBACK_CACHE_MAX_AGE_MS = 10_000;
@@ -47,7 +48,7 @@ export function enhancedObfuscate(bytes: Uint8Array): Uint8Array {
   }
   return bytes;
 }
-export function createCursorChecksum(machineId: string, nowMs = Date.now()): string {
+export function createSlateChecksum(machineId: string, nowMs = Date.now()): string {
   const unixKiloSeconds = Math.floor(nowMs / 1_000_000);
   const bytes = new Uint8Array([
     unixKiloSeconds >> 40 & 255,
@@ -65,7 +66,7 @@ export function getSlateGhostModeHeaderFromPrivacyMode(privacyMode: PrivacyModeV
 }
 export interface PrivacyLookupOptions { readonly backendUrl: string; readonly accessToken: string; readonly machineId: string }
 export type PrivacyModeFetcher = (options: PrivacyLookupOptions) => Promise<PrivacyModeValue | undefined>;
-export async function fetchSlatePrivacyMode(options: PrivacyLookupOptions, client = createSlateCursorBackendClient(
+export async function fetchSlatePrivacyMode(options: PrivacyLookupOptions, client = createSlateBackendClient(
   DashboardService as typeof DashboardService & {
     readonly methods: typeof DashboardService.methods & {
       readonly getUserPrivacyMode: MethodInfoUnary<GetUserPrivacyModeRequest, GetUserPrivacyModeResponse>;
@@ -150,14 +151,14 @@ export function createSlateInferenceInterceptor(options: SlateInferenceOptions):
     const pinned = request.header.get("x-request-id");
     const requestId = pinned != null && pinned !== "" ? pinned : options.randomUUID?.() ?? globalThis.crypto.randomUUID();
     if (auth.mode === "anonymous") request.header.delete("authorization"); else request.header.set("authorization", `Bearer ${auth.accessToken}`);
-    request.header.set("x-cursor-checksum", createCursorChecksum(machineId));
+    request.header.set("x-cursor-checksum", createSlateChecksum(machineId));
     request.header.set("x-cursor-client-type", SLATE_CLIENT_TYPE);
     request.header.set("x-cursor-client-version", getSlateClientVersion(options.env));
     request.header.set(SLATE_BOX_NAMESPACE_HEADER, getBoxNamespace(options.env));
     request.header.set("x-ghost-mode", ghostMode);
     request.header.set("x-request-id", requestId);
     for (const [name, value] of Object.entries(lineageHeaders(options.lineage))) request.header.set(name, value);
-    if ((options.env ?? process.env).CURSOR_AGENT_CLI_LOCAL_MODE === "true") request.header.set("local-cli-mode", "true");
+    if ((options.env ?? process.env)[LOCAL_CLI_MODE_ENV] === "true") request.header.set("local-cli-mode", "true");
     options.onRequestId?.(requestId);
     return await next(request);
   };
@@ -167,10 +168,10 @@ export function createSlateBackendTransport(options: Omit<SlateInferenceOptions,
   const backendUrl = getSlateInferenceBackendUrl();
   return createConnectTransport({ baseUrl: backendUrl, httpVersion: "1.1", interceptors: [createSlateRpcTracingInterceptor(), createSlateInferenceInterceptor({ ...options, backendUrl })] });
 }
-export function createSlateCursorBackendClient<Service extends ServiceType>(service: Service, options: Omit<SlateInferenceOptions, "backendUrl">): Client<Service> { return createClient(service, createSlateBackendTransport(options)); }
+export function createSlateBackendClient<Service extends ServiceType>(service: Service, options: Omit<SlateInferenceOptions, "backendUrl">): Client<Service> { return createClient(service, createSlateBackendTransport(options)); }
 
 export function createSlateAttachedMediaUrlProvider(options: Omit<SlateInferenceOptions, "backendUrl">) {
-  const client = createSlateCursorBackendClient(AgentService, options) as unknown as {
+  const client = createSlateBackendClient(AgentService, options) as unknown as {
     getSignedUrlForAttachedMedia(request: GetSignedUrlForAttachedMediaRequest, options: { signal: AbortSignal }): Promise<GetSignedUrlForAttachedMediaResponse>;
   };
   return {
@@ -192,13 +193,13 @@ export function createSlateAttachedMediaUrlProvider(options: Omit<SlateInference
   };
 }
 
-export function createCursorInferencePromptSession(options: Omit<SlateInferenceOptions, "backendUrl"> & {
+export function createSlateInferencePromptSession(options: Omit<SlateInferenceOptions, "backendUrl"> & {
   readonly requestedModel: RequestedModel;
   readonly inferenceReason?: InferenceReason;
 }) {
   const settingsPath = join(getSlateRootDir(), "settings.json");
   const routedProvider = new SlateSettingsStore(settingsPath).getInferenceProvider();
   if (routedProvider !== "slate") return createProviderPromptSession(routedProvider);
-  const client = createSlateCursorBackendClient(InferenceService, options);
+  const client = createSlateBackendClient(InferenceService, options);
   return createProtoSessionProvider(client, options.requestedModel, undefined, options.inferenceReason).getSession(imageResizingMiddleware);
 }

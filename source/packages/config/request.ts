@@ -6,7 +6,7 @@
  */
 
 /** The environment variable the local command line sets. */
-export const LOCAL_CLI_MODE_ENV = "CURSOR_AGENT_CLI_LOCAL_MODE";
+export const LOCAL_CLI_MODE_ENV = "SLATE_AGENT_CLI_LOCAL_MODE";
 
 /** The header a request carries when it was made from the local command line. */
 export const LOCAL_CLI_MODE_HEADER = "local-cli-mode";

@@ -8,13 +8,13 @@ import { PermissiveLocalExecAuthorization } from "../../source/packages/local-ex
 test("the local executor's default workspace view has no ignored paths", async () => {
   const ignore = new EmptyWorkspaceIgnorePolicy()
 
-  assert.equal(await ignore.isCursorIgnored("/project/file.ts"), false)
+  assert.equal(await ignore.isWorkspaceIgnored("/project/file.ts"), false)
   assert.equal(await ignore.isGitIgnored("/project/file.ts"), false)
   assert.equal(await ignore.isIgnoredByAny("/project/file.ts"), false)
-  assert.deepEqual(await ignore.listCursorIgnoreFilesByRoot("/project"), [])
+  assert.deepEqual(await ignore.listWorkspaceIgnoreFilesByRoot("/project"), [])
   assert.equal(await ignore.isRepoBlocked("/project"), false)
   assert.deepEqual(await ignore.getWorkspaceIgnoreMapping(), {})
-  assert.deepEqual(await ignore.getCursorIgnoreMapping(), {})
+  assert.deepEqual(await ignore.getWorkspaceIgnoreMapping(), {})
   assert.deepEqual(await ignore.getGitIgnoreMapping(), {})
   assert.deepEqual(await ignore.getRepoBlockExcludeGlobs("/project"), [])
 })

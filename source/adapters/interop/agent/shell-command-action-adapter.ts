@@ -236,7 +236,7 @@ export function adaptShellCommandAction(action: SlateShellCommandActionPayload):
     providerOptionsForPromptPlacement(placement) {
       return placement === undefined
         ? undefined
-        : { providerOptions: { slate: { composer2CloudTestingSectionsPlacement: placement } } };
+        : { providerOptions: { slate: { cloudTestingSectionsPlacement: placement } } };
     },
     createTurn: (ctx, stateHandler) => stateHandler.createShellTurn(ctx, shellInvocation),
     run(ctx, resourceAccessor) {

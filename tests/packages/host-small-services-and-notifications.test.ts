@@ -12,7 +12,7 @@ import {
   PrivacyModes,
   toPrivacyMode,
 } from "../../source/host/extensions/codebase-telemetry/privacy-mode.ts";
-import { createListenerIntegrationReads, DASHBOARD_INTEGRATIONS_URL, LISTENER_PLATFORMS } from "../../source/host/automations/listener-integrations.automations.ts";
+import { createListenerIntegrationReads, SLATE_DASHBOARD_INTEGRATIONS_URL, LISTENER_PLATFORMS } from "../../source/host/automations/listener-integrations.automations.ts";
 import { bestEffortToken, createMarketplaceInterceptor, MARKETPLACE_REQUEST_TIMEOUT_MS } from "../../source/adapters/interop/plugin-marketplace/dashboard-client-adapter.ts";
 import { notificationsExtension } from "../../source/host/notifications/extension.ts";
 import { HostExtensions } from "../../source/host/extensions/extension-ids.generated.ts";
@@ -218,12 +218,12 @@ describe("the integrations a listener can be connected for", () => {
 
   it("gives each platform somewhere to go, and the connections an agent has", async () => {
     const { reads } = listenerWorld();
-    assert.deepEqual([await reads.getConnectUrl("github"), await reads.getConnectUrl("slack")], [DASHBOARD_INTEGRATIONS_URL, "https://slack.example/install"]);
+    assert.deepEqual([await reads.getConnectUrl("github"), await reads.getConnectUrl("slack")], [SLATE_DASHBOARD_INTEGRATIONS_URL, "https://slack.example/install"]);
     // An install link that came back empty, or a dashboard that failed, is the integrations page.
     const empty = listenerWorld({ installUrl: null });
-    assert.equal(await empty.reads.getConnectUrl("slack"), DASHBOARD_INTEGRATIONS_URL);
+    assert.equal(await empty.reads.getConnectUrl("slack"), SLATE_DASHBOARD_INTEGRATIONS_URL);
     const failing = listenerWorld({ installFails: true });
-    assert.equal(await failing.reads.getConnectUrl("slack"), DASHBOARD_INTEGRATIONS_URL);
+    assert.equal(await failing.reads.getConnectUrl("slack"), SLATE_DASHBOARD_INTEGRATIONS_URL);
     const channels = await reads.getAgentChannels("agent-1");
     assert.deepEqual(channels.manifests.map((manifest) => manifest.platform), ["slack", "github"]);
     // Only the connections the platform knows are handed on.

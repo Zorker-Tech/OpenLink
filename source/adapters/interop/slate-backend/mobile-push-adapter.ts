@@ -1,5 +1,5 @@
 import { SlateBotService } from "../proto/generated/aiserver/v1/slate_bot_connect.ts"
-import { createSlateCursorBackendClient } from "./cursor-inference.ts"
+import { createSlateBackendClient } from "./slate-backend-client.ts"
 import type { MobilePushInput } from "../../../shared/mobile-push-contracts.ts"
 
 export interface MobilePushBackendRequest {
@@ -34,6 +34,6 @@ export function createSlateMobilePushAdapter(auth: {
   readonly getAccessToken: (options: { readonly backendUrl: string }) => Promise<string>
   readonly getMachineId: () => Promise<string>
 }): (input: MobilePushInput) => Promise<void> {
-  const client = createSlateCursorBackendClient(SlateBotService, auth)
+  const client = createSlateBackendClient(SlateBotService, auth)
   return createSlateMobilePushSender(client as unknown as MobilePushBackendClient)
 }

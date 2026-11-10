@@ -33,7 +33,7 @@ export class LocalDirectoryTraversal implements LsTraversalRuntime {
     args: {
       readonly root: string;
       readonly excludeGlobs: readonly string[];
-      readonly cursorIgnoreFiles: readonly string[];
+      readonly workspaceIgnoreFiles: readonly string[];
       readonly sandboxPolicy?: unknown;
       readonly source: "ls";
     },

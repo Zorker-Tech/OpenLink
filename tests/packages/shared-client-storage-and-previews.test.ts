@@ -22,7 +22,7 @@ test("a client's stored keys are the ones the platform owns", () => {
   assert.equal(ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX, "slate.")
   assert.equal(CLIENT_PERSISTENCE_MAX_VALUE_BYTES, 8 * 1024 * 1024)
   // A key of the platform's own becomes a file name, and the file name reads back as the key.
-  const key = `${ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX}composer-drafts`
+  const key = `${ALLOWED_CLIENT_PERSISTENCE_KEY_PREFIX}draft-inputs`
   const fileName = encodeClientPersistenceFileName(key)
   assert.equal(fileName.includes("/"), false)
   assert.equal(decodeClientPersistenceFileName(fileName), key)

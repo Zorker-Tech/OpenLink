@@ -157,11 +157,11 @@ export class BoxHandoffResume {
     const accountName = messagingPlatform === "slack" ? "Slack" : "GitHub";
     const channelNote =
       messagingPlatform === "slack"
-        ? " For a channel subscriber, also remind them the Cursor bot must be in the channel (/invite @Cursor) or messages there can't reach it."
+        ? " For a channel subscriber, also remind them the Slate bot must be in the channel (/invite @Slate) or messages there can't reach it."
         : "";
     await this.resumeWithHiddenPrompt(
       agentId,
-      `[${accountName} is now connected to the user's Cursor account — ${accountName} subscriber routines can fire. Your first action is a SendMessage telling the user it's connected, then pick up whatever you paused (e.g. finish or re-check the subscriber routine you were setting up).${channelNote} Remember: nothing reaches the user unless it's inside a SendMessage.]`,
+      `[${accountName} is now connected to the user's Slate account — ${accountName} subscriber routines can fire. Your first action is a SendMessage telling the user it's connected, then pick up whatever you paused (e.g. finish or re-check the subscriber routine you were setting up).${channelNote} Remember: nothing reaches the user unless it's inside a SendMessage.]`,
       "Agent failed to resume after listener connect",
     );
   }

@@ -2,7 +2,7 @@ import type { AnalyticsBatchRequest, AnalyticsEventProperty } from "../../../pac
 import type { AnalyticsBufferClient, AnalyticsBufferTokenProvider } from "../../../packages/analytics-client/buffer.ts"
 import { AnalyticsService } from "../proto/generated/aiserver/v1/analytics_connect.ts"
 import { AnalyticsEvent, EventData, TrackEventsRequest } from "../proto/generated/aiserver/v1/analytics_pb.ts"
-import { createSlateCursorBackendClient, getSlateInferenceBackendUrl, type SlateInferenceOptions } from "../cursor-backend/cursor-inference.ts"
+import { createSlateBackendClient, getSlateInferenceBackendUrl, type SlateInferenceOptions } from "../slate-backend/slate-backend-client.ts"
 
 export interface AnalyticsWireClient {
   trackEvents(request: TrackEventsRequest, options: { readonly signal: AbortSignal }): Promise<unknown>
@@ -37,7 +37,7 @@ export function createAnalyticsBufferWireClient(client: AnalyticsWireClient): An
 export function createSlateAnalyticsClient(
   options: Omit<SlateInferenceOptions, "backendUrl">,
 ): AnalyticsBufferClient {
-  const client = createSlateCursorBackendClient(AnalyticsService, options)
+  const client = createSlateBackendClient(AnalyticsService, options)
   return createAnalyticsBufferWireClient(client)
 }
 

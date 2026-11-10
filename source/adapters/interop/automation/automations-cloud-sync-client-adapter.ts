@@ -7,7 +7,7 @@ import {
   UpdateAutomationRequest,
   Workflow,
 } from "../proto/generated/aiserver/v1/automations_pb.ts";
-import { createSlateCursorBackendClient } from "../cursor-backend/cursor-inference.ts";
+import { createSlateBackendClient } from "../slate-backend/slate-backend-client.ts";
 
 export interface AutomationCloudCredentials {
   getAccessToken(args: { readonly backendUrl: string }): Promise<string>;
@@ -72,7 +72,7 @@ export function adaptAutomationCloudRpcClient(client: AutomationCloudRpcPort): C
 
 /** Connects the host-owned automation sync port to the counterpart cloud service. */
 export function createAutomationCloudSyncClient(credentials: AutomationCloudCredentials): CloudSyncClient {
-  const client = createSlateCursorBackendClient(AutomationsService, {
+  const client = createSlateBackendClient(AutomationsService, {
     getAccessToken: credentials.getAccessToken,
     getMachineId: async () => await credentials.getMachineId(),
   });
