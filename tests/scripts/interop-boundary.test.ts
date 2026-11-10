@@ -4,7 +4,6 @@ import { describe, it } from "node:test"
 import {
   compareConsumerAllowlist,
   coreInteropConsumers,
-  declaresExternalPluginManifestDialect,
   declaresPluginMcpInteropSchema,
   importedInteropModules,
   importsCounterpartExecutionWire,
@@ -60,12 +59,6 @@ describe("external wire-schema boundary ledger", () => {
     assert.equal(declaresPluginMcpInteropSchema("export const mcpConfigSchema = z.object({})"), true)
     assert.equal(declaresPluginMcpInteropSchema("export interface McpConfig { mcpServers?: Record<string, unknown> }"), false)
     assert.equal(declaresPluginMcpInteropSchema("export const externalPluginMcpConfigSchema = z.object({})"), false)
-  })
-
-  it("keeps foreign plugin manifest paths and schemas in the interop adapter", () => {
-    assert.equal(declaresExternalPluginManifestDialect('export const manifestPath = ".cursor-plugin/plugin.json"'), true)
-    assert.equal(declaresExternalPluginManifestDialect("const PluginManifestSchema = z.object({})"), true)
-    assert.equal(declaresExternalPluginManifestDialect("export interface SlatePluginManifest { name: string }"), false)
   })
 
   it("keeps generated execution messages out of Slate-owned local-exec wire modules", () => {

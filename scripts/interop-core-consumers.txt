@@ -304,8 +304,6 @@ source/packages/plugin-install/inline-plugin-writer.ts	../../adapters/interop/pl
 source/packages/plugin-install/manifest-parser.ts	../../adapters/interop/plugin-marketplace/plugin-manifest-adapter.ts
 source/packages/plugin-install/marketplace-plugin-loader.ts	../../adapters/interop/plugin-marketplace/plugin-origin.ts
 source/packages/plugin-install/mcp-parser-document.ts	../../adapters/interop/plugin-marketplace/plugin-mcp-config-adapter.ts
-source/packages/plugin-install/plugin-document-loader.ts	../../adapters/interop/hooks/foreign-hook-config-adapter.ts
-source/packages/plugin-install/plugin-variables.ts	../../adapters/interop/plugin-marketplace/plugin-root-variables-adapter.ts
 source/packages/shell-exec/powershell.ts	../../adapters/interop/shell/powershell-state-wrapper-adapter.ts
 source/packages/shell-exec/sandbox/hardcoded-policy.ts	../../../adapters/interop/agent/sandbox-workspace-path-adapter.ts
 source/packages/utils/model-markers.ts	../../adapters/interop/inference/model-capability-adapter.ts

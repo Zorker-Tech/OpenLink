@@ -2451,11 +2451,6 @@
       "overlap": 0.1111111111111111,
       "evidence": "Hook step registry and validator suite passes 55/55. Contracts pin all 21 accepted step names, declaration order, key-to-value identity, uniqueness, foreign-config translation and validation routing. Work-host typecheck passes. A single ordered name tuple now builds both the typed lookup and validator list."
     },
-    "packages/hooks/claude-code-mapper.ts": {
-      "claim": "rewritten",
-      "overlap": 0,
-      "evidence": "Hook configuration mapping moved under adapters/interop/hooks; the packages/hooks compatibility surface now only re-exports the Slate HookConfig contract and adapter entrypoints. hooks.test.ts passes 55/55, plugin hook integration passes 16/16, and mutations to event mapping and source-tool mapping are caught."
-    },
     "packages/hooks/validators/sessionStartResponse.ts": {
       "claim": "rewritten",
       "overlap": 0,
@@ -3946,12 +3941,6 @@
       "overlap": 0.3684210526315789,
       "refreshReason": "Specified Slate's complete hook-step registry, per-step response routing, and the three independently consumed step classifications.",
       "evidence": "hooks.test.ts passes 56/56. Work-host typecheck passes. Removing MCP execution from the permission-step catalogue is caught by the registry contract case. Measured overlap is 0.3684210526315789 against 190 baseline pairs."
-    },
-    "packages/hooks/claude-code-types.ts": {
-      "claim": "rewritten",
-      "overlap": 0,
-      "refreshReason": "Kept only Slate-owned normalized hook types in the package surface and removed parser and event-map exports from the interop adapter.",
-      "evidence": "hook-config-interop-boundary.test.ts and hooks.test.ts pass 58/58. Work-host typecheck passes. Re-exporting the foreign config parser through the hooks package is caught by the boundary test. rewrite-overlap.test.ts pins the adapter split and exemption. Measured overlap is 0 against 97 baseline pairs; the foreign dialect adapter is exempt as interop."
     },
     "packages/hooks/validators/preToolUseResponse.ts": {
       "claim": "rewritten",

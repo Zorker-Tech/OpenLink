@@ -159,6 +159,14 @@
     "host/boxes/generated-production.ts": {
       "reason": "The file name and export path described generated production ports after production stopped using generated clients.",
       "evidence": "Production composition now imports host/boxes/slate-production.ts, whose ports use the Slate control and execution clients. The compatibility exports remain in the interop adapter, and the old host facade has no importers; the generated-port behavior tests pass against the renamed Slate production export."
+    },
+    "packages/hooks/claude-code-mapper.ts": {
+      "reason": "Foreign hook configuration mapping was removed. Slate plugins now ship Slate HookConfig files directly, so there is no second hook dialect to translate.",
+      "evidence": "hooks.test.ts validates Slate hook configs and plugin-install-loader.test.ts covers plugin hook files; the rewrite gate confirms no source or importers remain."
+    },
+    "packages/hooks/claude-code-types.ts": {
+      "reason": "Foreign hook configuration types were removed with the mapper. Slate hook configuration is the only plugin hook contract.",
+      "evidence": "hooks.test.ts validates Slate hook configs and plugin-install-loader.test.ts covers plugin hook files; the rewrite gate confirms no source or importers remain."
     }
   }
 }

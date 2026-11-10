@@ -147,14 +147,14 @@ test("a plugin's MCP servers are read from its own files, and the manifest wins"
   }
   const readFileContent = async (candidate: string) => files[candidate] ?? null
 
-  const resolved = await resolvePluginMcpConfigFromReader(readFileContent, { fromManifest: { command: "manifest" }, shared: { command: "manifest" } }, ".cursor-plugin/plugin.json")
+  const resolved = await resolvePluginMcpConfigFromReader(readFileContent, { fromManifest: { command: "manifest" }, shared: { command: "manifest" } }, ".slate-plugin/plugin.json")
   assert.deepEqual(Object.keys(resolved?.mcpServers ?? {}).sort(), ["both", "fromFile", "fromManifest", "ignored", "shared"])
   // A server named by the first file that declares it keeps that declaration.
   assert.equal(resolved?.mcpServers.both?.command, "first")
   // The manifest's own server wins over the file's, and where each came from is kept.
   assert.equal(resolved?.mcpServers.shared?.command, "manifest")
   assert.equal(resolved?.mcpServerSourcePaths?.fromFile, ".mcp.json")
-  assert.equal(resolved?.mcpServerSourcePaths?.fromManifest, ".cursor-plugin/plugin.json")
+  assert.equal(resolved?.mcpServerSourcePaths?.fromManifest, ".slate-plugin/plugin.json")
   // Every place a plugin keeps its configuration is read, and a server already named is not replaced.
   assert.equal(resolved?.mcpServers.ignored?.command, "later")
   assert.equal(resolved?.mcpServerSourcePaths?.ignored, "mcp.json")
@@ -172,7 +172,7 @@ test("a plugin's MCP configuration is found by looking where a plugin keeps it",
   const manifest = JSON.stringify({ name: "mine", mcpServers: { fromManifest: { command: "node" } } })
   const resolved = await resolvePluginMcpConfigWithManifestLookup(async candidate => (candidate.endsWith("plugin.json") ? manifest : null))
   assert.deepEqual(Object.keys(resolved?.mcpServers ?? {}), ["fromManifest"])
-  assert.equal(resolved?.mcpServerSourcePaths?.fromManifest, ".cursor-plugin/plugin.json")
+  assert.equal(resolved?.mcpServerSourcePaths?.fromManifest, ".slate-plugin/plugin.json")
 
   // A manifest that is not there, or not readable, is no configuration at all.
   assert.equal(await resolvePluginMcpConfigWithManifestLookup(async () => null), null)

@@ -7,7 +7,7 @@
  */
 export type PluginIdentifier =
   | { source: "first-party" | "third-party"; sourceInfo: { pluginDbId: string } }
-  | { source: "claude-plugin" | "user-local" | "extension"; sourceInfo?: unknown };
+  | { source: "slate-plugin" | "user-local" | "extension"; sourceInfo?: unknown };
 
 /** The database id a plugin's source carries, or undefined for a source that has none. */
 export function getPluginDbId(plugin: PluginIdentifier): string | undefined {

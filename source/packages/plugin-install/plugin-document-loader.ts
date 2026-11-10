@@ -1,7 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import matter from "gray-matter";
-import { detectHookConfigDialect, transformForeignHookConfig } from "../../adapters/interop/hooks/foreign-hook-config-adapter.ts";
 import type { HookConfig } from "../hooks/hook-config.ts";
 import { validateHookConfig } from "../hooks/hook-config-validation.ts";
 import { PluginComponentDiscovery, type PluginComponentDescriptor, type PluginFileFetcher } from "./component-discovery.ts";
@@ -308,16 +307,10 @@ function expandHookScripts(config: HookConfig, installPath: string): HookConfig 
 }
 
 function validateHookShape(parsed: unknown, pluginLabel: string): HookCheck | undefined {
-  const dialect = detectHookConfigDialect(parsed);
-  let candidate: HookConfig | undefined;
-  if (dialect === "direct-scripts") candidate = parsed as HookConfig;
-  else if (dialect === "nested-matcher-scripts") {
-    const hooks = (parsed as { hooks?: Record<string, unknown> } | null)?.hooks;
-    if (hooks === undefined || Object.keys(hooks).length === 0) return undefined;
-    candidate = transformForeignHookConfig(hooks);
-  }
-  if (candidate === undefined) return undefined;
-
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const hooks = (parsed as { hooks?: unknown }).hooks;
+  if (typeof hooks !== "object" || hooks === null || Array.isArray(hooks) || Object.keys(hooks).length === 0) return undefined;
+  const candidate = parsed as HookConfig;
   const validation = validateHookConfig(candidate);
   if (validation.isValid) return { config: candidate };
   return {

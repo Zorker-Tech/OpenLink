@@ -7,7 +7,7 @@ describe('a plugin identifier', () => {
     assert.deepEqual(Object.keys(mod), ['getPluginDbId']);
     assert.equal(getPluginDbId({ source: 'first-party', sourceInfo: { pluginDbId: 'db-1' } }), 'db-1');
     assert.equal(getPluginDbId({ source: 'third-party', sourceInfo: { pluginDbId: 'db-2' } }), 'db-2');
-    assert.equal(getPluginDbId({ source: 'claude-plugin', sourceInfo: { pluginDbId: 'ignored' } }), undefined);
+    assert.equal(getPluginDbId({ source: 'slate-plugin', sourceInfo: { pluginDbId: 'ignored' } }), undefined);
     assert.equal(getPluginDbId({ source: 'user-local' }), undefined);
     assert.equal(getPluginDbId({ source: 'extension', sourceInfo: 'x' }), undefined);
   });
