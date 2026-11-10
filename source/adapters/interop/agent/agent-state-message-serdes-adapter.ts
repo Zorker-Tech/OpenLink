@@ -1051,7 +1051,6 @@ export function fromInteropGoalState(goal: GoalState): SlateGoalState {
     lastAccruedAtMs: goal.lastAccruedAtMs,
     continuationCount: goal.continuationCount,
     agentSessionId: goal.agentSessionId,
-    ...(SLATE_TO_INTEROP_GOAL_STATUS.get(status) === goal.status ? {} : { unknownStatusCode: goal.status }),
   })
 }
 
@@ -1060,9 +1059,7 @@ export function toInteropGoalState(goal: SlateGoalState): GoalState {
     conversationId: goal.conversationId,
     goalId: goal.goalId,
     objective: goal.objective,
-    status: goal.unknownStatusCode === undefined
-      ? SLATE_TO_INTEROP_GOAL_STATUS.get(goal.status) ?? GoalStatus.UNSPECIFIED
-      : goal.unknownStatusCode as GoalStatus,
+    status: SLATE_TO_INTEROP_GOAL_STATUS.get(goal.status) ?? GoalStatus.UNSPECIFIED,
     idleContinuationsWithoutToolCalls: goal.idleContinuationsWithoutToolCalls,
     ...(goal.activeDurationMs === undefined ? {} : { activeDurationMs: goal.activeDurationMs }),
     ...(goal.lastAccruedAtMs === undefined ? {} : { lastAccruedAtMs: goal.lastAccruedAtMs }),

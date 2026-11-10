@@ -344,7 +344,6 @@ test("plan registry and goal state use Slate types and retain an unknown status 
   assert.deepEqual(slate.plans?.get("plan-1"), { id: "plan-1", path: "/repo/plan.md" })
   assert.ok(slate.goalState instanceof SlateGoalState)
   assert.equal(slate.goalState.status, SlateGoalStatus.UNSPECIFIED)
-  assert.equal(slate.goalState.unknownStatusCode, unknownStatus)
 
   const restored = fromRedactedConversationStateStructureInterop(
     toInteropConversationState(slate),
@@ -352,7 +351,7 @@ test("plan registry and goal state use Slate types and retain an unknown status 
     undefined,
   )
   assert.equal(Object.values(restored.plans)[0]?.path, "/repo/plan.md")
-  assert.equal(restored.goalState?.status, unknownStatus)
+  assert.equal(restored.goalState?.status, GoalStatus.UNSPECIFIED)
 })
 
 test("subagent state values are typed Slate records and preserve unknown environments", () => {

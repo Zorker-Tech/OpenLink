@@ -502,7 +502,6 @@ function goalFromInterop(value: ConversationStateStructure["goalState"]): SlateC
     goalId: goal.goalId,
     objective: goal.objective,
     status: goal.status,
-    ...(goal.unknownStatusCode === undefined ? {} : { compatibility: { legacyStatusCode: goal.unknownStatusCode } }),
     idleContinuationsWithoutToolCalls: goal.idleContinuationsWithoutToolCalls,
     ...(goal.activeDurationMs === undefined ? {} : { activeDurationMs: goal.activeDurationMs.toString() }),
     ...(goal.lastAccruedAtMs === undefined ? {} : { lastAccruedAtMs: goal.lastAccruedAtMs.toString() }),
@@ -518,9 +517,6 @@ function goalToInterop(value: SlateCheckpointGoal | undefined): ConversationStat
     goalId: value.goalId,
     objective: value.objective,
     status: value.status,
-    ...(value.compatibility?.legacyStatusCode === undefined
-      ? {}
-      : { unknownStatusCode: value.compatibility.legacyStatusCode }),
     idleContinuationsWithoutToolCalls: value.idleContinuationsWithoutToolCalls,
     ...(value.activeDurationMs === undefined ? {} : { activeDurationMs: BigInt(value.activeDurationMs) }),
     ...(value.lastAccruedAtMs === undefined ? {} : { lastAccruedAtMs: BigInt(value.lastAccruedAtMs) }),
