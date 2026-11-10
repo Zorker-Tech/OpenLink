@@ -1,14 +1,39 @@
 {
   "name": "@slate/work-host",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1",
   "type": "module",
-  "engines": {
-    "node": ">=24.0.0"
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./host": {
+      "types": "./dist/host-sdk.d.ts",
+      "import": "./dist/host-sdk.js"
+    },
+    "./gateway": {
+      "types": "./dist/gateway-sdk.d.ts",
+      "import": "./dist/gateway-sdk.js"
+    },
+    "./box-exec": {
+      "types": "./dist/box-exec-sdk.d.ts",
+      "import": "./dist/box-exec-sdk.js"
+    }
   },
-  "description": "The Work platform: persistent agents, transcripts, runs, automation, workflow, rooms, channels and boxes. Ships with the desktop app; independent of the Code agent.",
+  "files": ["dist", "README.md", "LICENSE"],
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "description": "The Slate Work platform SDK for persistent agents, transcripts, runs, automations, workflows, rooms, channels and boxes.",
+  "publishConfig": {
+    "registry": "http://192.168.3.5:8081/repository/npm-hosted/"
+  },
   "scripts": {
-    "typecheck": "pnpm run extension-ids:check && pnpm run rewrite:check && pnpm run interop:check && tsc --noEmit",
+    "typecheck": "pnpm --filter @slate/work-domain build && pnpm --filter @slate/work-protocol build && pnpm run extension-ids:check && pnpm run rewrite:check && pnpm run interop:check && tsc --noEmit",
+    "pretest": "pnpm --filter @slate/work-domain build && pnpm --filter @slate/work-protocol build",
     "test": "node --experimental-transform-types --no-warnings --test \"tests/**/*.test.ts\"",
     "rewrite:overlap": "node scripts/rewrite-overlap.mjs",
     "rewrite:check": "node scripts/rewrite-overlap.mjs check",
@@ -18,7 +43,7 @@
     "redaction:generate": "node --experimental-transform-types --no-warnings scripts/generate-redacted-protos.mjs",
     "extension-ids:generate": "node scripts/generate-extension-ids.mjs",
     "extension-ids:check": "node scripts/generate-extension-ids.mjs check",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm --filter @slate/work-domain build && pnpm --filter @slate/work-protocol build && tsc -p tsconfig.build.json && node scripts/prepare-sdk-dist.mjs",
     "start": "node dist/host/main.js",
     "smoke": "node scripts/smoke.mjs",
     "rewrite:triage": "node scripts/rewrite-triage.mjs"
@@ -41,8 +66,6 @@
     "@opentelemetry/otlp-transformer": "^0.222.0",
     "@opentelemetry/sdk-logs": "^0.222.0",
     "@opentelemetry/sdk-metrics": "^2.11.0",
-    "@slate/work-domain": "workspace:*",
-    "@slate/work-protocol": "workspace:*",
     "@streamparser/json": "^0.0.22",
     "ai": "^4.3.17",
     "diff": "^8.0.4",
@@ -65,6 +88,8 @@
     "zod-to-json-schema": "^3.24.5"
   },
   "devDependencies": {
+    "@slate/work-domain": "workspace:*",
+    "@slate/work-protocol": "workspace:*",
     "@bufbuild/buf": "^1.73.0",
     "@bufbuild/protoc-gen-es": "^1.10.1",
     "@connectrpc/protoc-gen-connect-es": "^1.6.1",

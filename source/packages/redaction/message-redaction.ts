@@ -32,7 +32,7 @@ interface ContentPart extends LooseObject {
   readonly type: string
 }
 
-interface RedactedCoreMessageLike extends LooseObject {
+export interface RedactedCoreMessageLike extends LooseObject {
   /** The mode this message was redacted under; carried so a rebuild cannot guess it. */
   readonly _privacyMode: PrivacyMode
   readonly role: string

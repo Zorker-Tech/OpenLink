@@ -1,5 +1,6 @@
 import { MethodKind, type ServiceType } from "@bufbuild/protobuf"
 import { connectNodeAdapter } from "@connectrpc/connect-node"
+import type { IncomingMessage, ServerResponse } from "node:http"
 import {
   GetCapabilitiesResponse,
   LoadMcpServersResponse,
@@ -260,7 +261,7 @@ async function* dispatchBoxExecCall(runtime: BoxExecRuntime, call: ExecServerMes
 }
 
 /** Creates the Connect handler that adapts the daemon's Slate runtime to the counterpart control and exec services. */
-export function createBoxExecProtocolHandler(runtime: BoxExecRuntime) {
+export function createBoxExecProtocolHandler(runtime: BoxExecRuntime): (request: IncomingMessage, response: ServerResponse) => void {
   return connectNodeAdapter({
     routes(router) {
       router.service(BoxControlService, {
@@ -274,5 +275,5 @@ export function createBoxExecProtocolHandler(runtime: BoxExecRuntime) {
       })
       router.service(BoxExecService, { exec: (call, context) => dispatchBoxExecCall(runtime, call, context.signal) })
     },
-  })
+  }) as (request: IncomingMessage, response: ServerResponse) => void
 }

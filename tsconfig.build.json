@@ -3,8 +3,7 @@
   "compilerOptions": {
     "noEmit": false,
     "rewriteRelativeImportExtensions": true,
-    "declaration": false,
-    "sourceMap": true,
+    "declaration": true,
     "rootDir": "source",
     "outDir": "dist",
     "types": ["node"]

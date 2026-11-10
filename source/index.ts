@@ -1,14 +1,13 @@
 /**
- * Slate Assistant (Work mode) entry surface.
+ * Public entry surface for the Slate Work SDK.
  *
- * The platform ships with the desktop app and runs in its Node runtime. Layers land one module at a
- * time under `source/`; this module describes the shape they assemble into and will own startup
- * composition once they are all in place:
+ * The platform's process entrypoints are available from focused subpaths; the root export contains
+ * the typed Work client, route contracts and public domain values.
  *
  *     gateway  --(commands, scope)-->  coordinator / host
  *     host     --(typed ports)------->  local-exec, box-exec, bridges
  *
- * What is fixed already is the shape:
+ * The service API stays auditable:
  *
  * - the gateway exposes a static command catalogue (see `@slate/work-protocol`) and rejects
  *   anything not in it, so the capability surface stays auditable;
@@ -18,10 +17,16 @@
  *   functions inside the host.
  */
 
-/** Slate Assistant layers, in dependency order. Each maps to a directory under `source/`. */
+/** Slate Work layers, in dependency order. */
 export const WORK_LAYERS = ["gateway", "coordinator", "host", "local-exec", "box-exec", "shared"] as const
 
 export type WorkLayer = (typeof WORK_LAYERS)[number]
 
-/** Version of the Slate Assistant surface this scaffold targets. */
+/** Version of the published SDK package. */
+export const WORK_HOST_SDK_VERSION = "0.0.1" as const
+
+/** Version of the Work platform contract scaffold. */
 export const WORK_PLATFORM_VERSION = 0
+
+export * from "@slate/work-domain"
+export * from "@slate/work-protocol"
