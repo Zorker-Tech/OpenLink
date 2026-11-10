@@ -18,13 +18,13 @@ export function mapRunStatus(status: unknown): string {
 export function resolvePrUrl(
   detailed?: DetailedCloudAgent & { readonly prs?: readonly { readonly prUrl?: string }[] },
 ): string {
-  return detailed?.composer?.prUrl || detailed?.prs?.find((pullRequest) => pullRequest.prUrl)?.prUrl || "";
+  return detailed?.agent?.prUrl || detailed?.prs?.find((pullRequest) => pullRequest.prUrl)?.prUrl || "";
 }
 
 export function resolveBranchName(
   detailed?: DetailedCloudAgent & { readonly prs?: readonly { readonly branchName?: string }[] },
 ): string {
-  return detailed?.composer?.branchName || detailed?.prs?.find((pullRequest) => pullRequest.branchName)?.branchName || "";
+  return detailed?.agent?.branchName || detailed?.prs?.find((pullRequest) => pullRequest.branchName)?.branchName || "";
 }
 
 export function mapProtoPrStatus(status: unknown): Exclude<CloudAgentPrState, "none" | "unknown"> | null {
@@ -44,7 +44,7 @@ export function mapProtoPrStatus(status: unknown): Exclude<CloudAgentPrState, "n
 
 export function resolvePr(
   detailed?: DetailedCloudAgent & {
-    readonly composer?: DetailedCloudAgent["composer"] & { readonly prStatus?: unknown };
+    readonly agent?: DetailedCloudAgent["agent"] & { readonly prStatus?: unknown };
     readonly prs?: readonly { readonly prUrl?: string; readonly pullNumber?: number; readonly prStatus?: unknown }[];
   },
 ): { readonly state: CloudAgentPrState; readonly number: number | null } {
@@ -54,7 +54,7 @@ export function resolvePr(
     : detailed?.prs?.find((pullRequest) =>
       pullRequest.pullNumber != null || mapProtoPrStatus(pullRequest.prStatus) != null);
   const state = mapProtoPrStatus(primary?.prStatus)
-    ?? mapProtoPrStatus(detailed?.composer?.prStatus)
+    ?? mapProtoPrStatus(detailed?.agent?.prStatus)
     ?? (url.length > 0 || primary != null ? "unknown" : "none");
   return { state, number: primary?.pullNumber ?? null };
 }

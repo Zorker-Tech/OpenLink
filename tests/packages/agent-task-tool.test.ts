@@ -120,7 +120,7 @@ test("the tool is named for the model family that reads it", () => {
   assert.equal(createTool().name, "Task")
   // A codex prompt version calls it something else, and a composer model calls it something else again.
   assert.equal(createTool({}, { promptVersion: "gpt5-codex" }).name, "Subagent")
-  assert.equal(createTool({}, { promptVersion: "latest", isComposer1: true }).name, "mcp_task")
+  assert.equal(createTool({}, { promptVersion: "latest", isLegacyAgentModel1: true }).name, "mcp_task")
 })
 
 test("a description that was built for a placement is not built again", () => {

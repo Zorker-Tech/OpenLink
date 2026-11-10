@@ -54,7 +54,7 @@ test("a multitask wake-up names the tool this session launches subagents with", 
   const withModel = renderInteropSimulatedMessagePrompts({
     selectedContext: new SelectedContext({}),
     simulatedMsgReason: SimulatedMsgReason.MULTITASK,
-    modelInfo: { promptVersion: "latest", isComposer1: true },
+    modelInfo: { promptVersion: "latest", isLegacyAgentModel1: true },
   })
   assert.equal(withModel.length, 1)
   assert.match(withModel[0]?.text ?? "", /mcp_task/)

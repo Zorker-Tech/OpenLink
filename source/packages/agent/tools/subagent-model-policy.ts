@@ -14,13 +14,13 @@ export type SubagentModelForcePolicy = (typeof policyValues)[number]
 export const SubagentModelForcePolicy = Object.freeze({
   None: policyValues[0],
   ParentPin: policyValues[1],
-  RequestBasedComposer: policyValues[2],
+  RequestBasedAgent: policyValues[2],
 })
 
 export const SUBAGENT_MODEL_FORCE_POLICIES: readonly SubagentModelForcePolicy[] = [
   SubagentModelForcePolicy.None,
   SubagentModelForcePolicy.ParentPin,
-  SubagentModelForcePolicy.RequestBasedComposer,
+  SubagentModelForcePolicy.RequestBasedAgent,
 ]
 
 export function isSubagentModelForcePolicy(value: unknown): value is SubagentModelForcePolicy {

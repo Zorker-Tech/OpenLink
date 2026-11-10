@@ -286,15 +286,15 @@ function messagesEqualByValue(
   return true
 }
 
-const summarizationTime = createHistogram("agenticComposer.summarizationTime", {
+const summarizationTime = createHistogram("slate.summarization.time", {
   description: "Time taken for summarization in milliseconds",
   labelNames: ["strategy", "triggerReason", "model", "summarizerType", "isClientAtLeast1Point731"],
 })
-const summarizationGenerationTime = createHistogram("agenticComposer.summarizationGenerationTime", {
+const summarizationGenerationTime = createHistogram("slate.summarization.generation_time", {
   description: "Time spent generating a summary in milliseconds",
   labelNames: ["strategy", "triggerReason", "model", "summarizerType", "outcome", "isClientAtLeast1Point731"],
 })
-const summarizationCounter = createCounter("agenticComposer.summarization", {
+const summarizationCounter = createCounter("slate.summarization", {
   description: "Number of summarizations performed",
   labelNames: ["strategy", "requestedStrategy", "triggerReason", "isToolCall", "model", "summarizerType", "isClientAtLeast1Point731", "clientversion", "clienttype"],
 })

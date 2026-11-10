@@ -267,7 +267,7 @@ export class UserMessageActionHandler extends AbstractUserMessageActionHandler {
         priorUserInfoCloudTestingSectionsPlacement,
       }, toolSetHandle),
     });
-        const shouldRenderLargeContextUserInfo = stateHandler.usesLargeContextTreatment() || configAny.modelInfo?.isComposerMatterhorn === true;
+        const shouldRenderLargeContextUserInfo = stateHandler.usesLargeContextTreatment() || configAny.modelInfo?.isLegacyAgentMatterhorn === true;
     const toolInfo: Any = extractToolInfo(toolSetHandle);
     const namedAgentUserTurnReminder = isNamedAgentHomePromptSession(namedAgentSessionProps) ? renderNamedAgentHomeUserTurnReminder() : configAny.isCloudMetaAgentParent ? renderCloudMetaParentUserTurnReminder(requiredToolName(toolInfo.allTools, "TASK"), getNamedAgentSessionPromptContext(configAny)) : undefined;
     const toolMetadataMap = toolInfo.allTools;

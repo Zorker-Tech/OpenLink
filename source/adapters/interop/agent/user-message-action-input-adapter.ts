@@ -1,5 +1,6 @@
 /** Decodes redacted incoming message values before the host's turn policy handles them. */
 
+import { slateModelCapabilitiesFromInterop } from "./model-capabilities-adapter.ts"
 import { AgentMode, UserMessage } from "../proto/generated/agent/v1/agent_pb.ts"
 import { fromRedactedRequestContext } from "../redacted-protos/generated/agent/v1/request_context_exec_redacted.ts"
 import { fromRedactedUserMessage } from "../redacted-protos/generated/agent/v1/agent_redacted.ts"
@@ -51,13 +52,14 @@ export function shouldHideMcpMetaToolSnapshot(input: {
   readonly mode: SlateModeValue
   readonly enableFilterEditToolsInAskMode: boolean | undefined
   readonly modelInfo: {
-    readonly isComposerMatterhorn?: unknown
+    readonly isLegacyAgentMatterhorn?: unknown
     readonly isRawTrainingSlug?: unknown
   } | undefined
 }): boolean {
   const askModeRequiresFiltering = input.mode === SlateMode.CHAT &&
     (input.enableFilterEditToolsInAskMode ?? true)
-  const trainingModelRequiresFiltering = input.modelInfo?.isComposerMatterhorn === true &&
-    input.modelInfo.isRawTrainingSlug === true
+  const capabilities = slateModelCapabilitiesFromInterop(input.modelInfo)
+  const trainingModelRequiresFiltering = capabilities?.isLegacyAgentMatterhorn === true &&
+    capabilities.isRawTrainingSlug === true
   return askModeRequiresFiltering || trainingModelRequiresFiltering
 }

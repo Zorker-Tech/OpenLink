@@ -724,8 +724,8 @@
     },
     "host/cloud-agents/cloud-agents-service.ts": {
       "claim": "rewritten",
-      "overlap": 0.7010443864229765,
-      "refreshReason": "Cloud-agent identifiers now use Slate agentId names in the host service, with external background-composer field names confined to the backend adapter.",
+      "overlap": 0.6370757180156658,
+      "refreshReason": "The cloud-agent service now exposes Slate launch/get/list/reply/lifecycle names, with external background-composer names confined to the interop adapter.",
       "evidence": "host-cloud-agents-service.test.ts and host-cloud-agents-and-inference-wiring.test.ts pass 19/19 as an esbuild bundle, covering launch/refusal, projections, lifecycle actions, transcript/artifact reads and production wiring. Work-host typecheck/build pass. Interop boundary reports 44 direct consumers after this move. Measured overlap is 0.7304177545691906 against 1532 baseline pairs."
     },
     "host/workflows/workflow-store.ts": {
@@ -812,8 +812,9 @@
     },
     "host/cloud-agents/cloud-agent-poll-loop.ts": {
       "claim": "rewritten",
-      "overlap": 0.23076923076923078,
-      "evidence": "tests/packages/host-cloud-agent-poll-loop.test.ts passes 12/12, covering status/result projection, saved-environment selection, cache policy, scheduled polling, restart grace, rate limits, continued polling after failures, deadlines and disposal. Mutations that poll on the initial tick and that skip the rate-limit pause are caught."
+      "overlap": 0.2112950340798442,
+      "evidence": "tests/packages/host-cloud-agent-poll-loop.test.ts passes 12/12, covering status/result projection, saved-environment selection, cache policy, scheduled polling, restart grace, rate limits, continued polling after failures, deadlines and disposal. Mutations that poll on the initial tick and that skip the rate-limit pause are caught.",
+      "refreshReason": "The completion poller now calls the Slate cloud-agent get port and reads Slate agent records."
     },
     "host/extensions/codebase-telemetry/csnaps-process.ts": {
       "claim": "rewritten",
@@ -1314,8 +1315,8 @@
     },
     "packages/agent/tools/subagent-forced-model-resolution.ts": {
       "claim": "rewritten",
-      "overlap": 0.3522727272727273,
-      "refreshReason": "Renamed the provider-specific model matcher, moved external subagent model ids behind the catalog adapter, and replaced the brand-derived model-resolution reason with Slate vocabulary.",
+      "overlap": 0.3352272727272727,
+      "refreshReason": "Subagent force-policy selection now uses the Slate request-based agent name.",
       "evidence": "Subagent model resolution, agent-leaf, task-runtime and rewrite-gate suites pass 153/153; Work-host typecheck and the final Node 24 suite pass, 9234/9234. Parent pins, blocked/incompatible models, user defaults, max-mode compatibility and unknown-policy refusal remain covered."
     },
     "packages/agent/tools/task-tool-schema.ts": {
@@ -2243,8 +2244,9 @@
     },
     "packages/agent/context-processing-recent-agents.ts": {
       "claim": "rewritten",
-      "overlap": 0.5714285714285714,
-      "evidence": "Agent-blocks, recent-agent adapter, non-media assembly and selected-context suites pass 74/74. Contracts pin ordered field projection, optional overview trimming, transcript path output, empty input and model-family omission. Work-host typecheck passes. Generated recent-agent messages are projected into first-party transcript references at the interop seam."
+      "overlap": 0.5,
+      "evidence": "Agent-blocks, recent-agent adapter, non-media assembly and selected-context suites pass 74/74. Contracts pin ordered field projection, optional overview trimming, transcript path output, empty input and model-family omission. Work-host typecheck passes. Generated recent-agent messages are projected into first-party transcript references at the interop seam.",
+      "refreshReason": "Recent-agent transcript-link policy now reads Slate model-capability names."
     },
     "host/telemetry/automation-shadow-prune-telemetry.ts": {
       "claim": "rewritten",
@@ -2658,8 +2660,9 @@
     },
     "packages/agent/tools/task-tool-name.ts": {
       "claim": "rewritten",
-      "overlap": 0.4878048780487805,
-      "evidence": "Agent-leaves, simulated-message prompts, task preparation and task completion suites pass 118/118. Contracts pin composer-tool precedence, Codex prompt naming, default Task fallback and downstream subagent tool behavior. Work-host typecheck passes. Model families are resolved by separate priority helpers."
+      "overlap": 0.3902439024390244,
+      "evidence": "Agent-leaves, simulated-message prompts, task preparation and task completion suites pass 118/118. Contracts pin composer-tool precedence, Codex prompt naming, default Task fallback and downstream subagent tool behavior. Work-host typecheck passes. Model families are resolved by separate priority helpers.",
+      "refreshReason": "Task tool naming now reads Slate legacy-agent model capabilities."
     },
     "packages/local-exec/ignore-path.ts": {
       "claim": "rewritten",
@@ -2768,8 +2771,8 @@
     },
     "packages/agent/actions/background-task-completion.ts": {
       "claim": "rewritten",
-      "overlap": 0.542203147353362,
-      "refreshReason": "Replaced generated background-task enums and completion messages in the formatter with Slate-owned task records, with wire decoding moved to the interop adapter.",
+      "overlap": 0.5236051502145923,
+      "refreshReason": "Background completion acknowledgement policy now reads Slate model-capability names.",
       "evidence": "Background completion formatter and action-handler contracts pass 38/38; the full Work-host suite passes 9126/9126 under Node 24. Typecheck, interop boundary and rewrite gate pass. Formatting, acknowledgement guidance, progress filtering, metadata extraction and thread choice consume Slate task records rather than generated completion messages."
     },
     "host/runner/remote-box-resources.ts": {
@@ -3867,8 +3870,8 @@
     },
     "packages/agent/context-processing-non-media-assembly.ts": {
       "claim": "rewritten",
-      "overlap": 0.5666666666666667,
-      "refreshReason": "Moved generated selected-context and simulated-reason projection out of the Slate assembler into interop; the core now accepts only its own non-media view and rendered prompts.",
+      "overlap": 0.5481481481481482,
+      "refreshReason": "Selected-context assembly now reads the Slate model-capability name for the legacy agent family.",
       "evidence": "agent-leaves.test.ts, agent-non-media-assembly.test.ts, agent-process-selected-context.test.ts and interop-selected-non-media-context-adapter.test.ts pass 80/80. Slate prompt assembly names the owned value attachedCommands; only the interop projection reads the legacy cursorCommands field, while ordering and output boundaries remain covered. Work-host rewrite overlap measures 0.5666666666666667 against 270 baseline pairs."
     },
     "packages/utils/find-executable.ts": {

@@ -61,7 +61,7 @@ test("a subagent reporting in recomputes state and runs no tool", async () => {
 test("recent agents are listed with their transcript paths", () => {
   const rendered = renderRecentAgentsContext({
     recentAgents: [{ name: "Fix the build", path: "/t/a.jsonl", overview: "  what it did  " }],
-    isComposerMatterhorn: false,
+    isLegacyAgentMatterhorn: false,
     isRawTrainingSlug: false,
   })
   assert.match(rendered!.text, /- Fix the build/)
@@ -73,7 +73,7 @@ test("recent agents are listed with their transcript paths", () => {
 test("a model that never saw transcript paths is given none", () => {
   const rendered = renderRecentAgentsContext({
     recentAgents: [{ name: "x", path: "/t/a.jsonl" }],
-    isComposerMatterhorn: true,
+    isLegacyAgentMatterhorn: true,
     isRawTrainingSlug: true,
   })
   assert.equal(rendered, undefined)

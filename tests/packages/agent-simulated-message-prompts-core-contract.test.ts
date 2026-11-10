@@ -19,7 +19,7 @@ describe("simulated message prompt assembly", () => {
     const prompts = renderSimulatedMessagePrompts({
       gitAction: branchPrompt,
       multitaskAction: "start-self-fork",
-      modelInfo: { promptVersion: "latest", isComposer1: true },
+      modelInfo: { promptVersion: "latest", isLegacyAgentModel1: true },
     })
 
     assert.equal(prompts.length, 2)

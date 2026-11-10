@@ -146,12 +146,12 @@ test("a subagent whose result is hidden is asked for whatever follow-up it needs
 test("a shell task is acknowledged as a result rather than as a subagent's", () => {
   const text = getNotificationAcknowledgementUserQuery([completion({ kind: "shell" })], options())
   assert.match(text, /Briefly inform the user about the task result and perform any follow-up actions/)
-  // The composer family is told not to state that there is nothing to follow up.
+  // The legacy agent family is told not to state that there is nothing to follow up.
   assert.doesNotMatch(text, /don't explicitly say that/)
 })
 
-test("the composer family gets the wording that omits the no-follow-up note", () => {
-  const composer = getShellNotificationAcknowledgementUserQuery({ isComposer2: true })
+test("the legacy agent family gets the wording that omits the no-follow-up note", () => {
+  const composer = getShellNotificationAcknowledgementUserQuery({ isLegacyAgentModel2: true })
   assert.match(composer, /If there's no follow-ups needed, don't explicitly say that\./)
   assert.notEqual(composer, getShellNotificationAcknowledgementUserQuery(undefined))
 })

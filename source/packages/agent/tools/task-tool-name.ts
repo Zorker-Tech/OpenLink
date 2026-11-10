@@ -9,13 +9,13 @@
 import { isCodexPromptVersion } from "./tool-support.ts"
 
 export interface TaskToolModelInfo {
-  readonly isComposer1?: boolean | undefined
-  readonly isComposer15?: boolean | undefined
+  readonly isLegacyAgentModel1?: boolean | undefined
+  readonly isLegacyAgentModel15?: boolean | undefined
   readonly promptVersion: string
 }
 
 function legacyModelTaskTool(model: TaskToolModelInfo): string | undefined {
-  return model.isComposer1 || model.isComposer15 ? "mcp_task" : undefined
+  return model.isLegacyAgentModel1 || model.isLegacyAgentModel15 ? "mcp_task" : undefined
 }
 
 function codexTaskTool(model: TaskToolModelInfo): string | undefined {

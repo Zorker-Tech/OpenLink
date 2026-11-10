@@ -204,6 +204,7 @@ source/packages/agent/actions/user-message-action/user-message-action-handler.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/user-message-action-input-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-action-handler.ts	../../../../adapters/interop/agent/user-rule-profile-adapter.ts
 source/packages/agent/actions/user-message-action/user-message-run-warning.ts	../../../../adapters/interop/slate-backend/summary-origin-marker-adapter.ts
+source/packages/agent/agent-config-runtime.ts	../../adapters/interop/agent/model-capabilities-adapter.ts
 source/packages/agent/agent-config-tooling.ts	../../adapters/interop/agent/agent-config-tooling-adapter.ts
 source/packages/agent/automations/platform-communication-tools.ts	../../../adapters/interop/automation/platform-communication-tool-policy-adapter.ts
 source/packages/agent/configs/project-workspace-mcp-tools.ts	../../../adapters/interop/agent/project-conversation-adapter.ts

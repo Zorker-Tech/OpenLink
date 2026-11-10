@@ -10,37 +10,27 @@ export const MAX_CLOUD_AGENT_FILES = 300;
 export const CLOUD_AGENT_REQUEST_SOURCE = "slate";
 
 export interface CloudAgentClient extends SavedEnvironmentClient {
-  startBackgroundComposerFromSnapshot(request: Record<string, unknown>): Promise<{ composer?: { bcId?: string } }>;
-  getBackgroundComposerInfo(request: Record<string, unknown>, options?: { timeoutMs: number }): Promise<{
-    composer?: DetailedCloudAgent & {
-      prompt?: { text?: string };
-      composer?: DetailedCloudAgent["composer"] & {
-        bcId?: string;
-        name?: string;
-        isArchived?: boolean;
-        createdAtMs?: number;
-        prStatus?: unknown;
-      };
-      prs?: readonly { prUrl?: string; branchName?: string; pullNumber?: number; prStatus?: unknown }[];
-    };
+  launch(request: Record<string, unknown>): Promise<{ agent?: { agentId?: string } }>;
+  get(request: Record<string, unknown>, options?: { timeoutMs: number }): Promise<{
+    agent?: DetailedCloudAgent & { prompt?: { text?: string } };
   }>;
-  listBackgroundComposers(request: { n: number }): Promise<{ composers: readonly Record<string, unknown>[] }>;
-  addAsyncFollowupBackgroundComposer(request: Record<string, unknown>): Promise<{ runId?: string }>;
-  pauseBackgroundComposer(request: Record<string, unknown>): Promise<void>;
-  renameBackgroundComposer(request: Record<string, unknown>): Promise<void>;
-  archiveBackgroundComposer(request: Record<string, unknown>): Promise<void>;
-  deleteBackgroundComposer(request: Record<string, unknown>): Promise<void>;
-  listBackgroundComposerArtifacts(request: Record<string, unknown>): Promise<{
+  list(request: { n: number }): Promise<{ agents: readonly Record<string, unknown>[] }>;
+  reply(request: Record<string, unknown>): Promise<{ runId?: string }>;
+  pause(request: Record<string, unknown>): Promise<void>;
+  rename(request: Record<string, unknown>): Promise<void>;
+  archive(request: Record<string, unknown>): Promise<void>;
+  delete(request: Record<string, unknown>): Promise<void>;
+  listArtifacts(request: Record<string, unknown>): Promise<{
     artifacts: readonly { absolutePath: string; sizeBytes: number | bigint }[];
   }>;
-  getBackgroundComposerConversation(request: Record<string, unknown>): Promise<{ conversation: unknown }>;
+  getConversation(request: Record<string, unknown>): Promise<{ conversation: unknown }>;
   getPullRequestMergeStatus(request: { prUrl: string }): Promise<{
     isMerged?: boolean;
     isClosed?: boolean;
     isDraft?: boolean;
     state?: string;
   }>;
-  getOptimizedDiffDetails(request: Record<string, unknown>): Promise<{
+  getDiffDetails(request: Record<string, unknown>): Promise<{
     diff?: { diffs?: readonly { from: string; to: string; added: number; removed: number }[] };
   }>;
 }

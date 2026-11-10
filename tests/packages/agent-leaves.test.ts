@@ -179,8 +179,8 @@ test("an ambiguous enum is not guessed at", () => {
 
 test("the subagent tool is named the way the model was trained to call it", () => {
   assert.equal(getTaskToolName({ promptVersion: "gpt-5" }), "Task")
-  assert.equal(getTaskToolName({ promptVersion: "gpt5-codex", isComposer1: true }), "mcp_task")
-  assert.equal(getTaskToolName({ promptVersion: "gpt-5", isComposer15: true }), "mcp_task")
+  assert.equal(getTaskToolName({ promptVersion: "gpt5-codex", isLegacyAgentModel1: true }), "mcp_task")
+  assert.equal(getTaskToolName({ promptVersion: "gpt-5", isLegacyAgentModel15: true }), "mcp_task")
   assert.equal(getTaskToolName({ promptVersion: "gpt5-codex" }), "Subagent")
   assert.equal(getTaskToolName({ promptVersion: "codex-cloud" }), "Subagent")
 })

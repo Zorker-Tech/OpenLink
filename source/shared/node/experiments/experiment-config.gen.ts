@@ -391,7 +391,7 @@ export const FLAGS = {
       // the coordinator refuses to resolve a gateway connection (dropping the live
       // event stream) and Electron main's connector refuses connect/recreate, so no
       // EnsureBox and no in-box request is made. The desktop keeps polling
-      // Statsig off the cursor backend while paused, so flipping this back OFF
+      // Statsig off the Slate backend while paused, so flipping this back OFF
       // releases every client on its own. Evaluated in Electron main's
       // SlateExperimentService; the renderer reads it straight off the experiments
       // snapshot (useSlateClientPauseGate). Distinct from the backend's own
@@ -694,7 +694,7 @@ export const FLAGS = {
         default: false
       },
       // Master switch for Slate spotlighting: wrapping every tool result in the
-      // <cursor_untrusted_data_1337> fence and teaching the agent, in its system
+      // <slate_untrusted_data_1337> fence and teaching the agent, in its system
       // prompt, that fenced content is outside DATA that must not drive unrequested
       // actions. When OFF (the default for everyone) tool results reach the model
       // exactly as before and the prompt section is omitted. Evaluated in the Slate
@@ -716,7 +716,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      // Logs a structured `ext_host_cursor` warning (default off) when an extension
+      // Logs a structured `ext_host_slate` warning (default off) when an extension
       // on the agent-exec isolated extension host touches a text-document API. Used
       // to verify agent-exec never needs document sync before we stop syncing
       // documents to it. Scoped to agent-exec only: retrieval and always-local
@@ -729,16 +729,16 @@ export const FLAGS = {
       // the window-pinned workbench decision swaps the agent-exec fanout /
       // allowlist / dependency-backfill path over to agent-host so only one
       // of the pair is active in that window, regardless of workspace family.
-      cursor_agent_host: {
+      agent_host: {
         client: true,
         default: false
       },
-      // Sub-feature under cursor_agent_host: when ON, move exec instantiation into
+      // Sub-feature under agent_host: when ON, move exec instantiation into
       // agent-host (host constructs once and injects into shared exec activate /
       // createAgentHost). When OFF (default), host-ON still uses the topology, but
       // exec keeps minting its local fallback when no gitExecutor is injected.
       // Reused for future exec migrations — not git-specific.
-      cursor_agent_host_move_exec: {
+      agent_host_move_exec: {
         client: true,
         default: false
       },
@@ -757,7 +757,7 @@ export const FLAGS = {
       // extension's activation event so it loads just after eager activation
       // settles instead of blocking it. Absent gate reads false (safe default), so
       // this can ship dark and be flipped remotely without a redeploy.
-      defer_cursor_agent_exec_activation: {
+      defer_agent_exec_activation: {
         client: true,
         default: false
       },
@@ -805,11 +805,11 @@ export const FLAGS = {
         default: false
       },
       /**
-       * Makes `.slate/rules` discovery pass `.cursorignore` files to ripgrep
-       * (`--cursor-ignore`), so negation patterns can re-include gitignored rule
+       * Makes `.slate/rules` discovery pass workspace ignore files to ripgrep
+       * (the workspace ignore flag), so negation patterns can re-include gitignored rule
        * files (DESK-9199).
        */
-      rules_discovery_respect_cursorignore: {
+      rules_discovery_respect_workspace_ignore: {
         client: true,
         default: false
       },
@@ -846,8 +846,8 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      // Gates the client-side auto-GC of orphaned agentKv blobs in cursorDiskKV
-      // (see ComposerBlobGcContribution). Flip on in Statsig once we're ready.
+      // Gates the client-side auto-GC of orphaned agentKv blobs in slateDiskKV
+      // (see AgentBlobGcContribution). Flip on in Statsig once we're ready.
       agent_kv_auto_gc: {
         client: true,
         default: false
@@ -864,7 +864,7 @@ export const FLAGS = {
       // default off. When off the handler throws Unimplemented and IDE
       // clients fall back to their existing direct-fetch path. Ramp once
       // the handler impl (CS-98), workbench migration (CS-100), and
-      // cursor-retrieval migration (CS-101) have all merged.
+      // retrieval migration (CS-101) have all merged.
       ide_make_github_request_enabled: {
         client: true,
         default: false
@@ -927,7 +927,7 @@ export const FLAGS = {
         client: true,
         default: true
       },
-      enable_cursor_agent_worker_extension: {
+      enable_agent_worker_extension: {
         client: true,
         default: false
       },
@@ -1048,7 +1048,7 @@ export const FLAGS = {
       },
       /**
        * Glass-only ramp for forking a cloud agent from turn actions
-       * (ForkBackgroundComposer). Portal uses `cloud_agent_fork_from_turn`.
+       * (ForkCloudAgent). Portal uses `cloud_agent_fork_from_turn`.
        */
       glass_cloud_agent_fork_from_turn: {
         client: true,
@@ -1105,7 +1105,7 @@ export const FLAGS = {
       // When ON, a blocking `ask_question` interaction for a cloud agent will
       // auto-answer (reject the questionnaire so the model proceeds with reasonable
       // defaults) after a configurable timeout instead of blocking indefinitely.
-      // The timeout comes from the composer owner's user setting
+      // The timeout comes from the cloud agent owner's user setting
       // (askQuestionAutoAnswerTimeoutMinutes: 0 = disabled, up to 1 hour), falling
       // back to the cloudAgentAskQuestionDefaultTimeoutMs persistent config. Also
       // gates the timeout picker in the portal Cloud Agents settings, which reads
@@ -1252,7 +1252,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      cursor_backend_control_automation_mcp: {
+      backend_control_automation_mcp: {
         client: true,
         default: true
       },
@@ -1688,7 +1688,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      glass_cursor_tab: {
+      glass_agent_tab: {
         client: true,
         default: true
       },
@@ -1720,27 +1720,27 @@ export const FLAGS = {
         client: true,
         default: true
       },
-      open_github_pr_links_in_review_cursor: {
+      open_github_pr_links_in_review_portal: {
         client: true,
         default: false
       },
       // Phase-21 pr-page-portal-web migration gates. Client emitters (VS Code /
-      // Glass) require BOTH to emit cursor.com portal PR links, matching the
-      // portal-website emitter convention (useCursorPortalReviewLinksEnabled):
-      // `cursor_com_review_redirects` is the migration kill switch (ships dark;
+      // Glass) require BOTH to emit the review portal PR links, matching the
+      // portal-website emitter convention (usePortalReviewLinksEnabled):
+      // `review_redirects` is the migration kill switch (ships dark;
       // per-owner enablement rides on its Statsig targeting), and
-      // `cursor_com_review_pages` alone is not a safe emitter condition because
+      // `review_pages` alone is not a safe emitter condition because
       // that admission gate is already on for canary cohorts whose portal PR
       // routes do not render PRs yet.
-      cursor_com_review_redirects: {
+      review_redirects: {
         client: true,
         default: false
       },
-      cursor_com_review_pages: {
+      review_pages: {
         client: true,
         default: false
       },
-      show_cursor_review_early_access_ad: {
+      show_review_early_access_ad: {
         client: true,
         default: false
       },
@@ -1894,11 +1894,11 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      cursor_blame: {
+      editor_blame: {
         client: true,
         default: false
       },
-      cursor_skill_enabled: {
+      skill_enabled: {
         client: true,
         default: false
       },
@@ -2090,7 +2090,7 @@ export const FLAGS = {
       // Gates whether the public start RPC honors the client-supplied
       // `disable_pr_management_tool` flag (which drops the ManagePullRequest tool
       // from a codebase-only agent's tool surface). Off strips the flag fail-closed.
-      codebase_browse_ask_cursor: {
+      codebase_browse_ask_agent: {
         client: true,
         default: false
       },
@@ -2109,7 +2109,7 @@ export const FLAGS = {
       // control). Only takes effect while
       // enable_forge_source_pr_creation_setting and cloud_agent_origin_repos are
       // also enabled.
-      origin_dogfooding_cursor_creation_provider_override: {
+      origin_dogfooding_agent_creation_provider_override: {
         client: true,
         default: false
       },
@@ -2382,7 +2382,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      cursor_rules_batch_update: {
+      rules_batch_update: {
         client: true,
         default: true
       },
@@ -2576,7 +2576,7 @@ export const FLAGS = {
       // when ON, chatty windows batch to a 150-entry high watermark and backgrounded
       // (unfocused) windows flush every 60s instead of 3s. Default OFF keeps the
       // legacy ~3s/10-entry cadence so the fleet stays on the safe path until this
-      // is rolled out in Statsig. Read from the shared cursor-network path used by
+      // is rolled out in Statsig. Read from the shared Slate network path used by
       // both Glass and the classic IDE.
       submitlogs_flush_throttle: {
         client: true,
@@ -2592,7 +2592,7 @@ export const FLAGS = {
         default: false
       },
       // Internal-only access to the Agent SDK framework (packages/agent-serve,
-      // published as @cursor/july). Default off = fail closed; target internal
+      // published as @slate/july). Default off = fail closed; target internal
       // teams in the Statsig console.
       agentkit_enabled: {
         client: true,
@@ -2707,7 +2707,7 @@ export const FLAGS = {
         default: false
       },
       // Emergency off switch for the always-on local-commit reflog watcher in
-      // cursor-retrieval (`localCommitSignal.ts`), the producer for the post-commit
+      // retrieval (`localCommitSignal.ts`), the producer for the post-commit
       // review CTA. Enabling it stops watcher registration on new windows and
       // suppresses `gitCommitWasRun` signals on live ones; worst case the CTA
       // simply never shows.
@@ -2931,7 +2931,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      // Gates @ Past Chat / @bcId attachment for cloud agents. Backend attaches
+      // Gates @ Past Chat / @agentId attachment for cloud agents. Backend attaches
       // selected past-chat traces; Glass/portal hide the Past Chats picker when off.
       cloud_agent_bc_id_attachment: {
         client: true,
@@ -3062,7 +3062,7 @@ export const FLAGS = {
         client: true,
         default: false
       },
-      use_cursor_github_app_id: {
+      use_github_app_id: {
         client: true,
         default: true
       },
@@ -3377,7 +3377,7 @@ export const FLAGS = {
       // users (semantic indexers included), so the server skips building/updating a
       // queryable Turbopuffer index while the client keeps syncing and emitting
       // training telemetry. Hides only semantic-index UI in IndexingView — do not
-      // hide the Indexing & Docs settings tab (Docs / .cursorignore stay reachable).
+      // hide the Indexing & Docs settings tab (Docs / workspace ignore files stay reachable).
       // Default OFF (indexing on); the client fails open so a Statsig outage never
       // silently disables indexing.
       disable_codebase_indexing: {
@@ -3457,8 +3457,8 @@ export const FLAGS = {
         default: true
       },
       /**
-       * Kill-switch for running cursor-always-local in glass agent workspaces
-       * (PR #89691). When ON, cursor-always-local loads in glass non-BC agent
+       * Kill-switch for running agent-always-local in glass agent workspaces
+       * (PR #89691). When ON, agent-always-local loads in glass non-BC agent
        * workspaces (SSH remotes, devboxes) via the shared connect transport.
        * When OFF, the extension only loads in the glass root workspace — the
        * pre-PR behavior.
@@ -3503,19 +3503,19 @@ export const FLAGS = {
         client: true,
         default: true
       },
-      cursor_shared_session_file_watcher: {
+      shared_session_file_watcher: {
         client: true,
         default: false
       },
-      cursor_update_supervisor: {
+      update_supervisor: {
         client: true,
         default: false
       },
-      cursor_private_inference_download_prompt: {
+      private_inference_download_prompt: {
         client: true,
         default: false
       },
-      cursor_cli_private_inference_download_prompt: {
+      cli_private_inference_download_prompt: {
         client: true,
         default: false
       },
@@ -3676,7 +3676,7 @@ export const EXPERIMENTS = {
         client: true,
         fallbackValues: {
           group: "control",
-          copy: "cursor_models"
+          copy: "slate_models"
         },
         parseValue: {
           group: parseEnum(["control", "treatment"]),
@@ -4172,7 +4172,7 @@ export const EXPERIMENTS = {
           enabled: parseBoolean
         }
       },
-      cursor_launch_at_login: {
+      launch_at_login: {
         client: true,
         fallbackValues: {
           enabled: false
@@ -4345,7 +4345,7 @@ export const EXPERIMENTS = {
         fallbackValues: {
           enabled: false,
           message: "Install Slate CLI?",
-          action: "curl https://cursor.com/install -fsS | bash",
+          action: "curl https://slate.invalid/install -fsS | bash",
           show_every_hours: 0,
           show_count: 0
         },
@@ -5532,7 +5532,7 @@ Requirements:
       browser_default_url_config: {
         client: true,
         fallbackValues: {
-          defaultUrl: "https://cursor.com"
+          defaultUrl: "https://slate.invalid"
         }
       },
       glass_per_app_tabs_config: {

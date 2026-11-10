@@ -654,9 +654,9 @@ export interface PromptModelInfo {
   readonly isOpus45: false;
   readonly isOpus46: false;
   readonly isGpt5Family: false;
-  readonly isComposer1: false;
-  readonly isComposer15: false;
-  readonly isComposer2: false;
+  readonly isLegacyAgentModel1: false;
+  readonly isLegacyAgentModel15: false;
+  readonly isLegacyAgentModel2: false;
   readonly isGpt53CodexSpark: false;
 }
 
@@ -678,9 +678,9 @@ export function createSlatePromptModelInfo(modelName: string): PromptModelInfo {
     isOpus45: false,
     isOpus46: false,
     isGpt5Family: false,
-    isComposer1: false,
-    isComposer15: false,
-    isComposer2: false,
+    isLegacyAgentModel1: false,
+    isLegacyAgentModel15: false,
+    isLegacyAgentModel2: false,
     isGpt53CodexSpark: false,
   };
 }

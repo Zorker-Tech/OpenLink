@@ -1,6 +1,7 @@
 /** Converts the counterpart's persisted mode enum at the boundary of Slate's mode policy. */
 import { AgentMode, SimulatedMsgReason } from "../proto/generated/agent/v1/agent_pb.ts"
 import { getTaskToolName, type TaskToolModelInfo } from "../../../packages/agent/tools/task-tool-name.ts"
+import { slateModelCapabilitiesFromInterop } from "./model-capabilities-adapter.ts"
 import { usesPersistenceInstructions } from "../../../packages/agent/prompts/persistence-instructions.ts"
 import { adaptPersistenceModelInfo, type InteropPersistenceModelInfo } from "./model-persistence-guidance-adapter.ts"
 import {
@@ -18,8 +19,8 @@ import {
 } from "../../../packages/agent/prompts/multitask-mode-reminders.ts"
 
 export interface InteropModeModelInfo extends TaskToolModelInfo, InteropPersistenceModelInfo {
-  readonly isComposer2?: boolean | undefined
-  readonly isComposerMatterhorn?: boolean | undefined
+  readonly isLegacyAgentModel2?: boolean | undefined
+  readonly isLegacyAgentMatterhorn?: boolean | undefined
   readonly isRawTrainingSlug?: boolean | undefined
 }
 
@@ -30,21 +31,23 @@ export interface InteropModeProcessingConfig extends ModeProcessingConfig {
 export { AgentMode as AgentModeInterop, SimulatedMsgReason as SimulatedMsgReasonInterop }
 
 function reminderPolicy(modelInfo: InteropModeModelInfo | undefined): MultitaskReminderPolicy {
+  const capabilities = slateModelCapabilitiesFromInterop(modelInfo)
   return {
-    strictDelegation: modelInfo?.isComposer2 === true ||
-      (modelInfo?.isComposerMatterhorn === true && modelInfo.isRawTrainingSlug !== true),
+    strictDelegation: capabilities?.isLegacyAgentModel2 === true ||
+      (capabilities?.isLegacyAgentMatterhorn === true && capabilities.isRawTrainingSlug !== true),
     ignoreTurnPersistenceInstructions: usesPersistenceInstructions(adaptPersistenceModelInfo(modelInfo)),
   }
 }
 
 function slateModeConfig(config: InteropModeProcessingConfig): ModeProcessingConfig {
   const { modelInfo, ...owned } = config
+  const capabilities = slateModelCapabilitiesFromInterop(modelInfo)
   return {
     ...owned,
     multitaskReminder: {
       ...owned.multitaskReminder,
       subagentToolName: owned.multitaskReminder?.subagentToolName ??
-        (modelInfo === undefined ? "Task" : getTaskToolName(modelInfo)),
+        (capabilities === undefined ? "Task" : getTaskToolName(capabilities)),
       policy: {
         ...reminderPolicy(modelInfo),
         ...owned.multitaskReminder?.policy,
@@ -144,7 +147,8 @@ export function renderInteropMultitaskModeEnterUserReminder(
   options: { readonly hideAsyncSubagentTaskNotifications?: boolean | undefined } = {},
 ): string {
   const policy = reminderPolicy(modelInfo)
-  const subagentToolName = modelInfo === undefined ? "Task" : getTaskToolName(modelInfo)
+  const capabilities = slateModelCapabilitiesFromInterop(modelInfo)
+  const subagentToolName = capabilities === undefined ? "Task" : getTaskToolName(capabilities)
   return renderMultitaskModeEnterUserReminder(subagentToolName, {
     policy,
     hideAsyncSubagentTaskNotifications: options.hideAsyncSubagentTaskNotifications,
