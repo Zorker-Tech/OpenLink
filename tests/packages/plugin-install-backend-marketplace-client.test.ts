@@ -254,7 +254,7 @@ test("installing an inline plugin writes out what its manifest describes", async
     assert.equal(readFileSync(join(target, "commands", "command-one.md"), "utf8"), "---\ndescription: does things\n---\n\ncommand body");
     assert.deepEqual(JSON.parse(readFileSync(join(target, "hooks", "hooks.json"), "utf8")), { version: 1, hooks: { after: [{ type: "command", command: "echo done" }] } });
     assert.deepEqual(JSON.parse(readFileSync(join(target, ".mcp.json"), "utf8")), { mcpServers: { server: { command: "node" } } });
-    assert.deepEqual(JSON.parse(readFileSync(join(target, ".cursor-plugin", "plugin.json"), "utf8")), { name: "inline-plugin", rules: ["rules/Rule_One.md"], commands: ["commands/command-one.md"] });
+    assert.deepEqual(JSON.parse(readFileSync(join(target, ".slate-plugin", "plugin.json"), "utf8")), { name: "inline-plugin", rules: ["rules/Rule_One.md"], commands: ["commands/command-one.md"] });
     await assert.rejects(() => clientFor({}, recordingLogger().logger).installPlugin({ ...entry, inlineContentJson: "{not json" }, target), /Unexpected token|Expected property name|JSON/);
   } finally {
     rmSync(target, { recursive: true, force: true });
@@ -307,7 +307,7 @@ function releaseEntry(overrides: Partial<BackendPluginEntry> = {}): BackendPlugi
 
 test("installing a release asset verifies it before writing the plugin out", async () => {
   const target = targetDirectory();
-  const archive = await releaseArchive({ "wrapper/.claude-plugin/plugin.json": JSON.stringify({ name: "wrapped" }), "wrapper/rule.md": "# rule" });
+  const archive = await releaseArchive({ "wrapper/.slate-plugin/plugin.json": JSON.stringify({ name: "wrapped" }), "wrapper/rule.md": "# rule" });
   const sha = createHash("sha256").update(archive).digest("hex");
   const assetUrl = "https://github.com/owner/repo/releases/download/v1/plugin.tar.gz";
   const release = (assetName: string, size: number, downloadUrl: string): unknown => ({ assets: [{ name: assetName, size, browser_download_url: downloadUrl }] });
@@ -324,7 +324,7 @@ test("installing a release asset verifies it before writing the plugin out", asy
     assert.deepEqual(fetchStub.calls, ["https://api.github.com/repos/owner/repo/releases/tags/v1", assetUrl], "the release, then its asset");
     assert.deepEqual(fetchStub.headers[0], { Accept: "application/vnd.github.v3+json", "User-Agent": "SlatePluginInstaller" });
     assert.equal(readFileSync(join(target, "rule.md"), "utf8"), "# rule", "the wrapper directory is not copied");
-    assert.deepEqual(JSON.parse(readFileSync(join(target, ".claude-plugin", "plugin.json"), "utf8")), { name: "wrapped" });
+    assert.deepEqual(JSON.parse(readFileSync(join(target, ".slate-plugin", "plugin.json"), "utf8")), { name: "wrapped" });
 
     const untrusted = stubFetch([{ ok: true, json: release("plugin.tar.gz", archive.byteLength, "http://example.com/asset.tar.gz") }]);
     try {
@@ -352,12 +352,12 @@ test("installing a release asset verifies it before writing the plugin out", asy
 });
 
 test("installing a repository entry clones it and copies the plugin directory out", async () => {
-  const repository = createRepository({ "plugins/one/rule.md": "# one", "plugins/one/.claude-plugin/plugin.json": JSON.stringify({ name: "one" }) });
+  const repository = createRepository({ "plugins/one/rule.md": "# one", "plugins/one/.slate-plugin/plugin.json": JSON.stringify({ name: "one" }) });
   const target = targetDirectory();
   try {
     const entry: BackendPluginEntry = { pluginId: "repo", name: "repo", version: repository.sha, downloadUrl: "backend-git://" + encodeURIComponent(repository.repo) + "@" + encodeURIComponent(repository.sha) + "#" + encodeURIComponent("plugins/one") };
     await clientFor({}, recordingLogger().logger).installPlugin(entry, target);
-    assert.deepEqual(readdirSync(target).sort(), [".claude-plugin", "rule.md"], "only the plugin directory lands, not the clone");
+    assert.deepEqual(readdirSync(target).sort(), [".slate-plugin", "rule.md"], "only the plugin directory lands, not the clone");
     assert.equal(readFileSync(join(target, "rule.md"), "utf8"), "# one");
 
     await assert.rejects(() => clientFor({}, recordingLogger().logger).installPlugin({ ...entry, downloadUrl: "nonsense://source" }, target), { message: "Invalid download URL format for plugin repo: nonsense://source" });

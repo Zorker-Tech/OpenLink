@@ -22,19 +22,17 @@ const KEBAB_CASE_PATTERN = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/;
 
 /** The files a plugin's manifest may live in, in the order they are looked for. */
 export const PLUGIN_MANIFEST_PATHS = [
-  ".cursor-plugin/plugin.json",
-  ".claude-plugin/plugin.json",
+  ".slate-plugin/plugin.json",
   "plugin.json",
 ] as const;
 
 /** The directories that mark a plugin's root. */
-export const PLUGIN_ROOT_DIR_NAMES = [".cursor-plugin", ".claude-plugin"] as const;
+export const PLUGIN_ROOT_DIR_NAMES = [".slate-plugin"] as const;
 export const preferredPluginManifestRootDirectory = PLUGIN_ROOT_DIR_NAMES[0];
 
 /** The files a marketplace's manifest may live in. */
 export const MARKETPLACE_MANIFEST_PATHS = [
-  ".cursor-plugin/marketplace.json",
-  ".claude-plugin/marketplace.json",
+  ".slate-plugin/marketplace.json",
 ] as const;
 
 const GitHubSourceSchema = z.object({
@@ -62,9 +60,8 @@ export type PluginSource = z.infer<typeof PluginSourceSchema>;
 /** A semver-shaped client version, with an optional pre-release tail. */
 const MIN_CLIENT_VERSION_PATTERN = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 const MinClientVersionsSchema = z.object({
-  cursor: z.string().regex(MIN_CLIENT_VERSION_PATTERN, "Must be a semver version (X.Y.Z)").optional(),
   slate: z.string().regex(MIN_CLIENT_VERSION_PATTERN, "Must be a semver version (X.Y.Z)").optional(),
-});
+}).strict();
 const AuthorSchema = z.object({ name: z.string().min(1, "Author name is required"), email: z.string().email().optional() });
 
 /** The descriptive fields a plugin and a marketplace listing both carry, in the order both declare them. */
@@ -257,7 +254,7 @@ function isRecord(value: unknown): value is Record<string, unknown> { return typ
 function parsePluginMinClientVersions(value: unknown): z.infer<typeof MinClientVersionsSchema> | undefined {
   const result = MinClientVersionsSchema.safeParse(value);
   if (!result.success) return undefined;
-  return result.data.cursor === undefined && result.data.slate === undefined ? undefined : result.data;
+  return result.data.slate === undefined ? undefined : result.data;
 }
 
 /** The marketplace's own name, normalized from what it says or from the repository it came from. */

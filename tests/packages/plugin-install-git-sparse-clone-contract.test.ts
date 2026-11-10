@@ -28,7 +28,7 @@ test("a sparse plan adds required manifest roots once and avoids probing when it
   assert.deepEqual(await resolveSparseClonePlan(["skills", "./hooks/", "skills"], true, supported), {
     materialize: ["skills", "hooks", "skills"],
     sparse: true,
-    sparseDirs: [".cursor-plugin", ".claude-plugin", "skills", "hooks"],
+    sparseDirs: [".slate-plugin", "skills", "hooks"],
   })
   assert.equal(probes, 1)
   assert.deepEqual(await resolveSparseClonePlan("all", true, supported), { materialize: "all", sparse: false, sparseDirs: [] })

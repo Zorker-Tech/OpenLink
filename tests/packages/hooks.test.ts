@@ -32,11 +32,6 @@ import {
 import { validateHookConfig } from "../../source/packages/hooks/hook-config-validation.ts"
 import { sanitizeSystemReminderContent } from "../../source/packages/hooks/system-reminder-sanitizing.ts"
 import {
-  detectHookConfigDialect,
-  transformForeignHookConfig,
-  type HookConfigLogger,
-} from "../../source/adapters/interop/hooks/foreign-hook-config-adapter.ts"
-import {
   HOOK_CONTEXT_MAX_CHARACTERS,
   HookContextLimitError,
   appendHookContextEntries,
@@ -50,11 +45,6 @@ import {
   renderHookContextReminders,
 } from "../../source/packages/hooks-carriers/hook-context-rendering.ts"
 import { HOOK_STEP_CARRIER_SPECS } from "../../source/packages/hooks-carriers/carrier-spec.ts"
-
-function capturingLogger(): { logger: HookConfigLogger; warnings: string[] } {
-  const warnings: string[] = []
-  return { logger: { warn: message => warnings.push(message), info: () => {} }, warnings }
-}
 
 function withConsoleWarn<T>(run: (warnings: string[]) => T): T {
   const warnings: string[] = []
@@ -431,127 +421,6 @@ test("a system reminder tag written by a hook is defused on both sides", () => {
     sanitizeSystemReminderContent("<system_reminder>a</system_reminder><system_reminder>b"),
     "<system_reminder_>a</system_reminder_><system_reminder_>b",
   )
-})
-
-// ---------------------------------------------------------------------------------------------
-// hooks: a configuration written by another tool
-// ---------------------------------------------------------------------------------------------
-
-test("a foreign configuration is translated event by event and script by script", () => {
-  const { logger, warnings } = capturingLogger()
-  const config = transformForeignHookConfig({
-    PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "guard.sh", timeout: 10 }] }],
-    Stop: [{ hooks: [{ type: "prompt", prompt: "was that complete?" }] }],
-  }, logger)
-  assert.deepEqual(config, {
-    version: 1,
-    hooks: {
-      preToolUse: [{ type: "command", command: "guard.sh", matcher: "Shell", timeout: 10, loop_limit: null, failClosed: false }],
-      stop: [{ type: "prompt", prompt: "was that complete?", loop_limit: null, failClosed: false }],
-    },
-  })
-  assert.deepEqual(warnings, [])
-})
-
-test("an event we do not run is reported and left out", () => {
-  const { logger, warnings } = capturingLogger()
-  const config = transformForeignHookConfig({
-    Notification: [{ hooks: [{ command: "notify.sh" }] }],
-    UnknownEvent: [{ hooks: [{ command: "x.sh" }] }],
-  }, logger)
-  assert.deepEqual(config.hooks, {})
-  assert.deepEqual(warnings, [
-    'Event "Notification" is not supported and will be ignored',
-    'Unknown event "UnknownEvent", skipping',
-  ])
-})
-
-test("an event whose value is not a list is reported and skipped", () => {
-  const { logger, warnings } = capturingLogger()
-  const config = transformForeignHookConfig({ Stop: { hooks: [{ command: "x.sh" }] } }, logger)
-  assert.deepEqual(config.hooks, {})
-  assert.deepEqual(warnings, ['Event "Stop" has an invalid value (expected an array), skipping'])
-})
-
-test("tool names are translated, deduplicated, and MCP tools keep their server", () => {
-  const { logger, warnings } = capturingLogger()
-  const config = transformForeignHookConfig({
-    PreToolUse: [
-      { matcher: "Bash|Edit|Write", hooks: [{ command: "a.sh" }] },
-      { matcher: "mcp__server__do_thing|mcp__server__other", hooks: [{ command: "b.sh" }] },
-    ],
-  }, logger)
-  assert.equal(config.hooks.preToolUse?.[0]?.matcher, "Shell|Write")
-  assert.equal(config.hooks.preToolUse?.[1]?.matcher, "MCP:do_thing|MCP:other")
-  assert.deepEqual(warnings, [])
-})
-
-test("a tool we do not have is reported, and a matcher left with nothing is skipped", () => {
-  const { logger, warnings } = capturingLogger()
-  const config = transformForeignHookConfig({
-    PreToolUse: [
-      { matcher: "Glob|Bash", hooks: [{ command: "a.sh" }] },
-      { matcher: "Glob", hooks: [{ command: "b.sh" }] },
-    ],
-  }, logger)
-  assert.equal(config.hooks.preToolUse?.length, 1)
-  assert.equal(config.hooks.preToolUse?.[0]?.matcher, "Shell")
-  assert.deepEqual(warnings, [
-    'Tool "Glob" is not supported and will be ignored',
-    'Tool "Glob" is not supported and will be ignored',
-    'All tools in matcher "Glob" are unsupported, skipping hooks',
-  ])
-})
-
-test("a matcher that is a wildcard, or missing, applies to every tool", () => {
-  const { logger } = capturingLogger()
-  const config = transformForeignHookConfig({
-    PreToolUse: [
-      { matcher: "*", hooks: [{ command: "a.sh" }] },
-      { hooks: [{ command: "b.sh" }] },
-    ],
-  }, logger)
-  assert.equal(config.hooks.preToolUse?.[0]?.matcher, undefined)
-  assert.equal(config.hooks.preToolUse?.[1]?.matcher, undefined)
-})
-
-test("a matcher on a step that has no tools is dropped, and a trigger matcher is explained", () => {
-  const { logger, warnings } = capturingLogger()
-  const config = transformForeignHookConfig({
-    Stop: [{ matcher: "whatever", hooks: [{ command: "a.sh" }] }],
-    SessionStart: [
-      { matcher: "startup", hooks: [{ command: "b.sh" }] },
-      { matcher: "something-else", hooks: [{ command: "c.sh" }] },
-    ],
-  }, logger)
-  assert.equal(config.hooks.stop?.[0]?.matcher, undefined)
-  assert.equal(config.hooks.sessionStart?.length, 2)
-  assert.deepEqual(warnings, [
-    'SessionStart trigger matcher "startup" is not supported, hooks will fire for all triggers',
-  ])
-})
-
-test("scripts without what they need are dropped, and several entries merge into one step", () => {
-  const { logger } = capturingLogger()
-  const config = transformForeignHookConfig({
-    PreToolUse: [
-      { matcher: "Bash", hooks: [{ type: "prompt" }, { command: "" }, { command: "keep.sh" }] },
-      { matcher: "Read", hooks: [{ command: "also.sh" }] },
-    ],
-  }, logger)
-  assert.deepEqual(config.hooks.preToolUse?.map(script => script.command), ["keep.sh", "also.sh"])
-})
-
-test("the dialect of a configuration is read from the shape of its first entry", () => {
-  assert.equal(detectHookConfigDialect({ hooks: { stop: [{ matcher: "*", hooks: [{ command: "x" }] }] } }), "nested-matcher-scripts")
-  assert.equal(detectHookConfigDialect({ hooks: { stop: [{ command: "x" }] } }), "direct-scripts")
-  assert.equal(detectHookConfigDialect({ hooks: { stop: [{ type: "command" }] } }), "direct-scripts")
-  assert.equal(detectHookConfigDialect({ hooks: { stop: [] } }), "unknown")
-  assert.equal(detectHookConfigDialect({ hooks: { stop: ["x"] } }), "unknown")
-  assert.equal(detectHookConfigDialect({ hooks: {} }), "unknown")
-  assert.equal(detectHookConfigDialect({}), "unknown")
-  assert.equal(detectHookConfigDialect(null), "unknown")
-  assert.equal(detectHookConfigDialect("nope"), "unknown")
 })
 
 // ---------------------------------------------------------------------------------------------

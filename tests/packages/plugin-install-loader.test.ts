@@ -136,7 +136,7 @@ test("component files keep their metadata, defaults and plugin-root expansion", 
     fs.mkdirSync(path.join(dir, "agents"), { recursive: true })
     fs.writeFileSync(path.join(dir, "agents", "read_only.md"), "---\nname: helper agent\ndescription: Reads files\ntools: Read, Search\nmodel: small\npermissionMode: readonly\n---\n\n  Read the requested file.  ")
     fs.mkdirSync(path.join(dir, "commands"), { recursive: true })
-    fs.writeFileSync(path.join(dir, "commands", "inspect.md"), "---\nname: inspect\ndescription: Inspect a file\nargument-hint:\n  - file\n  - target\n---\n\n  inspect ${CLAUDE_PLUGIN_ROOT}/bin/check  ")
+    fs.writeFileSync(path.join(dir, "commands", "inspect.md"), "---\nname: inspect\ndescription: Inspect a file\nargument-hint:\n  - file\n  - target\n---\n\n  inspect ${SLATE_PLUGIN_ROOT}/bin/check  ")
     fs.mkdirSync(path.join(dir, "skills", "analyst"), { recursive: true })
     fs.writeFileSync(path.join(dir, "skills", "analyst", "SKILL.md"), "---\ndescription: Reviews changes\nglobs: src/{a,b}.ts, docs/**,\nalwaysApply: true\nenvironments: work, home\nmetadata:\n  disabledEnvironments:\n    - sandbox\n---\n\nReview the patch.")
 
@@ -170,35 +170,18 @@ test("component files keep their metadata, defaults and plugin-root expansion", 
   })
 })
 
-test("a plugin's hooks are read in either of the shapes the format allows", async () => {
+test("a plugin's hooks use Slate's hook configuration shape", async () => {
   await withTempDir("slate-plugin-", async (dir) => {
     fs.writeFileSync(path.join(dir, "plugin.json"), JSON.stringify({ name: "my-plugin" }))
     fs.mkdirSync(path.join(dir, "hooks"), { recursive: true })
-    // The plugin's own shape: each step lists the scripts directly.
     fs.writeFileSync(path.join(dir, "hooks", "hooks.json"), JSON.stringify({
       version: 1,
       hooks: { afterAgentThought: [{ type: "command", command: "echo hi" }] },
     }))
 
-    const direct = await loadPluginFromPath(dir, "third-party", { name: "my-plugin", version: "1.0.0" })
-    const directHooks = direct.hooks as { readonly config?: { readonly hooks: Record<string, unknown> } } | undefined
-    assert.deepEqual(directHooks?.config?.hooks.afterAgentThought, [{ type: "command", command: "echo hi" }])
-
-    // The other shape: an event's entry carries a matcher and nests the scripts inside it, and the event is
-    // named the way that shape names it rather than the way this platform does.
-    fs.writeFileSync(path.join(dir, "hooks", "hooks.json"), JSON.stringify({
-      hooks: { PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "echo hi" }] }] },
-    }))
-    const translated = await loadPluginFromPath(dir, "third-party", { name: "my-plugin", version: "1.0.0" })
-    const translatedResult = translated.hooks as { readonly config?: { readonly hooks: Record<string, readonly { readonly type?: string; readonly command?: string }[]> } } | undefined
-    const translatedHooks = translatedResult?.config?.hooks ?? {}
-    assert.deepEqual(Object.keys(translatedHooks), ["postToolUse"])
-    // The translated script keeps its command, and carries the fields the platform's own shape gives every
-    // script rather than leaving them out.
-    const translatedScripts = Object.values(translatedHooks)[0] ?? []
-    assert.equal(translatedScripts.length, 1)
-    assert.equal(translatedScripts[0]?.type, "command")
-    assert.equal(translatedScripts[0]?.command, "echo hi")
+    const loaded = await loadPluginFromPath(dir, "third-party", { name: "my-plugin", version: "1.0.0" })
+    const hooks = loaded.hooks as { readonly config?: { readonly hooks: Record<string, unknown> } } | undefined
+    assert.deepEqual(hooks?.config?.hooks.afterAgentThought, [{ type: "command", command: "echo hi" }])
   })
 })
 

@@ -4,11 +4,11 @@
  * A plugin's configuration refers to values only the person installing it knows — a host, a token — and those are
  * spelled as placeholders. They are collected from the configuration itself, so the form a user is shown is exactly the
  * values the plugin asks for: each one named, described by what it is used for, given its default when it has one, and
- * marked write-only when its name says it holds a secret. The two variables the loader fills in itself are not the
- * user's to provide and are left out.
+ * marked write-only when its name says it holds a secret. The install-path variable the loader fills in itself is not
+ * the user's to provide and is left out.
  */
 import { isSecretPluginVariableName } from "../../../packages/plugin-install/secret-variable-names.ts";
-import { LOADER_PROVIDED_PLUGIN_VARIABLES } from "./plugin-root-variables-adapter.ts";
+import { LOADER_PROVIDED_PLUGIN_VARIABLES } from "../../../packages/plugin-install/plugin-variables.ts";
 const PLACEHOLDER = /\$\{([A-Z][A-Z0-9_]*)(?::-([^}]*))?\}/g;
 const ACRONYMS = new Set(["api", "aws", "db", "dd", "gcp", "http", "https", "id", "mcp", "ssl", "tls", "uri", "url"]);
 const humanize = (name: string): string => name.split("_").filter(Boolean).map((word) => ACRONYMS.has(word.toLowerCase()) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.toLowerCase().slice(1)).join(" ");

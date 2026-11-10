@@ -91,19 +91,18 @@ test("a plugin's capabilities are the ones it may ask for, each of them once", (
   assert.throws(() => CapabilitiesSchema.parse(["telepathy"]))
 })
 
-test("a plugin's files can name where the plugin is installed, in either spelling", () => {
-  assert.equal(expandPluginVariables("run ${CLAUDE_PLUGIN_ROOT}/bin/tool", "/plugins/mine"), "run /plugins/mine/bin/tool")
-  assert.equal(expandPluginVariables("run ${CURSOR_PLUGIN_ROOT}/bin/tool", "/plugins/mine"), "run /plugins/mine/bin/tool")
+test("a plugin's files can name where the plugin is installed", () => {
+  assert.equal(expandPluginVariables("run ${SLATE_PLUGIN_ROOT}/bin/tool", "/plugins/mine"), "run /plugins/mine/bin/tool")
   // A variable the format does not define is left as it was written.
   assert.equal(expandPluginVariables("${SOMETHING_ELSE}", "/plugins/mine"), "${SOMETHING_ELSE}")
-  assert.equal(expandPluginVariables("${CLAUDE_PLUGIN_ROOT}:${CURSOR_PLUGIN_ROOT}", "/p"), "/p:/p", "both spellings are expanded")
-  assert.equal(expandPluginVariables("${CLAUDE_PLUGIN_ROOT}${CLAUDE_PLUGIN_ROOT}", "/p"), "/p/p", "every occurrence is expanded")
+  assert.equal(expandPluginVariables("${SLATE_PLUGIN_ROOT}:${SLATE_PLUGIN_ROOT}", "/p"), "/p:/p", "every occurrence is expanded")
+  assert.equal(expandPluginVariables("${SLATE_PLUGIN_ROOT}${SLATE_PLUGIN_ROOT}", "/p"), "/p/p", "every occurrence is expanded")
   assert.equal(expandPluginVariables("${claude_plugin_root}", "/p"), "${claude_plugin_root}", "the spelling is exact")
-  assert.equal(expandPluginVariables("${CLAUDE_PLUGIN_ROOT }", "/p"), "${CLAUDE_PLUGIN_ROOT }", "a space makes it another variable")
+  assert.equal(expandPluginVariables("${SLATE_PLUGIN_ROOT }", "/p"), "${SLATE_PLUGIN_ROOT }", "a space makes it another variable")
   assert.equal(expandPluginVariables("", "/p"), "")
   assert.equal(expandPluginVariables("$&", "/p"), "$&", "a value with no variable is untouched")
-  assert.equal(expandPluginVariables("${CLAUDE_PLUGIN_ROOT}", "$&"), "$&", "the path is inserted as it is, not as a replacement pattern")
-  assert.equal(expandPluginVariables("${CLAUDE_PLUGIN_ROOT}", "X${CURSOR_PLUGIN_ROOT}Y"), "XX${CURSOR_PLUGIN_ROOT}YY", "the spellings are expanded in the order the format lists them, so a path carrying the second one is expanded in its turn")
+  assert.equal(expandPluginVariables("${SLATE_PLUGIN_ROOT}", "$&"), "$&", "the path is inserted as it is, not as a replacement pattern")
+  assert.equal(expandPluginVariables("${SLATE_PLUGIN_ROOT}", "X${SLATE_PLUGIN_ROOT}Y"), "X${SLATE_PLUGIN_ROOT}Y", "the path is inserted as it is, not recursively expanded")
 })
 
 test("a plugin is identified by its source, and only the published ones carry an id", () => {
@@ -272,7 +271,7 @@ test("a plugin that arrived as a manifest is written out as a directory", async 
     const hooks = JSON.parse(fs.readFileSync(path.join(dir, "hooks", "hooks.json"), "utf8")) as { hooks: Record<string, unknown[]> }
     assert.deepEqual(hooks.hooks.afterAgentThought, [{ type: "command", command: "echo hi" }])
 
-    const manifest = JSON.parse(fs.readFileSync(path.join(dir, ".cursor-plugin", "plugin.json"), "utf8")) as { name: string; rules?: string[] }
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, ".slate-plugin", "plugin.json"), "utf8")) as { name: string; rules?: string[] }
     assert.equal(manifest.name, "mine")
     assert.deepEqual(manifest.rules, [`rules/${ruleName}`])
   } finally {

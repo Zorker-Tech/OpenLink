@@ -44,12 +44,6 @@ export function declaresPluginMcpInteropSchema(contents) {
   return /\b(?:mcpConfigSchema|mcpServerConfigSchema)\b/.test(contents)
 }
 
-/** Foreign plugin manifest paths, platform-version fields and Zod schemas live at the marketplace boundary. */
-export function declaresExternalPluginManifestDialect(contents) {
-  return /\.cursor-plugin|\.claude-plugin/.test(contents) || /\bcursor\s*:\s*z\./.test(contents) ||
-    /(?:PluginManifestSchema|MarketplacePluginEntrySchema|MinClientVersionsSchema)\s*=\s*z\./.test(contents)
-}
-
 /** A Slate-owned execution contract may not import or name generated counterpart message surfaces. */
 export const importsCounterpartExecutionWire = (contents) => {
   return /\bfrom\s+["']@bufbuild\/protobuf["']/.test(contents)
@@ -81,7 +75,6 @@ async function main() {
   const coreConsumers = []
   const legacyPaths = []
   const pluginMcpSchemaLeaks = []
-  const pluginManifestLeaks = []
   const localExecWireLeaks = []
   const protobufRuntimeLeaks = []
   const ownedLocalExecWireFiles = new Set([
@@ -101,7 +94,6 @@ async function main() {
       legacyPaths.push(file.relative)
     }
     if (declaresPluginMcpInteropSchema(contents)) pluginMcpSchemaLeaks.push(file.relative)
-    if (declaresExternalPluginManifestDialect(contents)) pluginManifestLeaks.push(file.relative)
     if (importsExternalProtobufRuntime(contents)) {
       protobufRuntimeLeaks.push(file.relative)
     }
@@ -148,13 +140,12 @@ async function main() {
   for (const file of legacyPaths) console.error("legacy packages/proto path remains in source: " + file)
   for (const file of protocolImports) console.error("Work API contract imports external wire schema: " + file)
   for (const file of pluginMcpSchemaLeaks) console.error("external plugin MCP schema is declared outside the interop adapter: " + file)
-  for (const file of pluginManifestLeaks) console.error("external plugin manifest dialect is declared outside the interop adapter: " + file)
   for (const file of protobufRuntimeLeaks) console.error("core imports the external protobuf runtime instead of a Slate contract: " + file)
   for (const file of localExecWireLeaks) console.error("Slate local-exec wire imports counterpart execution types: " + file)
 
   const problems = difference.added.length + difference.stale.length + coreDifference.added.length +
     coreDifference.stale.length + legacyPaths.length + protocolImports.length +
-    pluginMcpSchemaLeaks.length + pluginManifestLeaks.length + localExecWireLeaks.length
+    pluginMcpSchemaLeaks.length + localExecWireLeaks.length
     + protobufRuntimeLeaks.length
   if (problems > 0) {
     console.error("interop boundary: " + problems + " problem(s)")

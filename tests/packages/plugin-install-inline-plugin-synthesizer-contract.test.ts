@@ -43,7 +43,7 @@ describe("inline plugin synthesis behavior", () => {
         }),
       });
 
-      const manifest = JSON.parse(readFileSync(join(targetDir, ".cursor-plugin", "plugin.json"), "utf8")) as {
+      const manifest = JSON.parse(readFileSync(join(targetDir, ".slate-plugin", "plugin.json"), "utf8")) as {
         name: string;
         rules?: string[];
         commands?: string[];
@@ -87,7 +87,7 @@ describe("inline plugin synthesis behavior", () => {
           mcpServers: [{ name: "none", config: null }],
         }),
       });
-      assert.deepEqual(JSON.parse(readFileSync(join(targetDir, ".cursor-plugin", "plugin.json"), "utf8")), { name: "empty-plugin" });
+      assert.deepEqual(JSON.parse(readFileSync(join(targetDir, ".slate-plugin", "plugin.json"), "utf8")), { name: "empty-plugin" });
       assert.equal(readFileSync(join(targetDir, "hooks", "hooks.json"), "utf8"), JSON.stringify({ version: 1, hooks: {} }, null, 2));
       assert.equal(readdirSync(join(targetDir, "rules")).length, 0);
       assert.equal(readdirSync(join(targetDir, "commands")).length, 0);

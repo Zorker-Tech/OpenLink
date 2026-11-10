@@ -2132,20 +2132,6 @@ describe("rewrite overlap gate inputs", () => {
     );
   });
 
-  it("keeps foreign hook file shapes in the hook interop adapter", () => {
-    assert.deepEqual(sourcePathsOf({
-      port: "packages/hooks/claude-code-types.ts",
-      rewritten: "source/packages/hooks/foreign-hook-config.ts",
-    }), [
-      "packages/hooks/foreign-hook-config.ts",
-      "adapters/interop/hooks/foreign-hook-config-adapter.ts",
-    ]);
-    assert.equal(
-      exemptSourceReason("adapters/interop/hooks/foreign-hook-config-adapter.ts"),
-      "interop adapter: maps foreign hook event and script shapes into Slate's hook configuration",
-    );
-  });
-
   it("keeps foreign hook response fields in the response interop adapter", () => {
     assert.deepEqual(sourcePathsOf({
       port: "packages/hooks/validators/preToolUseResponse.ts",

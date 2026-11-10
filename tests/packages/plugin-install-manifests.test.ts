@@ -36,13 +36,13 @@ test("the placeholders a plugin asks for are collected from its own configuratio
       mine: {
         command: "node",
         env: { API_URL: "${API_URL}", TOKEN: "${TOKEN:-abc}" },
-        args: ["--root", "${CURSOR_PLUGIN_ROOT}", "${CLAUDE_PLUGIN_ROOT}"],
+        args: ["--root", "${SLATE_PLUGIN_ROOT}"],
         nested: { deeper: ["${REGION}"] },
       },
     },
   })
 
-  // The two variables the loader fills in itself are not the user's to provide.
+  // The install-path variable the loader fills in itself is not the user's to provide.
   assert.deepEqual(Object.keys(inferred?.properties ?? {}), ["API_URL", "REGION", "TOKEN"])
   // A name is shown as words, and a default is said out loud.
   assert.equal(inferred?.properties.API_URL?.title, "API URL")
@@ -128,7 +128,7 @@ test("a manifest is read against the schema the format defines", () => {
     version: "1.2.3",
     author: { name: "Someone" },
     capabilities: ["canvas"],
-    minClientVersions: { cursor: "1.0.0" },
+    minClientVersions: { slate: "1.0.0" },
     mcpServers: { mine: { command: "node" } },
     skills: ["./skills"],
   }))
@@ -178,9 +178,9 @@ test("a plugin's source is read into a path, and only a safe one is accepted", (
   assert.equal(isPathSafe("/etc/passwd"), false)
   assert.equal(isPathSafe("https://example.com/x"), false)
 
-  assert.equal(containsPluginRootDir(["rules", ".cursor-plugin"]), true)
+  assert.equal(containsPluginRootDir(["rules", ".slate-plugin"]), true)
   assert.equal(containsPluginRootDir(["rules"]), false)
-  assert.equal(PLUGIN_ROOT_DIR_NAMES.includes(".cursor-plugin"), true)
+  assert.equal(PLUGIN_ROOT_DIR_NAMES.includes(".slate-plugin"), true)
   assert.equal(PLUGIN_MANIFEST_PATHS.includes("plugin.json"), true)
   assert.equal(MAX_MANIFEST_SIZE_BYTES, 10 * 1024 * 1024)
 })
@@ -215,9 +215,9 @@ test("the entries a marketplace lists are classified by what they are", () => {
 // ---------------------------------------------------------------------------------------------
 
 test("the paths and the source schema are the ones the format defines", () => {
-  assert.deepEqual(PLUGIN_MANIFEST_PATHS, [".cursor-plugin/plugin.json", ".claude-plugin/plugin.json", "plugin.json"])
-  assert.deepEqual(MARKETPLACE_MANIFEST_PATHS, [".cursor-plugin/marketplace.json", ".claude-plugin/marketplace.json"])
-  assert.deepEqual(PLUGIN_ROOT_DIR_NAMES, [".cursor-plugin", ".claude-plugin"])
+  assert.deepEqual(PLUGIN_MANIFEST_PATHS, [".slate-plugin/plugin.json", "plugin.json"])
+  assert.deepEqual(MARKETPLACE_MANIFEST_PATHS, [".slate-plugin/marketplace.json"])
+  assert.deepEqual(PLUGIN_ROOT_DIR_NAMES, [".slate-plugin"])
   assert.equal(MAX_MANIFEST_SIZE_BYTES, 10 * 1024 * 1024)
 
   assert.equal(PluginSourceSchema.safeParse("acme/a-plugin").success, true)
@@ -232,9 +232,11 @@ test("the paths and the source schema are the ones the format defines", () => {
 })
 
 test("a plugin's variable schema is checked beyond its shape", () => {
-  const badVersion = parsePluginManifest(JSON.stringify({ name: "a", minClientVersions: { cursor: "1.0" } }))
+  const badVersion = parsePluginManifest(JSON.stringify({ name: "a", minClientVersions: { slate: "1.0" } }))
   assert.equal(badVersion.success, false)
   assert.match(badVersion.success === false ? badVersion.error : "", /Must be a semver version \(X\.Y\.Z\)/, "a client version says what it must look like")
+  const foreignVersion = parsePluginManifest(JSON.stringify({ name: "a", minClientVersions: { cursor: "1.0.0" } }))
+  assert.equal(foreignVersion.success, false, "only Slate's client-version key is part of the format")
 
   const issuesOf = (schema: unknown): Array<[string, string]> => {
     const result = parsePluginVariablesJsonSchema(schema)

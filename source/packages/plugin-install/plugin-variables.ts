@@ -1,23 +1,16 @@
 /**
- * The variables a plugin's own files may use to refer to where they are installed.
+ * The variables a Slate plugin's own files may use to refer to where they are installed.
  *
- * A plugin cannot know its own path, so its files spell it as a variable. Slate's spelling is the primary
- * one; bundles written for other hosts are expanded through the interop adapter.
+ * A plugin cannot know its own path, so its files spell it as `${SLATE_PLUGIN_ROOT}`.
  */
-import {
-  EXTERNAL_PLUGIN_ROOT_VARIABLES,
-  SLATE_PLUGIN_ROOT_VARIABLE,
-} from "../../adapters/interop/plugin-marketplace/plugin-root-variables-adapter.ts";
 
-const PLUGIN_ROOT_VARIABLE_NAMES = [SLATE_PLUGIN_ROOT_VARIABLE, ...EXTERNAL_PLUGIN_ROOT_VARIABLES] as const;
+export const SLATE_PLUGIN_ROOT_VARIABLE = "SLATE_PLUGIN_ROOT"
 
-/** The pattern a file spells the install path with, for one of those names. */
-const pluginRootPattern = (name: string): RegExp => new RegExp(`\\$\\{${name}\\}`, "g");
+export const LOADER_PROVIDED_PLUGIN_VARIABLES: ReadonlySet<string> = new Set([SLATE_PLUGIN_ROOT_VARIABLE])
 
-/** The value with every recognized spelling of the install path replaced by the path itself. */
+const pluginRootPattern = new RegExp(`\\$\\{${SLATE_PLUGIN_ROOT_VARIABLE}\\}`, "g")
+
+/** The value with the install-path variable replaced by the path itself. */
 export function expandPluginVariables(value: string, pluginPath: string): string {
-  return PLUGIN_ROOT_VARIABLE_NAMES.reduce(
-    (expanded, name) => expanded.replace(pluginRootPattern(name), () => pluginPath),
-    value,
-  );
+  return value.replace(pluginRootPattern, () => pluginPath)
 }

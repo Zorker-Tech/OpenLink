@@ -141,9 +141,9 @@ test("plugin root and environment placeholders expand in server values with expl
   try {
     const resolved = await resolvePluginMcpConfigFromReader(memoryReader({
       ".mcp.json": JSON.stringify({ mcpServers: { local: {
-        command: "${CLAUDE_PLUGIN_ROOT}/bin/${SLATE_MCP_PARSER_TOKEN}",
-        args: ["${CURSOR_PLUGIN_ROOT}/arg", "${MISSING:-fallback}"],
-        cwd: "${CLAUDE_PLUGIN_ROOT}/work",
+        command: "${SLATE_PLUGIN_ROOT}/bin/${SLATE_MCP_PARSER_TOKEN}",
+        args: ["${SLATE_PLUGIN_ROOT}/arg", "${MISSING:-fallback}"],
+        cwd: "${SLATE_PLUGIN_ROOT}/work",
         env: { TOKEN: "${SLATE_MCP_PARSER_TOKEN}", UNRESOLVED: "${NOT_SET}" },
         headers: { Authorization: "Bearer ${SLATE_MCP_PARSER_TOKEN}" },
       } } }),
@@ -167,7 +167,7 @@ test("plugin root and environment placeholders expand in server values with expl
 
 test("cloud lookup replaces process and configured values; skipExpansion leaves source text alone", async () => {
   const content = JSON.stringify({ mcpServers: { local: {
-    command: "${CLAUDE_PLUGIN_ROOT}/bin/${TOKEN}", args: ["${TOKEN:-default}"], env: { TOKEN: "${TOKEN}" },
+    command: "${SLATE_PLUGIN_ROOT}/bin/${TOKEN}", args: ["${TOKEN:-default}"], env: { TOKEN: "${TOKEN}" },
   } } });
   const cloud = await resolvePluginMcpConfigFromReader(memoryReader({ ".mcp.json": content }), undefined, undefined, {
     installPathForExpansion: "/plugin",
@@ -181,7 +181,7 @@ test("cloud lookup replaces process and configured values; skipExpansion leaves 
     command: "/plugin/bin/cloud", args: ["cloud"], env: { TOKEN: "cloud" },
   });
   assert.deepEqual(untouched?.mcpServers.local, {
-    command: "${CLAUDE_PLUGIN_ROOT}/bin/${TOKEN}", args: ["${TOKEN:-default}"], env: { TOKEN: "${TOKEN}" },
+    command: "${SLATE_PLUGIN_ROOT}/bin/${TOKEN}", args: ["${TOKEN:-default}"], env: { TOKEN: "${TOKEN}" },
   });
 });
 
@@ -207,13 +207,12 @@ test("manifest lookup uses the first parseable plugin manifest and carries its s
   const reads: string[] = [];
   const warnings: string[] = [];
   const files: Record<string, string> = {
-    ".cursor-plugin/plugin.json": "{ broken",
-    ".claude-plugin/plugin.json": JSON.stringify({
+    ".slate-plugin/plugin.json": "{ broken",
+    "plugin.json": JSON.stringify({
       $schema: "https://schemas.example/v1.0/plugin.json",
       name: "plugin",
-      mcpServers: { fromManifest: { command: "${CLAUDE_PLUGIN_ROOT}/run" } },
+      mcpServers: { fromManifest: { command: "${SLATE_PLUGIN_ROOT}/run" } },
     }),
-    "plugin.json": JSON.stringify({ name: "later", mcpServers: { ignored: { command: "later" } } }),
     ".mcp.json": JSON.stringify({ $schema: "https://schemas.example/v2.0/mcp.json", mcpServers: { fromFile: { command: "file" } } }),
   };
   const resolved = await resolvePluginMcpConfigWithManifestLookup(memoryReader(files, reads), {
@@ -221,16 +220,16 @@ test("manifest lookup uses the first parseable plugin manifest and carries its s
     parserOptions: { pluginSchemaId: "https://schemas.example/other/plugin.json", log: loggerWithWarnings(warnings) },
   });
 
-  assert.deepEqual(reads, [".cursor-plugin/plugin.json", ".claude-plugin/plugin.json", ".mcp.json", "mcp.json"]);
+  assert.deepEqual(reads, [".slate-plugin/plugin.json", "plugin.json", ".mcp.json", "mcp.json"]);
   assert.deepEqual(resolved?.mcpServers, { fromManifest: { command: "/plugin/run" }, fromFile: { command: "file" } });
-  assert.equal(resolved?.mcpServerSourcePaths?.fromManifest, ".claude-plugin/plugin.json");
+  assert.equal(resolved?.mcpServerSourcePaths?.fromManifest, "plugin.json");
   assert.equal(warnings.some((warning) => warning.includes("unrecognized $schema")), true);
 });
 
 test("the last readable manifest schema still informs MCP diagnostics when that manifest fails validation", async () => {
   const warnings: string[] = [];
   const files: Record<string, string> = {
-    ".cursor-plugin/plugin.json": JSON.stringify({ $schema: "https://schemas.example/v2.0/plugin.json", invalid: true }),
+    ".slate-plugin/plugin.json": JSON.stringify({ $schema: "https://schemas.example/v2.0/plugin.json", invalid: true }),
     ".mcp.json": JSON.stringify({
       $schema: "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
       mcpServers: { one: { command: "run" } },
