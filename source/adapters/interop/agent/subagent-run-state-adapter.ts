@@ -9,7 +9,6 @@ import {
 } from "./agent-state-message-serdes-adapter.ts"
 import type {
   SlateSubagentCompletionReason,
-  SlateSubagentRunCompatibility,
   SlateSubagentExecutionEnvironment,
   SlateSubagentRunState,
   SlateSubagentRunStatus,
@@ -17,12 +16,12 @@ import type {
 
 function environmentFromInterop(
   environment: SubagentExecutionEnvironment | undefined,
-): { readonly value: SlateSubagentExecutionEnvironment; readonly legacyCode?: number } {
+): SlateSubagentExecutionEnvironment {
   switch (environment) {
-    case SubagentExecutionEnvironment.LOCAL: return { value: "local" }
-    case SubagentExecutionEnvironment.CLOUD: return { value: "cloud" }
-    case SubagentExecutionEnvironment.UNSPECIFIED: return { value: "unspecified" }
-    default: return { value: "unspecified", ...(environment === undefined ? {} : { legacyCode: environment }) }
+    case SubagentExecutionEnvironment.LOCAL: return "local"
+    case SubagentExecutionEnvironment.CLOUD: return "cloud"
+    case SubagentExecutionEnvironment.UNSPECIFIED: return "unspecified"
+    default: return "unspecified"
   }
 }
 
@@ -36,15 +35,15 @@ export function toInteropSubagentEnvironment(
   }
 }
 
-function statusFromInterop(status: SubagentRunStatus): { readonly value: SlateSubagentRunStatus; readonly legacyCode?: number } {
+function statusFromInterop(status: SubagentRunStatus): SlateSubagentRunStatus {
   switch (status) {
-    case SubagentRunStatus.RUNNING: return { value: "running" }
-    case SubagentRunStatus.BACKGROUNDED: return { value: "backgrounded" }
-    case SubagentRunStatus.SUCCESS: return { value: "success" }
-    case SubagentRunStatus.ERROR: return { value: "error" }
-    case SubagentRunStatus.ABORTED: return { value: "aborted" }
-    case SubagentRunStatus.UNSPECIFIED: return { value: "unspecified" }
-    default: return { value: "unspecified", legacyCode: status }
+    case SubagentRunStatus.RUNNING: return "running"
+    case SubagentRunStatus.BACKGROUNDED: return "backgrounded"
+    case SubagentRunStatus.SUCCESS: return "success"
+    case SubagentRunStatus.ERROR: return "error"
+    case SubagentRunStatus.ABORTED: return "aborted"
+    case SubagentRunStatus.UNSPECIFIED: return "unspecified"
+    default: return "unspecified"
   }
 }
 
@@ -61,12 +60,11 @@ function statusToInterop(status: SlateSubagentRunStatus): SubagentRunStatus {
 
 function reasonFromInterop(
   reason: BackgroundTaskCompletionReason | undefined,
-): { readonly value?: SlateSubagentCompletionReason; readonly legacyCode?: number } {
+): SlateSubagentCompletionReason | undefined {
   switch (reason) {
-    case BackgroundTaskCompletionReason.TASK_PROGRESS: return { value: "task-progress" }
-    case BackgroundTaskCompletionReason.WORKER_REPARENTED: return { value: "worker-reparented" }
-    case undefined: return {}
-    default: return { legacyCode: reason }
+    case BackgroundTaskCompletionReason.TASK_PROGRESS: return "task-progress"
+    case BackgroundTaskCompletionReason.WORKER_REPARENTED: return "worker-reparented"
+    default: return undefined
   }
 }
 
@@ -95,23 +93,17 @@ export function fromInteropSubagentRunState(
   const environment = environmentFromInterop(state.environment)
   const status = statusFromInterop(state.status)
   const completionReason = reasonFromInterop(state.completionReason)
-  const compatibility: SlateSubagentRunCompatibility = {
-    ...(environment.legacyCode === undefined ? {} : { legacyEnvironmentCode: environment.legacyCode }),
-    ...(status.legacyCode === undefined ? {} : { legacyStatusCode: status.legacyCode }),
-    ...(completionReason.legacyCode === undefined ? {} : { legacyCompletionReasonCode: completionReason.legacyCode }),
-  }
   return {
     parentToolCallId: state.parentToolCallId,
     ...(subagentId === undefined ? {} : { subagentId }),
-    environment: environment.value,
-    status: status.value,
+    environment,
+    status,
     ...(title === undefined ? {} : { title }),
     ...(detail === undefined ? {} : { detail }),
     ...(transcriptPath === undefined ? {} : { transcriptPath }),
     ...(outputPath === undefined ? {} : { outputPath }),
     ...(state.completedTimestampMs === undefined ? {} : { completedTimestampMs: state.completedTimestampMs }),
-    ...(completionReason.value === undefined ? {} : { completionReason: completionReason.value }),
-    ...(Object.keys(compatibility).length === 0 ? {} : { compatibility }),
+    ...(completionReason === undefined ? {} : { completionReason }),
   }
 }
 
@@ -122,16 +114,14 @@ export function toInteropSubagentRunState(
   return createAgentSubagentRunStateInterop({
     parentToolCallId: state.parentToolCallId,
     ...(state.subagentId === undefined ? {} : { subagentId: state.subagentId }),
-    environment: state.compatibility?.legacyEnvironmentCode ?? toInteropSubagentEnvironment(state.environment),
-    status: state.compatibility?.legacyStatusCode ?? statusToInterop(state.status),
+    environment: toInteropSubagentEnvironment(state.environment),
+    status: statusToInterop(state.status),
     ...(state.title === undefined ? {} : { title: state.title }),
     ...(state.detail === undefined ? {} : { detail: state.detail }),
     ...(state.transcriptPath === undefined ? {} : { transcriptPath: state.transcriptPath }),
     ...(state.outputPath === undefined ? {} : { outputPath: state.outputPath }),
     ...(state.completedTimestampMs === undefined ? {} : { completedTimestampMs: state.completedTimestampMs }),
-    ...(state.compatibility?.legacyCompletionReasonCode === undefined
-      ? state.completionReason === undefined ? {} : { completionReason: reasonToInterop(state.completionReason) }
-      : { completionReason: state.compatibility.legacyCompletionReasonCode as BackgroundTaskCompletionReason }),
+    ...(state.completionReason === undefined ? {} : { completionReason: reasonToInterop(state.completionReason) }),
   })
 }
 
@@ -139,6 +129,6 @@ export function toInteropSubagentRunState(
 export function slateSubagentEnvironmentFromInterop(
   environment: SubagentExecutionEnvironment | undefined,
 ): SlateSubagentExecutionEnvironment | undefined {
-  const projected = environmentFromInterop(environment).value
+  const projected = environmentFromInterop(environment)
   return projected === "unspecified" ? undefined : projected
 }

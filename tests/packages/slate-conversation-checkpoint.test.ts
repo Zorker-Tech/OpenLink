@@ -148,7 +148,7 @@ test("Slate checkpoint v2 owns all conversation fields and round-trips nested st
       }),
       "child-shell": new SubagentPersistedState({
         subagentType: new SubagentType({ type: { case: "shell", value: new SubagentTypeShell() } }),
-        environment: 91 as never,
+        environment: SubagentExecutionEnvironment.LOCAL,
         machine: new TargetMachine({ machine: { case: "sameMachine", value: new SameMachineTarget() } }),
       }),
       "child-cloud": new SubagentPersistedState({
@@ -188,14 +188,14 @@ test("Slate checkpoint v2 owns all conversation fields and round-trips nested st
       "call-a": new SubagentRunState({
         parentToolCallId: "call-a",
         subagentId: "child-custom",
-        environment: 92 as never,
-        status: 93 as never,
+        environment: SubagentExecutionEnvironment.LOCAL,
+        status: SubagentRunStatus.RUNNING,
         title: "Review",
         detail: "Inspecting changes",
         transcriptPath: "/worker/transcript.jsonl",
         outputPath: "/repo/review.md",
         completedTimestampMs: 1_700_000_000_999n,
-        completionReason: 94 as never,
+        completionReason: BackgroundTaskCompletionReason.TASK_PROGRESS,
       }),
     },
     subagentStateRefs: { "child-blob": new Uint8Array([18, 19]) },

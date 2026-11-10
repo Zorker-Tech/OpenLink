@@ -71,7 +71,6 @@ test("a persisted subagent round-trips through Slate metadata and its conversati
   assert.equal(slate.createdAtMs, BigInt(10))
   assert.equal(slate.lastUsedAtMs, BigInt(20))
   assert.equal(slate.subagentType?.kind, "general-purpose")
-  assert.equal(slate.subagentType?.compatibility?.legacyDiscriminator, "unspecified")
   assert.equal(slate.modelId, "model-1")
   assert.equal(slate.executionEnvironment, "cloud")
   assert.deepEqual(slate.cloudAgent, {

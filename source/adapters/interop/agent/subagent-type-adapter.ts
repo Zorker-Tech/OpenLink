@@ -38,66 +38,49 @@ export function slateSubagentTypeFromInterop(value: CounterpartSubagentType | un
   if (value === undefined) return createSlateSubagentType(SlateSubagentKind.UNKNOWN)
   switch (value.type.case) {
     case "unspecified":
-      return createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE, { compatibility: { legacyDiscriminator: "unspecified" } })
+      return createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)
     case "computerUse":
-      return createSlateSubagentType(SlateSubagentKind.COMPUTER_USE, { compatibility: { legacyDiscriminator: "computerUse" } })
+      return createSlateSubagentType(SlateSubagentKind.COMPUTER_USE)
     case "custom":
       return createSlateSubagentType(SlateSubagentKind.CUSTOM, {
         ...(value.type.value.name.length === 0 ? {} : { customName: value.type.value.name }),
-        compatibility: { legacyDiscriminator: "custom" },
       })
     case "explore":
-      return createSlateSubagentType(SlateSubagentKind.EXPLORE, { compatibility: { legacyDiscriminator: "explore" } })
+      return createSlateSubagentType(SlateSubagentKind.EXPLORE)
     case "mediaReview":
-      return createSlateSubagentType(SlateSubagentKind.VIDEO_REVIEW, { compatibility: { legacyDiscriminator: "mediaReview" } })
+      return createSlateSubagentType(SlateSubagentKind.VIDEO_REVIEW)
     case "bash":
-      return createSlateSubagentType(SlateSubagentKind.SHELL, { compatibility: { legacyDiscriminator: "bash" } })
-    case "browserUse":
-      return createSlateSubagentType(SlateSubagentKind.BROWSER_USE, { compatibility: { legacyDiscriminator: "browserUse" } })
     case "shell":
-      return createSlateSubagentType(SlateSubagentKind.SHELL, { compatibility: { legacyDiscriminator: "shell" } })
+      return createSlateSubagentType(SlateSubagentKind.SHELL)
+    case "browserUse":
+      return createSlateSubagentType(SlateSubagentKind.BROWSER_USE)
     case "vmSetupHelper":
-      return createSlateSubagentType(SlateSubagentKind.ENVIRONMENT_SETUP, { compatibility: { legacyDiscriminator: "vmSetupHelper" } })
+      return createSlateSubagentType(SlateSubagentKind.ENVIRONMENT_SETUP)
     case "debug":
-      return createSlateSubagentType(SlateSubagentKind.DEBUG, { compatibility: { legacyDiscriminator: "debug" } })
+      return createSlateSubagentType(SlateSubagentKind.DEBUG)
     case "cursorGuide":
-      return createSlateSubagentType(SlateSubagentKind.GUIDE, { compatibility: { legacyDiscriminator: "cursorGuide" } })
+      return createSlateSubagentType(SlateSubagentKind.GUIDE)
     case "watchVideo":
-      return createSlateSubagentType(SlateSubagentKind.WATCH_VIDEO, { compatibility: { legacyDiscriminator: "watchVideo" } })
+      return createSlateSubagentType(SlateSubagentKind.WATCH_VIDEO)
     case undefined:
-      return createSlateSubagentType(SlateSubagentKind.UNKNOWN, { compatibility: { legacyDiscriminator: "" } })
+      return createSlateSubagentType(SlateSubagentKind.UNKNOWN)
   }
 }
 
 /** Projects Slate's kind/name value into the generated message used by the current runner. */
 export function subagentTypeToInterop(value: SlateSubagentType | undefined): SubagentType | undefined {
   if (value === undefined) return undefined
-  const discriminator = value.compatibility?.legacyDiscriminator
-  switch (discriminator) {
-    case "unspecified": return new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified() } })
-    case "computerUse": return new SubagentType({ type: { case: "computerUse", value: new SubagentTypeComputerUse() } })
-    case "custom": return new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: value.customName ?? "" }) } })
-    case "explore": return new SubagentType({ type: { case: "explore", value: new SubagentTypeExplore() } })
-    case "mediaReview": return new SubagentType({ type: { case: "mediaReview", value: new SubagentTypeMediaReview() } })
-    case "bash": return new SubagentType({ type: { case: "bash", value: new SubagentTypeBash() } })
-    case "browserUse": return new SubagentType({ type: { case: "browserUse", value: new SubagentTypeBrowserUse() } })
-    case "shell": return new SubagentType({ type: { case: "shell", value: new SubagentTypeShell() } })
-    case "vmSetupHelper": return new SubagentType({ type: { case: "vmSetupHelper", value: new SubagentTypeVmSetupHelper() } })
-    case "debug": return new SubagentType({ type: { case: "debug", value: new SubagentTypeDebug() } })
-    case "cursorGuide": return new SubagentType({ type: { case: "cursorGuide", value: new SubagentTypeCursorGuide() } })
-    case "watchVideo": return new SubagentType({ type: { case: "watchVideo", value: new SubagentTypeWatchVideo() } })
-  }
   switch (value.kind) {
     case SlateSubagentKind.GENERAL_PURPOSE:
       return new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified() } })
     case SlateSubagentKind.COMPUTER_USE:
-      return new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "computerUse" }) } })
+      return new SubagentType({ type: { case: "computerUse", value: new SubagentTypeComputerUse() } })
     case SlateSubagentKind.EXPLORE:
       return new SubagentType({ type: { case: "explore", value: new SubagentTypeExplore() } })
     case SlateSubagentKind.SHELL:
       return new SubagentType({ type: { case: "shell", value: new SubagentTypeShell() } })
     case SlateSubagentKind.BROWSER_USE:
-      return new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "browserUse" }) } })
+      return new SubagentType({ type: { case: "browserUse", value: new SubagentTypeBrowserUse() } })
     case SlateSubagentKind.DEBUG:
       return new SubagentType({ type: { case: "debug", value: new SubagentTypeDebug() } })
     case SlateSubagentKind.VIDEO_REVIEW:

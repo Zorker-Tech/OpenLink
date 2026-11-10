@@ -326,32 +326,6 @@ test("a subagent's state is persisted with its type, and found again by either i
   assert.equal(restored?.createdAtMs, restored?.lastUsedAtMs)
 })
 
-test("an explicit subagent type and environment transition retires stale legacy markers", () => {
-  const harnessed = harness()
-  const legacyType = createSlateSubagentType(SlateSubagentKind.UNKNOWN, {
-    compatibility: { legacyDiscriminator: "future-agent" },
-  })
-  harnessed.handle.persistSubagentState(createContext(), "subagent-1", legacyType, {
-    executionEnvironment: "unspecified",
-    compatibility: {
-      legacyEnvironmentCode: 987,
-      legacyUnknownFields: [
-        { path: [], number: 100, wireType: 0, dataHex: "01" },
-        { path: [{ field: "subagentType" }], number: 101, wireType: 0, dataHex: "02" },
-      ],
-    },
-  })
-
-  harnessed.handle.persistSubagentState(createContext(), "subagent-1", createSlateSubagentType(SlateSubagentKind.EXPLORE), {
-    executionEnvironment: "cloud",
-  })
-
-  const state = harnessed.handle.restoreSubagentState(createContext(), "subagent-1")
-  assert.equal(state?.executionEnvironment, "cloud")
-  assert.equal(state?.compatibility?.legacyEnvironmentCode, undefined)
-  assert.deepEqual(state?.compatibility?.legacyUnknownFields?.map(field => field.number), [100])
-})
-
 test("the most recent subagent of a type is the one a resume mode finds", () => {
   const harnessed = harness()
   const subagentType = createSlateSubagentType(SlateSubagentKind.GENERAL_PURPOSE)

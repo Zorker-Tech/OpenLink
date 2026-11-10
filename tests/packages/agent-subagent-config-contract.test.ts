@@ -57,7 +57,6 @@ describe("subagent type and state boundary", () => {
     assert.deepEqual(slate, {
       kind: SlateSubagentKind.CUSTOM,
       customName: "release-helper",
-      compatibility: { legacyDiscriminator: "custom" },
     })
     assert.equal(SubagentType.equals(subagentTypeToInterop(slate), source), true)
 
@@ -72,11 +71,9 @@ describe("subagent type and state boundary", () => {
   it("keeps Slate built-ins on the same runner aliases", () => {
     const computerUse = subagentTypeToInterop({ kind: SlateSubagentKind.COMPUTER_USE })
     const browserUse = subagentTypeToInterop({ kind: SlateSubagentKind.BROWSER_USE })
-    assert.equal(computerUse?.type.case, "custom")
-    assert.equal(computerUse?.type.case === "custom" ? computerUse.type.value.name : undefined, "computerUse")
-    assert.equal(browserUse?.type.case, "custom")
-    assert.equal(browserUse?.type.case === "custom" ? browserUse.type.value.name : undefined, "browserUse")
-    assert.equal(slateSubagentTypeName({ kind: SlateSubagentKind.BROWSER_USE }), "browserUse")
+    assert.equal(computerUse?.type.case, "computerUse")
+    assert.equal(browserUse?.type.case, "browserUse")
+    assert.equal(slateSubagentTypeName({ kind: SlateSubagentKind.BROWSER_USE }), "browser-use")
   })
 
   it("starts with a fresh empty conversation state unless a mapper is explicitly supplied", () => {

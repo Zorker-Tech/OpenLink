@@ -36,24 +36,15 @@ export type SlateSubagentTypeName =
   | (typeof SLATE_SUBAGENT_TYPE_NAMES)[number]
   | (string & { readonly __slateSubagentTypeName?: never })
 
-export interface SlateSubagentTypeCompatibility {
-  /** Original generated discriminator retained only for migration and runner projection. */
-  readonly legacyDiscriminator?: string
-}
-
 /** Slate's identity for a kind of delegated task. */
 export interface SlateSubagentType {
   readonly kind: SlateSubagentKindValue
   readonly customName?: string
-  readonly compatibility?: SlateSubagentTypeCompatibility
 }
 
 export function createSlateSubagentType(
   kind: SlateSubagentKindValue,
-  options: {
-    readonly customName?: string
-    readonly compatibility?: SlateSubagentTypeCompatibility
-  } = {},
+  options: { readonly customName?: string } = {},
 ): SlateSubagentType {
   if (typeof kind !== "string" || kind.trim().length === 0) {
     throw new TypeError("Slate subagent kind must be a non-empty string")
@@ -61,7 +52,6 @@ export function createSlateSubagentType(
   return {
     kind,
     ...(options.customName === undefined ? {} : { customName: options.customName }),
-    ...(options.compatibility === undefined ? {} : { compatibility: { ...options.compatibility } }),
   }
 }
 
@@ -70,7 +60,7 @@ const TASK_TYPE_NAMES: Readonly<Record<KnownSlateSubagentKind, SlateSubagentType
   [SlateSubagentKind.COMPUTER_USE]: "computerUse",
   [SlateSubagentKind.EXPLORE]: "explore",
   [SlateSubagentKind.SHELL]: "shell",
-  [SlateSubagentKind.BROWSER_USE]: "browserUse",
+  [SlateSubagentKind.BROWSER_USE]: "browser-use",
   [SlateSubagentKind.DEBUG]: "debug",
   [SlateSubagentKind.VIDEO_REVIEW]: "videoReview",
   [SlateSubagentKind.WATCH_VIDEO]: "watchVideo",
@@ -82,12 +72,6 @@ const TASK_TYPE_NAMES: Readonly<Record<KnownSlateSubagentKind, SlateSubagentType
 
 export function slateSubagentTypeName(value: SlateSubagentType): SlateSubagentTypeName {
   if (value.kind === SlateSubagentKind.CUSTOM) return value.customName ?? "unknown"
-  if (value.kind === SlateSubagentKind.BROWSER_USE && value.compatibility?.legacyDiscriminator === "browserUse") {
-    return "browser-use"
-  }
-  if (value.kind === SlateSubagentKind.UNKNOWN) {
-    return value.compatibility?.legacyDiscriminator || "unknown"
-  }
   return TASK_TYPE_NAMES[value.kind as KnownSlateSubagentKind] ?? value.kind
 }
 

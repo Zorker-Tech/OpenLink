@@ -60,38 +60,23 @@ import {
   toInteropGoalState,
   toInteropPlanRegistryEntry,
 } from "./agent-state-message-serdes-adapter.ts"
-import {
-  collectSubagentUnknownFieldsInterop,
-  restoreSubagentUnknownFieldsInterop,
-} from "./subagent-persisted-state-adapter.ts"
 import { fromHex, toHex } from "../../../packages/agent-kv/serde.ts"
 
 function sortedRecord<Value>(entries: Iterable<readonly [string, Value]>): Record<string, Value> {
   return Object.fromEntries([...entries].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0))
 }
 
-function environmentFromInterop(value: number): {
-  readonly environment: "unspecified" | "local" | "cloud"
-  readonly compatibility?: { readonly legacyEnvironmentCode: number }
-} {
+function environmentFromInterop(value: number): "unspecified" | "local" | "cloud" {
   switch (value) {
-    case SubagentExecutionEnvironment.LOCAL:
-      return { environment: "local" }
-    case SubagentExecutionEnvironment.CLOUD:
-      return { environment: "cloud" }
-    case SubagentExecutionEnvironment.UNSPECIFIED:
-      return { environment: "unspecified" }
-    default:
-      return { environment: "unspecified", compatibility: { legacyEnvironmentCode: value } }
+    case SubagentExecutionEnvironment.LOCAL: return "local"
+    case SubagentExecutionEnvironment.CLOUD: return "cloud"
+    case SubagentExecutionEnvironment.UNSPECIFIED: return "unspecified"
+    default: return "unspecified"
   }
 }
 
-function environmentToInterop(value: {
-  readonly environment: "unspecified" | "local" | "cloud"
-  readonly compatibility?: { readonly legacyEnvironmentCode?: number }
-}): number {
-  if (value.compatibility?.legacyEnvironmentCode !== undefined) return value.compatibility.legacyEnvironmentCode
-  switch (value.environment) {
+function environmentToInterop(value: "unspecified" | "local" | "cloud"): number {
+  switch (value) {
     case "local": return SubagentExecutionEnvironment.LOCAL
     case "cloud": return SubagentExecutionEnvironment.CLOUD
     case "unspecified": return SubagentExecutionEnvironment.UNSPECIFIED
@@ -101,31 +86,27 @@ function environmentToInterop(value: {
 function subagentTypeFromInterop(value: SubagentType | undefined): SlateCheckpointSubagentType | undefined {
   if (value === undefined) return undefined
   switch (value.type.case) {
-    case "unspecified": return { kind: "general-purpose", compatibility: { legacyDiscriminator: "unspecified" } }
-    case "computerUse": return { kind: "computer-use", compatibility: { legacyDiscriminator: "computerUse" } }
-    case "custom": return { kind: "custom", customName: value.type.value.name, compatibility: { legacyDiscriminator: "custom" } }
-    case "explore": return { kind: "explore", compatibility: { legacyDiscriminator: "explore" } }
-    case "mediaReview": return { kind: "video-review", compatibility: { legacyDiscriminator: "mediaReview" } }
-    case "bash": return { kind: "shell", compatibility: { legacyDiscriminator: "bash" } }
-    case "browserUse": return { kind: "browser-use", compatibility: { legacyDiscriminator: "browserUse" } }
-    case "shell": return { kind: "shell", compatibility: { legacyDiscriminator: "shell" } }
-    case "vmSetupHelper": return { kind: "environment-setup", compatibility: { legacyDiscriminator: "vmSetupHelper" } }
-    case "debug": return { kind: "debug", compatibility: { legacyDiscriminator: "debug" } }
-    case "cursorGuide": return { kind: "guide", compatibility: { legacyDiscriminator: "cursorGuide" } }
-    case "watchVideo": return { kind: "watch-video", compatibility: { legacyDiscriminator: "watchVideo" } }
-    case undefined: return { kind: "unknown", compatibility: { legacyDiscriminator: "" } }
+    case "unspecified": return { kind: "general-purpose" }
+    case "computerUse": return { kind: "computer-use" }
+    case "custom": return { kind: "custom", customName: value.type.value.name }
+    case "explore": return { kind: "explore" }
+    case "mediaReview": return { kind: "video-review" }
+    case "bash":
+    case "shell": return { kind: "shell" }
+    case "browserUse": return { kind: "browser-use" }
+    case "vmSetupHelper": return { kind: "environment-setup" }
+    case "debug": return { kind: "debug" }
+    case "cursorGuide": return { kind: "guide" }
+    case "watchVideo": return { kind: "watch-video" }
+    case undefined: return { kind: "unknown" }
   }
 }
 
 function subagentTypeToInterop(value: SlateCheckpointSubagentType | undefined): SubagentType | undefined {
   if (value === undefined) return undefined
-  const discriminator = value.compatibility?.legacyDiscriminator
-  if (discriminator === "") return new SubagentType()
-  switch (discriminator ?? value.kind) {
-    case "unspecified":
+  switch (value.kind) {
     case "general-purpose":
       return new SubagentType({ type: { case: "unspecified", value: new SubagentTypeUnspecified() } })
-    case "computerUse":
     case "computer-use":
       return new SubagentType({ type: { case: "computerUse", value: new SubagentTypeComputerUse() } })
     case "custom":
@@ -134,25 +115,18 @@ function subagentTypeToInterop(value: SlateCheckpointSubagentType | undefined): 
       })
     case "explore":
       return new SubagentType({ type: { case: "explore", value: new SubagentTypeExplore() } })
-    case "mediaReview":
     case "video-review":
       return new SubagentType({ type: { case: "mediaReview", value: new SubagentTypeMediaReview() } })
-    case "bash":
-      return new SubagentType({ type: { case: "bash", value: new SubagentTypeBash() } })
-    case "browserUse":
     case "browser-use":
       return new SubagentType({ type: { case: "browserUse", value: new SubagentTypeBrowserUse() } })
     case "shell":
       return new SubagentType({ type: { case: "shell", value: new SubagentTypeShell() } })
-    case "vmSetupHelper":
     case "environment-setup":
       return new SubagentType({ type: { case: "vmSetupHelper", value: new SubagentTypeVmSetupHelper() } })
     case "debug":
       return new SubagentType({ type: { case: "debug", value: new SubagentTypeDebug() } })
-    case "cursorGuide":
     case "guide":
       return new SubagentType({ type: { case: "cursorGuide", value: new SubagentTypeCursorGuide() } })
-    case "watchVideo":
     case "watch-video":
       return new SubagentType({ type: { case: "watchVideo", value: new SubagentTypeWatchVideo() } })
     default:
@@ -218,15 +192,10 @@ function targetMachineToInterop(value: SlateCheckpointTargetMachine | undefined)
   }
 }
 
-function subagentFromInterop(value: SubagentPersistedState, preserveUnknownFields = false): SlateCheckpointSubagent {
+function subagentFromInterop(value: SubagentPersistedState): SlateCheckpointSubagent {
   const environment = environmentFromInterop(value.environment)
   const subagentType = subagentTypeFromInterop(value.subagentType)
   const targetMachine = targetMachineFromInterop(value.machine)
-  const unknownFields = preserveUnknownFields ? collectSubagentUnknownFieldsInterop(value) : []
-  const compatibility = {
-    ...(environment.compatibility ?? {}),
-    ...(unknownFields.length === 0 ? {} : { legacyUnknownFields: unknownFields }),
-  }
   return {
     ...(value.conversationState === undefined
       ? {}
@@ -235,7 +204,7 @@ function subagentFromInterop(value: SubagentPersistedState, preserveUnknownField
     lastUsedAtMs: value.lastUsedTimestampMs.toString(),
     ...(subagentType === undefined ? {} : { type: subagentType }),
     ...(value.modelId === undefined ? {} : { modelId: value.modelId }),
-    ...environment,
+    environment,
     ...(value.cloudSubagent === undefined
       ? {}
       : {
@@ -251,20 +220,19 @@ function subagentFromInterop(value: SubagentPersistedState, preserveUnknownField
       ? {}
       : { requestedRuntimeBuildId: value.cloudRequestedEnvironmentBuildId }),
     ...(targetMachine === undefined ? {} : { targetMachine }),
-    ...(Object.keys(compatibility).length === 0 ? {} : { compatibility }),
   }
 }
 
-/** Projects a legacy or referenced persisted subagent into Slate's checkpoint record. */
+/** Projects a persisted subagent into Slate's checkpoint record. */
 export function slateCheckpointSubagentFromInterop(value: SubagentPersistedState): SlateCheckpointSubagent {
-  return subagentFromInterop(value, true)
+  return subagentFromInterop(value)
 }
 
 function subagentToInterop(value: SlateCheckpointSubagent): SubagentPersistedState {
-  const environment = environmentToInterop(value)
+  const environment = environmentToInterop(value.environment)
   const subagentType = subagentTypeToInterop(value.type)
   const machine = targetMachineToInterop(value.targetMachine)
-  const interop = new SubagentPersistedState({
+  return new SubagentPersistedState({
     ...(value.conversation === undefined ? {} : { conversationState: conversationStateToInterop(value.conversation) }),
     createdTimestampMs: BigInt(value.createdAtMs),
     lastUsedTimestampMs: BigInt(value.lastUsedAtMs),
@@ -285,7 +253,6 @@ function subagentToInterop(value: SlateCheckpointSubagent): SubagentPersistedSta
       : { cloudRequestedEnvironmentBuildId: value.requestedRuntimeBuildId }),
     ...(machine === undefined ? {} : { machine }),
   })
-  return interop
 }
 
 function communicationHistoryFromInterop(
@@ -411,55 +378,39 @@ function tokenUsageToInterop(value: SlateCheckpointTokenUsage | undefined): Conv
 }
 
 function subagentRunFromInterop(value: SubagentRunState): SlateCheckpointSubagentRun {
-  const environment = environmentFromInterop(value.environment)
-  const status: { readonly status: SlateCheckpointSubagentRun["status"]; readonly legacyStatusCode?: number } = (() => {
+  const status: SlateCheckpointSubagentRun["status"] = (() => {
     switch (value.status) {
-      case SubagentRunStatus.UNSPECIFIED: return { status: "unspecified" as const }
-      case SubagentRunStatus.RUNNING: return { status: "running" as const }
-      case SubagentRunStatus.BACKGROUNDED: return { status: "backgrounded" as const }
-      case SubagentRunStatus.SUCCESS: return { status: "success" as const }
-      case SubagentRunStatus.ERROR: return { status: "error" as const }
-      case SubagentRunStatus.ABORTED: return { status: "aborted" as const }
-      default: return { status: "unspecified" as const, legacyStatusCode: value.status }
+      case SubagentRunStatus.RUNNING: return "running"
+      case SubagentRunStatus.BACKGROUNDED: return "backgrounded"
+      case SubagentRunStatus.SUCCESS: return "success"
+      case SubagentRunStatus.ERROR: return "error"
+      case SubagentRunStatus.ABORTED: return "aborted"
+      default: return "unspecified"
     }
   })()
-  const completionReason: {
-    readonly completionReason?: SlateCheckpointSubagentRun["completionReason"]
-    readonly legacyCompletionReasonCode?: number
-  } = (() => {
-    if (value.completionReason === undefined) return {}
+  const completionReason: SlateCheckpointSubagentRun["completionReason"] = (() => {
     switch (value.completionReason) {
-      case BackgroundTaskCompletionReason.TASK_PROGRESS: return { completionReason: "task-progress" }
-      case BackgroundTaskCompletionReason.WORKER_REPARENTED: return { completionReason: "worker-reparented" }
-      default: return { legacyCompletionReasonCode: value.completionReason }
+      case BackgroundTaskCompletionReason.TASK_PROGRESS: return "task-progress"
+      case BackgroundTaskCompletionReason.WORKER_REPARENTED: return "worker-reparented"
+      default: return undefined
     }
   })()
-  const compatibility = {
-    ...(environment.compatibility?.legacyEnvironmentCode === undefined
-      ? {}
-      : { legacyEnvironmentCode: environment.compatibility.legacyEnvironmentCode }),
-    ...(status.legacyStatusCode === undefined ? {} : { legacyStatusCode: status.legacyStatusCode }),
-    ...(completionReason.legacyCompletionReasonCode === undefined
-      ? {}
-      : { legacyCompletionReasonCode: completionReason.legacyCompletionReasonCode }),
-  }
   return {
     parentCallId: value.parentToolCallId,
     ...(value.subagentId === undefined ? {} : { subagentId: value.subagentId }),
-    environment: environment.environment,
-    status: status.status,
+    environment: environmentFromInterop(value.environment),
+    status,
     ...(value.title === undefined ? {} : { title: value.title }),
     ...(value.detail === undefined ? {} : { detail: value.detail }),
     ...(value.transcriptPath === undefined ? {} : { transcriptPath: value.transcriptPath }),
     ...(value.outputPath === undefined ? {} : { outputPath: value.outputPath }),
     ...(value.completedTimestampMs === undefined ? {} : { completedAtMs: value.completedTimestampMs.toString() }),
-    ...(completionReason.completionReason === undefined ? {} : { completionReason: completionReason.completionReason }),
-    ...(Object.keys(compatibility).length === 0 ? {} : { compatibility }),
+    ...(completionReason === undefined ? {} : { completionReason }),
   }
 }
 
 function subagentRunToInterop(value: SlateCheckpointSubagentRun): SubagentRunState {
-  const status = value.compatibility?.legacyStatusCode ?? (() => {
+  const status = (() => {
     switch (value.status) {
       case "unspecified": return SubagentRunStatus.UNSPECIFIED
       case "running": return SubagentRunStatus.RUNNING
@@ -469,20 +420,15 @@ function subagentRunToInterop(value: SlateCheckpointSubagentRun): SubagentRunSta
       case "aborted": return SubagentRunStatus.ABORTED
     }
   })()
-  const reason = value.compatibility?.legacyCompletionReasonCode ?? (value.completionReason === undefined
+  const reason = value.completionReason === undefined
     ? undefined
     : value.completionReason === "task-progress"
       ? BackgroundTaskCompletionReason.TASK_PROGRESS
-      : BackgroundTaskCompletionReason.WORKER_REPARENTED)
+      : BackgroundTaskCompletionReason.WORKER_REPARENTED
   return new SubagentRunState({
     parentToolCallId: value.parentCallId,
     ...(value.subagentId === undefined ? {} : { subagentId: value.subagentId }),
-    environment: environmentToInterop({
-      environment: value.environment,
-      ...(value.compatibility?.legacyEnvironmentCode === undefined
-        ? {}
-        : { compatibility: { legacyEnvironmentCode: value.compatibility.legacyEnvironmentCode } }),
-    }) as SubagentExecutionEnvironment,
+    environment: environmentToInterop(value.environment) as SubagentExecutionEnvironment,
     status: status as SubagentRunStatus,
     ...(value.title === undefined ? {} : { title: value.title }),
     ...(value.detail === undefined ? {} : { detail: value.detail }),
@@ -658,13 +604,5 @@ function conversationStateToInterop(value: SlateConversationCheckpointV2): Conve
 export function interopConversationCheckpointFromSlate(
   value: SlateConversationCheckpointV2,
 ): ConversationStateStructure {
-  const interop = conversationStateToInterop(value)
-  for (const [subagentId, subagent] of Object.entries(value.subagents)) {
-    const fields = subagent.compatibility?.legacyUnknownFields
-    const target = interop.subagentStates[subagentId]
-    if (fields !== undefined && target !== undefined) {
-      restoreSubagentUnknownFieldsInterop(target, fields)
-    }
-  }
-  return interop
+  return conversationStateToInterop(value)
 }
