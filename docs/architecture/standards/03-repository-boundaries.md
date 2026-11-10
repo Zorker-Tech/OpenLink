@@ -7,7 +7,7 @@
 | `app/`, `components/`, `lib/`, `utils/` | OpenLink Web/BFF | Root pnpm/Next.js conventions; no privileged runtime imports |
 | `desktop/` | Electron/Vite shell | Loads the existing Web/BFF; no duplicated product UI or backend credentials |
 | `packages/` | OpenLink shared packages/artifacts | Must have an explicit consumer and stable contract |
-| `services/agent-host`, `agent-worker`, `agent-rpc-worker`, `browser-host`, `knowledge-service` | OpenLink-owned services | Independent package/build boundary; communicate through contracts |
+| `services/agent-host`, `work-host`, `agent-worker`, `agent-rpc-worker`, `browser-host`, `knowledge-service` | OpenLink-owned services | Independent package/build boundary; communicate through contracts |
 | `services/pi`, `civilization`, `opensandbox`, `sandbox-runtime`, `code-server`, `linux`, `zero`, `agent-desktop` | Vendored runtime source | No nested `.git`; no casual refactor; update from pinned upstream with review |
 | `backend/` | Sparse ZOKERBASE upstream-compatible source snapshot | Keep self-host runtime, Studio, and required workspace packages; product changes belong in overlays/patches where possible |
 | `zorkerbase/migrations/` | Authoritative application schema history | Append-only migrations; Local and Cloud-compatible schema contract |
@@ -15,6 +15,11 @@
 | `docs/architecture/` | Architecture decisions and standards | Update with architectural changes |
 | GitLab Container/Generic Package Registry | Portable Docker/OCI release images | Publish immutable image tags/digests outside Git; keep source/build metadata in Git; never include mutable runtime state |
 | `.openlink-runtime/`, `.openlink-releases/`, `.agent-data/`, `.next/` | Generated/runtime state | Never source-controlled; never treated as source of release code |
+
+`services/work-host` is OpenLink-owned Work mode source imported with its
+history from the internal `work-host` repository. It is not third-party
+vendored source and is not subject to the upstream attribution rules below;
+its source revision is still recorded for reproducibility.
 
 ## Dependency rules
 

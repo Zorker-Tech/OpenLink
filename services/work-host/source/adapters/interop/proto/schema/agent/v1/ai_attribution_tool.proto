@@ -1,0 +1,41 @@
+// agent.v1 — agent/v1/ai_attribution_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/utils.proto";
+
+message AiAttributionResult {
+  oneof result {
+    .agent.v1.AiAttributionSuccess success = 1 [json_name = "success"];
+    .agent.v1.AiAttributionError error = 2 [json_name = "error"];
+  }
+}
+
+message AiAttributionSuccess {
+  string attribution_text = 1 [json_name = "attributionText"];
+  optional .agent.v1.OutputLocation output_location = 2 [json_name = "outputLocation"];
+}
+
+message AiAttributionError {
+  string error = 1 [json_name = "error"];
+}
+
+message AiAttributionToolCall {
+  optional .agent.v1.AiAttributionArgs args = 1 [json_name = "args"];
+  optional .agent.v1.AiAttributionResult result = 2 [json_name = "result"];
+}
+
+message AiAttributionArgs {
+  optional int32 start_line = 2 [json_name = "startLine"];
+  optional int32 end_line = 3 [json_name = "endLine"];
+  repeated string file_paths = 5 [json_name = "filePaths"];
+  repeated string commit_hashes = 6 [json_name = "commitHashes"];
+  optional string output_mode = 7 [json_name = "outputMode"];
+  optional int32 max_commits = 9 [json_name = "maxCommits"];
+  optional bool include_line_ranges = 10 [json_name = "includeLineRanges"];
+}

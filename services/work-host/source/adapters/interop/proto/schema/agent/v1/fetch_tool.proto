@@ -1,0 +1,15 @@
+// agent.v1 — agent/v1/fetch_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/fetch_exec.proto";
+
+message FetchToolCall {
+  optional .agent.v1.FetchArgs args = 1 [json_name = "args"];
+  optional .agent.v1.FetchResult result = 2 [json_name = "result"];
+}

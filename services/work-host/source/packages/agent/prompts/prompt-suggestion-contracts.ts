@@ -1,0 +1,1 @@
+export const PROMPT_SUGGESTION_MAX_WORDS = 12

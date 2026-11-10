@@ -19,6 +19,7 @@ or start product services.
 ```text
 services/
 ├── agent-host/          # OpenLink-owned orchestration contracts and backends
+├── work-host/           # OpenLink-owned Work mode host and SDK
 ├── agent-worker/        # Pi Node.js SDK worker used by web and desktop
 ├── agent-rpc-worker/    # Pi CLI RPC gateway used by remote OpenSandbox
 ├── browser-host/        # browser sessions, preview proxy, Chromium/CDP runtime
@@ -34,11 +35,23 @@ services/
 The upstream repositories are deliberately not root workspace packages. Each
 keeps its own build system, lockfile, runtime requirements, and release cadence,
 while the root supervisor is the only supported product lifecycle entry point.
-`services/agent-host` and `services/browser-host` are the OpenLink-owned
-integration boundaries.
+`services/agent-host` (Code mode), `services/work-host` (Work mode), and
+`services/browser-host` are the OpenLink-owned integration boundaries.
 Its current implementation validates policies, storage paths, Pi RPC frames,
 and remote bootstrap plans while keeping privileged adapters dependency
 injected.
+
+## Work Host
+
+`services/work-host` is the OpenLink-owned Work mode host and SDK. It is a
+project component, not vendored third-party source. Its source history is
+preserved from the internal `work-host` repository and remains independently
+buildable from the root Next.js application.
+
+The package is ESM-only, requires Node.js 24.14 or later, and exposes the typed
+Work client plus `host`, `gateway`, and `box-exec` entrypoints. The root
+lifecycle will integrate it as a separate process boundary; the Next.js
+application must not import its privileged runtime source directly.
 
 Civilization stays as a separate upstream service at `services/civilization`.
 Agent Host starts its Stage74 Orion memory service through the small

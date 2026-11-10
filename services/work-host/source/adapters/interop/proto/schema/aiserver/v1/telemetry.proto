@@ -1,0 +1,307 @@
+// aiserver.v1 — aiserver/v1/telemetry messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+message CapturedProfile {
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  optional .google.protobuf.Duration duration = 2 [json_name = "duration"];
+  bytes profile_data = 3 [json_name = "profileData"];
+  string profile_config_id = 4 [json_name = "profileConfigId"];
+  .aiserver.v1.ProfileKind profile_kind = 5 [json_name = "profileKind"];
+  map<string, string> tags = 6 [json_name = "tags"];
+}
+
+message CapturedWebProfile {
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  bytes trace_data = 3 [json_name = "traceData"];
+  map<string, string> tags = 4 [json_name = "tags"];
+}
+
+message ChatRequestTelemetryEvent {
+  string chat_request_uuid = 1 [json_name = "chatRequestUuid"];
+  string requested_model = 2 [json_name = "requestedModel"];
+  string actual_model = 3 [json_name = "actualModel"];
+  optional .google.protobuf.Timestamp start_time = 4 [json_name = "startTime"];
+  optional .google.protobuf.Timestamp end_time = 5 [json_name = "endTime"];
+  optional .google.protobuf.Duration duration = 6 [json_name = "duration"];
+  bool success = 7 [json_name = "success"];
+  optional string error_message = 8 [json_name = "errorMessage"];
+  optional string transport = 9 [json_name = "transport"];
+  string completion_status = 10 [json_name = "completionStatus"];
+  map<string, string> metadata = 11 [json_name = "metadata"];
+  optional double total_ttft_ms = 12 [json_name = "totalTtftMs"];
+  optional double total_generate_ms = 13 [json_name = "totalGenerateMs"];
+  optional double total_stream_ms = 14 [json_name = "totalStreamMs"];
+  optional double total_request_ms = 15 [json_name = "totalRequestMs"];
+  optional int32 model_call_count = 16 [json_name = "modelCallCount"];
+  optional double total_tool_call_latency = 17 [json_name = "totalToolCallLatency"];
+  optional int32 tool_call_count = 18 [json_name = "toolCallCount"];
+}
+
+message Interaction {
+  string id = 1 [json_name = "id"];
+  .aiserver.v1.InteractionType type = 2 [json_name = "type"];
+  double performance_start_timestamp = 3 [json_name = "performanceStartTimestamp"];
+  double performance_end_timestamp = 4 [json_name = "performanceEndTimestamp"];
+}
+
+enum InteractionType {
+  INTERACTION_TYPE_UNSPECIFIED = 0;
+  INTERACTION_TYPE_CLICK = 1;
+  INTERACTION_TYPE_KEYPRESS = 2;
+}
+
+message PerformanceEvent {
+  .aiserver.v1.PerformanceEventType event_type = 1 [json_name = "eventType"];
+  optional .google.protobuf.Timestamp timestamp = 2 [json_name = "timestamp"];
+  double performance_timestamp = 3 [json_name = "performanceTimestamp"];
+  optional double duration = 4 [json_name = "duration"];
+  optional string target_element = 5 [json_name = "targetElement"];
+  optional string target_class = 6 [json_name = "targetClass"];
+  optional string target_id = 7 [json_name = "targetId"];
+  optional int32 client_x = 8 [json_name = "clientX"];
+  optional int32 client_y = 9 [json_name = "clientY"];
+  optional string key = 10 [json_name = "key"];
+  optional string code = 11 [json_name = "code"];
+  optional bool ctrl_key = 12 [json_name = "ctrlKey"];
+  optional bool alt_key = 13 [json_name = "altKey"];
+  optional bool shift_key = 14 [json_name = "shiftKey"];
+  optional bool meta_key = 15 [json_name = "metaKey"];
+  optional double scroll_x = 16 [json_name = "scrollX"];
+  optional double scroll_y = 17 [json_name = "scrollY"];
+  optional double scroll_delta_x = 18 [json_name = "scrollDeltaX"];
+  optional double scroll_delta_y = 19 [json_name = "scrollDeltaY"];
+  map<string, string> metadata = 20 [json_name = "metadata"];
+  optional double render_start = 21 [json_name = "renderStart"];
+  optional double style_and_layout_start = 22 [json_name = "styleAndLayoutStart"];
+  optional double first_ui_event_timestamp = 23 [json_name = "firstUiEventTimestamp"];
+  optional double blocking_duration = 24 [json_name = "blockingDuration"];
+  repeated .aiserver.v1.ScriptTiming scripts = 25 [json_name = "scripts"];
+  optional string target_aria_id = 26 [json_name = "targetAriaId"];
+}
+
+enum PerformanceEventType {
+  PERFORMANCE_EVENT_TYPE_UNSPECIFIED = 0;
+  PERFORMANCE_EVENT_TYPE_CLICK = 1;
+  PERFORMANCE_EVENT_TYPE_POINTER = 2;
+  PERFORMANCE_EVENT_TYPE_TOUCH = 3;
+  PERFORMANCE_EVENT_TYPE_KEYDOWN = 4;
+  PERFORMANCE_EVENT_TYPE_KEYUP = 5;
+  PERFORMANCE_EVENT_TYPE_SCROLL = 6;
+  PERFORMANCE_EVENT_TYPE_LONG_ANIMATION_FRAME = 7;
+  PERFORMANCE_EVENT_TYPE_MOUSEDOWN = 8;
+  PERFORMANCE_EVENT_TYPE_MOUSEUP = 9;
+}
+
+message PerformanceMetric {
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  string name = 2 [json_name = "name"];
+  double value = 3 [json_name = "value"];
+  optional string unit = 4 [json_name = "unit"];
+  map<string, string> metadata = 5 [json_name = "metadata"];
+}
+
+enum ProfileKind {
+  PROFILE_KIND_UNSPECIFIED = 0;
+  PROFILE_KIND_WALL = 1;
+  PROFILE_KIND_ALLOCATION = 2;
+  PROFILE_KIND_CPU = 3;
+}
+
+message ReportInlineActionRequest {
+  string action = 1 [json_name = "action"];
+  string generation_uuid = 2 [json_name = "generationUuid"];
+}
+
+message ReportInlineActionResponse {
+}
+
+message ReportMetricsRequest {
+  map<string, .aiserver.v1.ReportMetricsRequest.Metric> metrics = 1 [json_name = "metrics"];
+  repeated .aiserver.v1.ReportMetricsRequest.NamedMetric metrics_list = 2 [json_name = "metricsList"];
+  message Metric {
+    optional double value = 1 [json_name = "value"];
+    map<string, string> tags = 2 [json_name = "tags"];
+  }
+  message NamedMetric {
+    string name = 1 [json_name = "name"];
+    optional double value = 2 [json_name = "value"];
+    map<string, string> tags = 3 [json_name = "tags"];
+  }
+}
+
+message ReportMetricsResponse {
+}
+
+message ScriptTiming {
+  string name = 1 [json_name = "name"];
+  double start_time = 2 [json_name = "startTime"];
+  double duration = 3 [json_name = "duration"];
+  double execution_start = 4 [json_name = "executionStart"];
+  double forced_style_and_layout_duration = 5 [json_name = "forcedStyleAndLayoutDuration"];
+  double pause_duration = 6 [json_name = "pauseDuration"];
+  string source_url = 7 [json_name = "sourceUrl"];
+  string source_function_name = 8 [json_name = "sourceFunctionName"];
+  int32 source_char_position = 9 [json_name = "sourceCharPosition"];
+  optional string invoker = 10 [json_name = "invoker"];
+  string invoker_type = 11 [json_name = "invokerType"];
+  string window_attribution = 12 [json_name = "windowAttribution"];
+}
+
+enum SpanKind {
+  SPAN_KIND_UNSPECIFIED = 0;
+  SPAN_KIND_INTERNAL = 1;
+  SPAN_KIND_SERVER = 2;
+  SPAN_KIND_CLIENT = 3;
+  SPAN_KIND_PRODUCER = 4;
+  SPAN_KIND_CONSUMER = 5;
+}
+
+message Status {
+  string message = 1 [json_name = "message"];
+  .aiserver.v1.Status.StatusCode code = 2 [json_name = "code"];
+  enum StatusCode {
+    STATUS_CODE_UNSPECIFIED = 0;
+    STATUS_CODE_OK = 1;
+    STATUS_CODE_ERROR = 2;
+  }
+}
+
+message SubmitChatRequestEventsRequest {
+  string session_id = 1 [json_name = "sessionId"];
+  repeated .aiserver.v1.ChatRequestTelemetryEvent events = 2 [json_name = "events"];
+  string client_version = 3 [json_name = "clientVersion"];
+  string client_commit = 4 [json_name = "clientCommit"];
+  map<string, string> platform_tags = 5 [json_name = "platformTags"];
+  optional string window_type = 6 [json_name = "windowType"];
+}
+
+message SubmitChatRequestEventsResponse {
+  bool success = 1 [json_name = "success"];
+  optional string error_message = 2 [json_name = "errorMessage"];
+  int32 events_processed = 3 [json_name = "eventsProcessed"];
+}
+
+message SubmitInteractionWindowRequest {
+  optional .google.protobuf.Timestamp time_origin = 1 [json_name = "timeOrigin"];
+  optional .aiserver.v1.CapturedWebProfile web_profile = 2 [json_name = "webProfile"];
+  repeated .aiserver.v1.Interaction interactions = 3 [json_name = "interactions"];
+  string session_id = 4 [json_name = "sessionId"];
+}
+
+message SubmitInteractionWindowResponse {
+  bool success = 1 [json_name = "success"];
+  optional string error_message = 2 [json_name = "errorMessage"];
+}
+
+message SubmitPerformanceEventsRequest {
+  string session_id = 1 [json_name = "sessionId"];
+  repeated .aiserver.v1.PerformanceEvent events = 2 [json_name = "events"];
+  optional .aiserver.v1.SystemMetadata system_metadata = 3 [json_name = "systemMetadata"];
+  string client_version = 4 [json_name = "clientVersion"];
+  string client_commit = 5 [json_name = "clientCommit"];
+  map<string, string> platform_tags = 6 [json_name = "platformTags"];
+  optional string window_type = 7 [json_name = "windowType"];
+  repeated .aiserver.v1.PerformanceMetric metrics = 8 [json_name = "metrics"];
+}
+
+message SubmitPerformanceEventsResponse {
+  bool success = 1 [json_name = "success"];
+  optional string error_message = 2 [json_name = "errorMessage"];
+  int32 events_processed = 3 [json_name = "eventsProcessed"];
+}
+
+message SubmitProfileRequest {
+  repeated .aiserver.v1.CapturedProfile profiles = 1 [json_name = "profiles"];
+}
+
+message SubmitProfileResponse {
+  repeated string profile_ids = 1 [json_name = "profileIds"];
+}
+
+message SubmitSpansRequest {
+  repeated .aiserver.v1.TraceSpan spans = 1 [json_name = "spans"];
+  string client_version = 2 [json_name = "clientVersion"];
+  string client_commit = 3 [json_name = "clientCommit"];
+}
+
+message SubmitSpansResponse {
+  bool success = 1 [json_name = "success"];
+  optional string error_message = 2 [json_name = "errorMessage"];
+}
+
+message SubmitToolCallEventsRequest {
+  string session_id = 1 [json_name = "sessionId"];
+  repeated .aiserver.v1.ToolCallTelemetryEvent events = 2 [json_name = "events"];
+  string client_version = 3 [json_name = "clientVersion"];
+  string client_commit = 4 [json_name = "clientCommit"];
+  map<string, string> platform_tags = 5 [json_name = "platformTags"];
+  optional string window_type = 6 [json_name = "windowType"];
+}
+
+message SubmitToolCallEventsResponse {
+  bool success = 1 [json_name = "success"];
+  optional string error_message = 2 [json_name = "errorMessage"];
+  int32 events_processed = 3 [json_name = "eventsProcessed"];
+}
+
+message SystemMetadata {
+  optional .google.protobuf.Timestamp timestamp = 1 [json_name = "timestamp"];
+  optional double memory_used_mb = 2 [json_name = "memoryUsedMb"];
+  optional double memory_total_mb = 3 [json_name = "memoryTotalMb"];
+  optional double cpu_usage_percent = 4 [json_name = "cpuUsagePercent"];
+  optional int32 active_tabs_count = 5 [json_name = "activeTabsCount"];
+  optional int32 open_editors_count = 6 [json_name = "openEditorsCount"];
+  optional bool window_focused = 7 [json_name = "windowFocused"];
+  optional string window_size = 8 [json_name = "windowSize"];
+  map<string, string> additional_metadata = 9 [json_name = "additionalMetadata"];
+}
+
+message ToolCallTelemetryEvent {
+  string tool_call_id = 1 [json_name = "toolCallId"];
+  string tool_type = 2 [json_name = "toolType"];
+  string chat_request_uuid = 3 [json_name = "chatRequestUuid"];
+  string model_name = 4 [json_name = "modelName"];
+  optional .google.protobuf.Timestamp start_time = 5 [json_name = "startTime"];
+  optional .google.protobuf.Timestamp end_time = 6 [json_name = "endTime"];
+  optional .google.protobuf.Duration duration = 7 [json_name = "duration"];
+  bool is_parallel = 8 [json_name = "isParallel"];
+  optional int32 parallel_batch_size = 9 [json_name = "parallelBatchSize"];
+  bool success = 10 [json_name = "success"];
+  optional string error_message = 11 [json_name = "errorMessage"];
+  map<string, string> metadata = 12 [json_name = "metadata"];
+  optional .google.protobuf.Duration approval_wait_duration = 13 [json_name = "approvalWaitDuration"];
+  bool is_stream = 14 [json_name = "isStream"];
+}
+
+message TraceLink {
+  string trace_id = 1 [json_name = "traceId"];
+  string span_id = 2 [json_name = "spanId"];
+  optional string trace_state = 3 [json_name = "traceState"];
+  map<string, string> attributes = 4 [json_name = "attributes"];
+  optional uint32 flags = 5 [json_name = "flags"];
+}
+
+message TraceSpan {
+  string trace_id = 1 [json_name = "traceId"];
+  string span_id = 2 [json_name = "spanId"];
+  optional string parent_span_id = 3 [json_name = "parentSpanId"];
+  string name = 4 [json_name = "name"];
+  optional .google.protobuf.Timestamp start_time = 5 [json_name = "startTime"];
+  optional .google.protobuf.Timestamp end_time = 6 [json_name = "endTime"];
+  map<string, string> attributes = 7 [json_name = "attributes"];
+  optional bool error = 8 [json_name = "error"];
+  optional string trace_state = 9 [json_name = "traceState"];
+  optional uint32 flags = 10 [json_name = "flags"];
+  optional .aiserver.v1.SpanKind kind = 11 [json_name = "kind"];
+  optional .aiserver.v1.Status status = 12 [json_name = "status"];
+  repeated .aiserver.v1.TraceLink links = 13 [json_name = "links"];
+}

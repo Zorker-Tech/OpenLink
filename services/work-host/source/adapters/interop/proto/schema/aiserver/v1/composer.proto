@@ -1,0 +1,180 @@
+// aiserver.v1 — aiserver/v1/composer messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package aiserver.v1;
+
+import "aiserver/v1/utils.proto";
+
+message ComposerCapabilityRequest {
+  .aiserver.v1.ComposerCapabilityRequest.ComposerCapabilityType type = 1 [json_name = "type"];
+  oneof data {
+    .aiserver.v1.ComposerCapabilityRequest.LoopOnLintsCapability loop_on_lints = 2 [json_name = "loopOnLints"];
+    .aiserver.v1.ComposerCapabilityRequest.LoopOnTestsCapability loop_on_tests = 3 [json_name = "loopOnTests"];
+    .aiserver.v1.ComposerCapabilityRequest.MegaPlannerCapability mega_planner = 4 [json_name = "megaPlanner"];
+    .aiserver.v1.ComposerCapabilityRequest.LoopOnCommandCapability loop_on_command = 5 [json_name = "loopOnCommand"];
+    .aiserver.v1.ComposerCapabilityRequest.ToolCallCapability tool_call = 6 [json_name = "toolCall"];
+    .aiserver.v1.ComposerCapabilityRequest.DiffReviewCapability diff_review = 7 [json_name = "diffReview"];
+    .aiserver.v1.ComposerCapabilityRequest.ContextPickingCapability context_picking = 8 [json_name = "contextPicking"];
+    .aiserver.v1.ComposerCapabilityRequest.EditTrailCapability edit_trail = 9 [json_name = "editTrail"];
+    .aiserver.v1.ComposerCapabilityRequest.AutoContextCapability auto_context = 10 [json_name = "autoContext"];
+    .aiserver.v1.ComposerCapabilityRequest.ContextPlannerCapability context_planner = 11 [json_name = "contextPlanner"];
+    .aiserver.v1.ComposerCapabilityRequest.RememberThisCapability remember_this = 12 [json_name = "rememberThis"];
+    .aiserver.v1.ComposerCapabilityRequest.DecomposerCapability decomposer = 13 [json_name = "decomposer"];
+    .aiserver.v1.ComposerCapabilityRequest.CursorRulesCapability cursor_rules = 14 [json_name = "cursorRules"];
+  }
+  message LoopOnLintsCapability {
+    repeated .aiserver.v1.LinterErrors linter_errors = 1 [json_name = "linterErrors"];
+    optional string custom_instructions = 2 [json_name = "customInstructions"];
+  }
+  message LoopOnTestsCapability {
+    repeated string test_names = 1 [json_name = "testNames"];
+    optional string custom_instructions = 2 [json_name = "customInstructions"];
+  }
+  message MegaPlannerCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+  }
+  message LoopOnCommandCapability {
+    string command = 1 [json_name = "command"];
+    optional string custom_instructions = 2 [json_name = "customInstructions"];
+    optional string output = 3 [json_name = "output"];
+    optional int32 exit_code = 4 [json_name = "exitCode"];
+  }
+  message ToolCallCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+    repeated .aiserver.v1.ComposerCapabilityRequest.ToolSchema tool_schemas = 2 [json_name = "toolSchemas"];
+    repeated string relevant_files = 3 [json_name = "relevantFiles"];
+    repeated string files_in_context = 4 [json_name = "filesInContext"];
+    repeated string semantic_search_files = 5 [json_name = "semanticSearchFiles"];
+  }
+  message DiffReviewCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+    repeated .aiserver.v1.ComposerCapabilityRequest.DiffReviewCapability.SimpleFileDiff diffs = 2 [json_name = "diffs"];
+    message SimpleFileDiff {
+      string relative_workspace_path = 1 [json_name = "relativeWorkspacePath"];
+      repeated .aiserver.v1.ComposerCapabilityRequest.DiffReviewCapability.SimpleFileDiff.Chunk chunks = 3 [json_name = "chunks"];
+      message Chunk {
+        repeated string old_lines = 1 [json_name = "oldLines"];
+        repeated string new_lines = 2 [json_name = "newLines"];
+        optional .aiserver.v1.LineRange old_range = 3 [json_name = "oldRange"];
+        optional .aiserver.v1.LineRange new_range = 4 [json_name = "newRange"];
+      }
+    }
+  }
+  message ContextPickingCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+    repeated string potential_context_files = 2 [json_name = "potentialContextFiles"];
+    repeated .aiserver.v1.CodeChunk potential_context_code_chunks = 3 [json_name = "potentialContextCodeChunks"];
+    repeated string files_in_context = 4 [json_name = "filesInContext"];
+  }
+  message EditTrailCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+  }
+  message AutoContextCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+    repeated string additional_files = 2 [json_name = "additionalFiles"];
+  }
+  message ContextPlannerCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+    repeated .aiserver.v1.CodeChunk attached_code_chunks = 2 [json_name = "attachedCodeChunks"];
+  }
+  message RememberThisCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+    string memory = 2 [json_name = "memory"];
+  }
+  message DecomposerCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+  }
+  message CursorRulesCapability {
+    optional string custom_instructions = 1 [json_name = "customInstructions"];
+  }
+  message ToolSchema {
+    .aiserver.v1.ComposerCapabilityRequest.ToolType type = 1 [json_name = "type"];
+    string name = 2 [json_name = "name"];
+    map<string, .aiserver.v1.ComposerCapabilityRequest.SchemaProperty> properties = 3 [json_name = "properties"];
+    repeated string required = 4 [json_name = "required"];
+  }
+  message SchemaProperty {
+    string type = 1 [json_name = "type"];
+    optional string description = 2 [json_name = "description"];
+  }
+  enum ComposerCapabilityType {
+    COMPOSER_CAPABILITY_TYPE_UNSPECIFIED = 0;
+    COMPOSER_CAPABILITY_TYPE_LOOP_ON_LINTS = 1;
+    COMPOSER_CAPABILITY_TYPE_LOOP_ON_TESTS = 2;
+    COMPOSER_CAPABILITY_TYPE_MEGA_PLANNER = 3;
+    COMPOSER_CAPABILITY_TYPE_LOOP_ON_COMMAND = 4;
+    COMPOSER_CAPABILITY_TYPE_TOOL_CALL = 5;
+    COMPOSER_CAPABILITY_TYPE_DIFF_REVIEW = 6;
+    COMPOSER_CAPABILITY_TYPE_CONTEXT_PICKING = 7;
+    COMPOSER_CAPABILITY_TYPE_EDIT_TRAIL = 8;
+    COMPOSER_CAPABILITY_TYPE_AUTO_CONTEXT = 9;
+    COMPOSER_CAPABILITY_TYPE_CONTEXT_PLANNER = 10;
+    COMPOSER_CAPABILITY_TYPE_DIFF_HISTORY = 11;
+    COMPOSER_CAPABILITY_TYPE_REMEMBER_THIS = 12;
+    COMPOSER_CAPABILITY_TYPE_DECOMPOSER = 13;
+    COMPOSER_CAPABILITY_TYPE_USES_CODEBASE = 14;
+    COMPOSER_CAPABILITY_TYPE_TOOL_FORMER = 15;
+    COMPOSER_CAPABILITY_TYPE_CURSOR_RULES = 16;
+    COMPOSER_CAPABILITY_TYPE_TOKEN_COUNTER = 17;
+    COMPOSER_CAPABILITY_TYPE_USAGE_DATA = 18;
+    COMPOSER_CAPABILITY_TYPE_CHIMES = 19;
+    COMPOSER_CAPABILITY_TYPE_CODE_DECAY_TRACKER = 20;
+    COMPOSER_CAPABILITY_TYPE_BACKGROUND_COMPOSER = 21;
+    COMPOSER_CAPABILITY_TYPE_SUMMARIZATION = 22;
+    COMPOSER_CAPABILITY_TYPE_AI_CODE_TRACKING = 23;
+    COMPOSER_CAPABILITY_TYPE_QUEUING = 24;
+    COMPOSER_CAPABILITY_TYPE_MEMORIES = 25;
+    COMPOSER_CAPABILITY_TYPE_RCP_LOGS = 26;
+    COMPOSER_CAPABILITY_TYPE_KNOWLEDGE_FETCH = 27;
+    COMPOSER_CAPABILITY_TYPE_SLACK_INTEGRATION = 28;
+    COMPOSER_CAPABILITY_TYPE_SUB_COMPOSER = 29;
+    COMPOSER_CAPABILITY_TYPE_THINKING = 30;
+    COMPOSER_CAPABILITY_TYPE_CONTEXT_WINDOW = 31;
+    COMPOSER_CAPABILITY_TYPE_ONLINE_METRICS = 32;
+    COMPOSER_CAPABILITY_TYPE_NOTIFICATIONS = 33;
+    COMPOSER_CAPABILITY_TYPE_SPEC = 34;
+    COMPOSER_CAPABILITY_TYPE_BROWSER_AGENT = 35;
+  }
+  enum ToolType {
+    TOOL_TYPE_UNSPECIFIED = 0;
+    TOOL_TYPE_ADD_FILE_TO_CONTEXT = 1;
+    TOOL_TYPE_ITERATE = 3;
+    TOOL_TYPE_REMOVE_FILE_FROM_CONTEXT = 4;
+    TOOL_TYPE_SEMANTIC_SEARCH_CODEBASE = 5;
+  }
+}
+
+message ComposerCapabilityContext {
+  oneof data {
+    .aiserver.v1.ComposerCapabilityContext.SlackIntegrationContext slack_integration = 27 [json_name = "slackIntegration"];
+    .aiserver.v1.ComposerCapabilityContext.GithubPRContext github_pr = 28 [json_name = "githubPr"];
+    .aiserver.v1.ComposerCapabilityContext.MicrosoftTeamsIntegrationContext microsoft_teams_integration = 29 [json_name = "microsoftTeamsIntegration"];
+  }
+  message SlackIntegrationContext {
+    string thread = 1 [json_name = "thread"];
+    optional string channel_name = 2 [json_name = "channelName"];
+    optional string channel_purpose = 3 [json_name = "channelPurpose"];
+    optional string channel_topic = 4 [json_name = "channelTopic"];
+    optional string sender_name = 5 [json_name = "senderName"];
+    optional string sender_id = 6 [json_name = "senderId"];
+    optional string sender_type = 7 [json_name = "senderType"];
+    optional bool is_directly_addressed = 8 [json_name = "isDirectlyAddressed"];
+  }
+  message GithubPRContext {
+    string title = 1 [json_name = "title"];
+    string description = 2 [json_name = "description"];
+    string comments = 3 [json_name = "comments"];
+    optional string ci_failures = 4 [json_name = "ciFailures"];
+  }
+  message MicrosoftTeamsIntegrationContext {
+    string thread = 1 [json_name = "thread"];
+    optional string channel_name = 2 [json_name = "channelName"];
+    optional string team_name = 3 [json_name = "teamName"];
+    optional string channel_description = 4 [json_name = "channelDescription"];
+    optional string team_description = 5 [json_name = "teamDescription"];
+  }
+}

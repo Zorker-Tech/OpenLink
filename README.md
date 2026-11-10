@@ -125,6 +125,7 @@ for the data and recovery contract.
 - `desktop/` — thin Electron shell; it loads the same Web/BFF.
 - `services/agent-host/` — Project VM lifecycle, Agent Host, OpenSandbox,
   Browser/Desktop gateways.
+- `services/work-host/` — OpenLink-owned Work mode host and SDK.
 - `services/agent-worker/`, `services/agent-rpc-worker/` — session workers.
 - `services/browser-host/`, `services/knowledge-service/` — owned services.
 - `services/pi`, `opensandbox`, `sandbox-runtime`, `code-server`, `linux`,

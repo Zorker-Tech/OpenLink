@@ -1,0 +1,32 @@
+// agent.v1 — agent/v1/canvas_diagnostics_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/diagnostics_exec.proto";
+
+message CanvasDiagnosticsArgs {
+  string path = 1 [json_name = "path"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+}
+
+message CanvasDiagnosticsResult {
+  oneof result {
+    .agent.v1.CanvasDiagnosticsSuccess success = 1 [json_name = "success"];
+    .agent.v1.CanvasDiagnosticsError error = 2 [json_name = "error"];
+  }
+}
+
+message CanvasDiagnosticsSuccess {
+  string path = 1 [json_name = "path"];
+  repeated .agent.v1.Diagnostic diagnostics = 2 [json_name = "diagnostics"];
+}
+
+message CanvasDiagnosticsError {
+  string path = 1 [json_name = "path"];
+  string error = 2 [json_name = "error"];
+}

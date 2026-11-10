@@ -1,0 +1,1232 @@
+{
+  "agent/v1/adopt_tool_pb.ts": {
+    "messages": [
+      "AdoptArgs",
+      "AdoptResult",
+      "AdoptResult_result",
+      "AdoptToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/agent_pb.ts": {
+    "messages": [
+      "ActiveBranchChange",
+      "AskQuestionInteractionQuery",
+      "AskQuestionInteractionResponse",
+      "AssistantMessage2",
+      "AsyncAskQuestionCompletionAction",
+      "BackgroundShellAction",
+      "BackgroundSubagentAction",
+      "BackgroundTaskCompletion",
+      "BackgroundTaskCompletionAction",
+      "CancelAction",
+      "CancelSubagentAction",
+      "CloudSubagentReference",
+      "CommunicateUpdateHistoryEntry",
+      "CommunicateUpdateTurnState",
+      "ContextInjectionCancelled",
+      "ContextInjectionDelivered",
+      "ContextInjectionQueued",
+      "ContextInjectionQueuedForNextTurn",
+      "ContextInjectionRejected",
+      "ContextInjectionState",
+      "ContextInjectionStateUpdate",
+      "ContextInjectionState_state",
+      "ConversationAction",
+      "ConversationAction_action",
+      "ConversationHistory",
+      "ConversationHistoryAssistantContent",
+      "ConversationHistoryAssistantContent_content",
+      "ConversationHistoryAssistantMessage",
+      "ConversationHistoryImageContent",
+      "ConversationHistoryMessage",
+      "ConversationHistoryMessage_message",
+      "ConversationHistoryReasoningContent",
+      "ConversationHistoryRedactedReasoningContent",
+      "ConversationHistoryTextContent",
+      "ConversationHistoryToolCall",
+      "ConversationHistoryToolMessage",
+      "ConversationHistoryToolResultContent",
+      "ConversationHistoryToolResultContent_content",
+      "ConversationHistoryUserContent",
+      "ConversationHistoryUserContent_content",
+      "ConversationHistoryUserMessage",
+      "ConversationPlan",
+      "ConversationStateStructure",
+      "ConversationStep",
+      "ConversationStep_message",
+      "ConversationSummary",
+      "ConversationSummaryArchive",
+      "ConversationTokenDetails",
+      "CustomModeExitIntent",
+      "CustomModeIntent",
+      "CustomModeIntent_intent",
+      "ExecutePlanAction",
+      "ExecutePlanInfo",
+      "FeedbackRequestCategory",
+      "FeedbackRequestCategoryGroup",
+      "FeedbackRequestUpdate",
+      "FileStateStructure",
+      "GoalContinuationAction",
+      "GoalState",
+      "HeartbeatUpdate",
+      "InjectContextAction",
+      "InjectContextAction_payload",
+      "InteractionQuery",
+      "InteractionQuery_query",
+      "InteractionResponse",
+      "InteractionResponse_result",
+      "InteractionUpdate",
+      "InteractionUpdate_message",
+      "InterruptedPendingToolCallResolution",
+      "InterruptedPendingToolCallResolution_resolution",
+      "InterruptedPendingToolCallResolutions",
+      "NewCloudVmTarget",
+      "PartialToolCallUpdate",
+      "PlanRegistryEntry",
+      "PostRequestPromptUpdate",
+      "ProjectDetails",
+      "ProjectSideChatDetails",
+      "ProjectSubagentDetails",
+      "PromptContextNode",
+      "PromptContextSourceRef",
+      "PromptContextUsageTree",
+      "PromptSuggestionUpdate",
+      "PromptTokenBreakdownCategory",
+      "PromptTokenBreakdownSnapshot",
+      "ResponseComparisonCompleted",
+      "ResponseComparisonSkipped",
+      "ResponseComparisonStarted",
+      "ResponseComparisonTextDelta",
+      "ResponseComparisonUpdate",
+      "ResponseComparisonUpdate_event",
+      "ResumeAction",
+      "RoutedModelUpdate",
+      "SameMachineTarget",
+      "SelfHostedPoolTarget",
+      "SelfHostedWorkerLabel",
+      "SelfHostedWorkerTarget",
+      "SetActiveBranchArgs",
+      "SetActiveBranchError",
+      "SetActiveBranchResult",
+      "SetActiveBranchResult_result",
+      "SetActiveBranchSuccess",
+      "SetActiveBranchToolCall",
+      "ShellCommand",
+      "ShellCommandAction",
+      "ShellOutput",
+      "ShellOutputDeltaUpdate",
+      "ShellOutputDeltaUpdate_event",
+      "StartPlanAction",
+      "StepCompletedUpdate",
+      "StepStartedUpdate",
+      "StepTiming",
+      "SubagentPersistedState",
+      "SubagentRunState",
+      "SubmittedCustomMode",
+      "SubmittedExitedCustomMode",
+      "SubscriptionEventDisplay",
+      "SubscriptionNotificationAction",
+      "SummarizeAction",
+      "SummaryCompletedUpdate",
+      "SummaryStartedUpdate",
+      "SummaryUpdate",
+      "SystemContextInjection",
+      "TargetMachine",
+      "TargetMachine_machine",
+      "TaskArgs",
+      "TaskError",
+      "TaskResult",
+      "TaskResult_result",
+      "TaskSuccess",
+      "TaskToolCall",
+      "TaskToolCallDelta",
+      "TextDeltaUpdate",
+      "ThinkingCompletedUpdate",
+      "ThinkingDeltaUpdate",
+      "ThinkingMessage",
+      "TokenDeltaUpdate",
+      "ToolCall",
+      "ToolCallCompletedUpdate",
+      "ToolCallDelta",
+      "ToolCallDeltaUpdate",
+      "ToolCallDelta_delta",
+      "ToolCallStartedUpdate",
+      "ToolCall_tool",
+      "TrackedGitRepo",
+      "TriggeringUserInfo",
+      "TruncatedToolCall",
+      "TruncatedToolCallArgs",
+      "TruncatedToolCallError",
+      "TruncatedToolCallResult",
+      "TruncatedToolCallResult_result",
+      "TruncatedToolCallSuccess",
+      "TurnEndedUpdate",
+      "UserContextInjection",
+      "UserMessage2",
+      "UserMessageAction",
+      "UserMessageAppendedUpdate",
+      "UserMessage_SimulatedMessageMetadata"
+    ],
+    "factories": [
+      "ConversationSummary",
+      "ConversationSummaryArchive",
+      "ConversationTokenDetails",
+      "ShellOutput",
+      "ToolCall",
+      "UserMessageAction"
+    ]
+  },
+  "agent/v1/agent_skills_pb.ts": {
+    "messages": [
+      "AgentSkill"
+    ],
+    "factories": []
+  },
+  "agent/v1/ai_attribution_tool_pb.ts": {
+    "messages": [
+      "AiAttributionArgs",
+      "AiAttributionError",
+      "AiAttributionResult",
+      "AiAttributionResult_result",
+      "AiAttributionSuccess",
+      "AiAttributionToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/apply_agent_diff_tool_pb.ts": {
+    "messages": [
+      "AppliedAgentChange",
+      "ApplyAgentDiffArgs",
+      "ApplyAgentDiffError",
+      "ApplyAgentDiffResult",
+      "ApplyAgentDiffResult_result",
+      "ApplyAgentDiffSuccess",
+      "ApplyAgentDiffToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/ask_question_tool_pb.ts": {
+    "messages": [
+      "AskQuestionArgs",
+      "AskQuestionArgs_Option",
+      "AskQuestionArgs_Question",
+      "AskQuestionAsync",
+      "AskQuestionError",
+      "AskQuestionRejected",
+      "AskQuestionResult",
+      "AskQuestionResult_result",
+      "AskQuestionSuccess",
+      "AskQuestionSuccess_Answer",
+      "AskQuestionToolCall"
+    ],
+    "factories": [
+      "AskQuestionArgs",
+      "AskQuestionToolCall"
+    ]
+  },
+  "agent/v1/await_tool_pb.ts": {
+    "messages": [
+      "AwaitArgs",
+      "AwaitError",
+      "AwaitResult",
+      "AwaitResult_result",
+      "AwaitSuccess",
+      "AwaitSuccess_await_result",
+      "AwaitTaskComplete",
+      "AwaitTaskStillRunning",
+      "AwaitToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/background_shell_exec_pb.ts": {
+    "messages": [
+      "WriteShellStdinArgs",
+      "WriteShellStdinError",
+      "WriteShellStdinResult",
+      "WriteShellStdinResult_result",
+      "WriteShellStdinSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/blame_by_file_path_tool_pb.ts": {
+    "messages": [
+      "BlameByFilePathArgs",
+      "BlameByFilePathError",
+      "BlameByFilePathResult",
+      "BlameByFilePathResult_result",
+      "BlameByFilePathSuccess",
+      "BlameByFilePathToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/communicate_update_tool_pb.ts": {
+    "messages": [
+      "CommunicateUpdateArgs",
+      "CommunicateUpdateError",
+      "CommunicateUpdateResult",
+      "CommunicateUpdateResult_result",
+      "CommunicateUpdateSuccess",
+      "CommunicateUpdateToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/computer_use_tool_pb.ts": {
+    "messages": [
+      "ClickAction",
+      "ComputerUseAction",
+      "ComputerUseAction_action",
+      "ComputerUseArgs",
+      "ComputerUseError",
+      "ComputerUseResult",
+      "ComputerUseResult_result",
+      "ComputerUseSuccess",
+      "ComputerUseToolCall",
+      "Coordinate",
+      "CursorPositionAction",
+      "DragAction",
+      "KeyAction",
+      "MouseDownAction",
+      "MouseMoveAction",
+      "MouseUpAction",
+      "ScreenshotAction",
+      "ScrollAction",
+      "TypeAction",
+      "WaitAction"
+    ],
+    "factories": []
+  },
+  "agent/v1/connect_scm_tool_pb.ts": {
+    "messages": [
+      "ConnectScmArgs",
+      "ConnectScmArgs_target",
+      "ConnectScmError",
+      "ConnectScmGithub",
+      "ConnectScmGithubRepository",
+      "ConnectScmRejected",
+      "ConnectScmRequestQuery",
+      "ConnectScmRequestResponse",
+      "ConnectScmRequestResponse_Approved",
+      "ConnectScmRequestResponse_Failed",
+      "ConnectScmRequestResponse_Rejected",
+      "ConnectScmRequestResponse_result",
+      "ConnectScmResult",
+      "ConnectScmResult_result",
+      "ConnectScmSuccess",
+      "ConnectScmToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/conversation_search_exec_pb.ts": {
+    "messages": [
+      "ConversationSearchArgs",
+      "ConversationSearchError",
+      "ConversationSearchHit",
+      "ConversationSearchResult",
+      "ConversationSearchResult_result",
+      "ConversationSearchSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/coordinator_tools_pb.ts": {
+    "messages": [
+      "CreateAgentArgs",
+      "CreateAgentError",
+      "CreateAgentResult",
+      "CreateAgentResult_result",
+      "CreateAgentSuccess",
+      "CreateAgentToolCall",
+      "GetAgentStatusArgs",
+      "GetAgentStatusError",
+      "GetAgentStatusResult",
+      "GetAgentStatusResult_result",
+      "GetAgentStatusSuccess",
+      "GetAgentStatusToolCall",
+      "GetAgentStatusWorker",
+      "ReadAgentTranscriptArgs",
+      "ReadAgentTranscriptError",
+      "ReadAgentTranscriptResult",
+      "ReadAgentTranscriptResult_result",
+      "ReadAgentTranscriptSuccess",
+      "ReadAgentTranscriptToolCall",
+      "SendToAgentArgs",
+      "SendToAgentError",
+      "SendToAgentResult",
+      "SendToAgentResult_result",
+      "SendToAgentSuccess",
+      "SendToAgentToolCall",
+      "StopAgentArgs",
+      "StopAgentError",
+      "StopAgentResult",
+      "StopAgentResult_result",
+      "StopAgentSuccess",
+      "StopAgentToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/create_plan_tool_pb.ts": {
+    "messages": [
+      "CreatePlanArgs",
+      "CreatePlanError",
+      "CreatePlanRequestQuery",
+      "CreatePlanRequestResponse",
+      "CreatePlanResult",
+      "CreatePlanResult_result",
+      "CreatePlanSuccess",
+      "CreatePlanToolCall",
+      "Phase"
+    ],
+    "factories": []
+  },
+  "agent/v1/cursor_rules_pb.ts": {
+    "messages": [
+      "CursorRule",
+      "CursorRuleType",
+      "CursorRuleTypeAgentFetched",
+      "CursorRuleTypeFileGlobs",
+      "CursorRuleTypeGlobal",
+      "CursorRuleTypeManuallyAttached",
+      "CursorRuleType_type"
+    ],
+    "factories": []
+  },
+  "agent/v1/delete_exec_pb.ts": {
+    "messages": [
+      "DeleteArgs",
+      "DeleteError",
+      "DeleteFileBusy",
+      "DeleteFileNotFound",
+      "DeleteNotFile",
+      "DeletePermissionDenied",
+      "DeleteRejected",
+      "DeleteResult",
+      "DeleteResult_result",
+      "DeleteSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/delete_tool_pb.ts": {
+    "messages": [
+      "DeleteToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/edit_pr_labels_tool_pb.ts": {
+    "messages": [
+      "EditPrLabelsArgs",
+      "EditPrLabelsError",
+      "EditPrLabelsResult",
+      "EditPrLabelsResult_result",
+      "EditPrLabelsSuccess",
+      "EditPrLabelsToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/edit_tool_pb.ts": {
+    "messages": [
+      "EditArgs",
+      "EditError",
+      "EditFileNotFound",
+      "EditReadPermissionDenied",
+      "EditRejected",
+      "EditResult",
+      "EditResult_result",
+      "EditSuccess",
+      "EditToolCall",
+      "EditToolCallDelta",
+      "EditWritePermissionDenied"
+    ],
+    "factories": []
+  },
+  "agent/v1/fetch_cloud_agent_data_tool_pb.ts": {
+    "messages": [
+      "FetchCloudAgentDataArgs",
+      "FetchCloudAgentDataError",
+      "FetchCloudAgentDataResult",
+      "FetchCloudAgentDataResult_result",
+      "FetchCloudAgentDataSuccess",
+      "FetchCloudAgentDataToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/fetch_exec_pb.ts": {
+    "messages": [
+      "FetchArgs",
+      "FetchError",
+      "FetchResult",
+      "FetchResult_result",
+      "FetchSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/fetch_tool_pb.ts": {
+    "messages": [
+      "FetchToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/generate_image_tool_pb.ts": {
+    "messages": [
+      "GenerateImageArgs",
+      "GenerateImageError",
+      "GenerateImageRequestQuery",
+      "GenerateImageRequestResponse",
+      "GenerateImageRequestResponse_Approved",
+      "GenerateImageRequestResponse_Rejected",
+      "GenerateImageRequestResponse_result",
+      "GenerateImageResult",
+      "GenerateImageResult_result",
+      "GenerateImageSuccess",
+      "GenerateImageToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/get_mcp_tools_tool_pb.ts": {
+    "messages": [
+      "GetMcpToolsAgentResult",
+      "GetMcpToolsAgentResult_result",
+      "GetMcpToolsArgs",
+      "GetMcpToolsError",
+      "GetMcpToolsSuccess",
+      "GetMcpToolsToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/glob_tool_pb.ts": {
+    "messages": [
+      "GlobToolArgs",
+      "GlobToolCall",
+      "GlobToolError",
+      "GlobToolResult",
+      "GlobToolResult_result",
+      "GlobToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/goal_tool_pb.ts": {
+    "messages": [
+      "CreateGoalArgs",
+      "CreateGoalResult",
+      "CreateGoalResult_result",
+      "CreateGoalSuccess",
+      "CreateGoalToolCall",
+      "GoalError",
+      "UpdateGoalArgs",
+      "UpdateGoalResult",
+      "UpdateGoalResult_result",
+      "UpdateGoalSuccess",
+      "UpdateGoalToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/grep_exec_pb.ts": {
+    "messages": [
+      "GrepArgs",
+      "GrepContentMatch",
+      "GrepContentResult",
+      "GrepCountResult",
+      "GrepError",
+      "GrepFileCount",
+      "GrepFileMatch",
+      "GrepFilesResult",
+      "GrepResult",
+      "GrepResult_result",
+      "GrepSuccess",
+      "GrepUnionResult",
+      "GrepUnionResult_result"
+    ],
+    "factories": []
+  },
+  "agent/v1/grep_tool_pb.ts": {
+    "messages": [
+      "GrepToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/hook_additional_context_pb.ts": {
+    "messages": [
+      "HookAdditionalContext"
+    ],
+    "factories": []
+  },
+  "agent/v1/ls_exec_pb.ts": {
+    "messages": [
+      "LsArgs",
+      "LsDirectoryTreeNode",
+      "LsDirectoryTreeNode_File",
+      "LsError",
+      "LsRejected",
+      "LsResult",
+      "LsResult_result",
+      "LsSuccess",
+      "LsTimeout",
+      "TerminalMetadata",
+      "TerminalMetadata_Command"
+    ],
+    "factories": []
+  },
+  "agent/v1/ls_tool_pb.ts": {
+    "messages": [
+      "LsToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/mcp_auth_tool_pb.ts": {
+    "messages": [
+      "McpAuthArgs",
+      "McpAuthError",
+      "McpAuthRejected",
+      "McpAuthRequestQuery",
+      "McpAuthRequestResponse",
+      "McpAuthRequestResponse_Approved",
+      "McpAuthRequestResponse_Rejected",
+      "McpAuthRequestResponse_result",
+      "McpAuthResult",
+      "McpAuthResult_result",
+      "McpAuthSuccess",
+      "McpAuthToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/mcp_exec_pb.ts": {
+    "messages": [
+      "ListMcpResourcesError",
+      "ListMcpResourcesExecArgs",
+      "ListMcpResourcesExecResult",
+      "ListMcpResourcesExecResult_McpResource",
+      "ListMcpResourcesExecResult_result",
+      "ListMcpResourcesRejected",
+      "ListMcpResourcesSuccess",
+      "McpArgs",
+      "McpImageContent",
+      "McpPermissionDenied",
+      "McpRejected",
+      "McpSuccess",
+      "McpTextContent",
+      "McpToolResultContentItem",
+      "McpToolResultContentItem_content",
+      "ReadMcpResourceError",
+      "ReadMcpResourceExecArgs",
+      "ReadMcpResourceExecResult",
+      "ReadMcpResourceExecResult_result",
+      "ReadMcpResourceNotFound",
+      "ReadMcpResourceRejected",
+      "ReadMcpResourceSuccess",
+      "ReadMcpResourceSuccess_content"
+    ],
+    "factories": []
+  },
+  "agent/v1/mcp_pb.ts": {
+    "messages": [
+      "McpDescriptor",
+      "McpFileSystemOptions",
+      "McpInstructions",
+      "McpMetaToolOptions",
+      "McpToolDefinition",
+      "McpToolDescriptor"
+    ],
+    "factories": []
+  },
+  "agent/v1/mcp_resource_tool_pb.ts": {
+    "messages": [
+      "ListMcpResourcesToolCall",
+      "ReadMcpResourceToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/mcp_tool_pb.ts": {
+    "messages": [
+      "McpToolCall",
+      "McpToolError",
+      "McpToolResult",
+      "McpToolResult_result"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_bash_tool_pb.ts": {
+    "messages": [
+      "PiBashToolArgs",
+      "PiBashToolCall",
+      "PiBashToolError",
+      "PiBashToolResult",
+      "PiBashToolResult_result",
+      "PiBashToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_common_pb.ts": {
+    "messages": [
+      "PiTruncation"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_edit_tool_pb.ts": {
+    "messages": [
+      "PiEditReplacement",
+      "PiEditToolArgs",
+      "PiEditToolCall",
+      "PiEditToolError",
+      "PiEditToolRejected",
+      "PiEditToolResult",
+      "PiEditToolResult_result",
+      "PiEditToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_find_tool_pb.ts": {
+    "messages": [
+      "PiFindToolArgs",
+      "PiFindToolCall",
+      "PiFindToolError",
+      "PiFindToolResult",
+      "PiFindToolResult_result",
+      "PiFindToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_grep_tool_pb.ts": {
+    "messages": [
+      "PiGrepToolArgs",
+      "PiGrepToolCall",
+      "PiGrepToolError",
+      "PiGrepToolResult",
+      "PiGrepToolResult_result",
+      "PiGrepToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_ls_tool_pb.ts": {
+    "messages": [
+      "PiLsToolArgs",
+      "PiLsToolCall",
+      "PiLsToolError",
+      "PiLsToolResult",
+      "PiLsToolResult_result",
+      "PiLsToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_read_tool_pb.ts": {
+    "messages": [
+      "PiReadToolArgs",
+      "PiReadToolCall",
+      "PiReadToolError",
+      "PiReadToolResult",
+      "PiReadToolResult_result",
+      "PiReadToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/pi_write_tool_pb.ts": {
+    "messages": [
+      "PiWriteToolArgs",
+      "PiWriteToolCall",
+      "PiWriteToolError",
+      "PiWriteToolRejected",
+      "PiWriteToolResult",
+      "PiWriteToolResult_result",
+      "PiWriteToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/pr_management_tool_pb.ts": {
+    "messages": [
+      "CreatePrAction",
+      "GetCiStatusAction",
+      "PostCommentAction",
+      "PrManagementArgs",
+      "PrManagementArgs_action",
+      "PrManagementError",
+      "PrManagementNeedsConfirmation",
+      "PrManagementRegistered",
+      "PrManagementRejected",
+      "PrManagementRequestQuery",
+      "PrManagementResult",
+      "PrManagementResult_result",
+      "PrManagementSuccess",
+      "PrManagementToolCall",
+      "ResolveCommentAction",
+      "SetPrStatusAction",
+      "UpdatePrAction"
+    ],
+    "factories": []
+  },
+  "agent/v1/read_lints_tool_pb.ts": {
+    "messages": [
+      "DiagnosticItem",
+      "DiagnosticRange",
+      "FileDiagnostics",
+      "ReadLintsToolArgs",
+      "ReadLintsToolCall",
+      "ReadLintsToolError",
+      "ReadLintsToolResult",
+      "ReadLintsToolResult_result",
+      "ReadLintsToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/read_tool_pb.ts": {
+    "messages": [
+      "ReadRange",
+      "ReadToolArgs",
+      "ReadToolCall",
+      "ReadToolError",
+      "ReadToolResult",
+      "ReadToolResult_result",
+      "ReadToolSuccess",
+      "ReadToolSuccess_output"
+    ],
+    "factories": []
+  },
+  "agent/v1/record_ci_investigation_findings_tool_pb.ts": {
+    "messages": [
+      "RecordCiInvestigationFinding",
+      "RecordCiInvestigationFindingsArgs",
+      "RecordCiInvestigationFindingsError",
+      "RecordCiInvestigationFindingsResult",
+      "RecordCiInvestigationFindingsResult_result",
+      "RecordCiInvestigationFindingsSuccess",
+      "RecordCiInvestigationFindingsToolCall",
+      "RecordCiInvestigationOverall"
+    ],
+    "factories": []
+  },
+  "agent/v1/record_screen_exec_pb.ts": {
+    "messages": [
+      "RecordScreenArgs",
+      "RecordScreenDiscardSuccess",
+      "RecordScreenFailure",
+      "RecordScreenResult",
+      "RecordScreenResult_result",
+      "RecordScreenSaveSuccess",
+      "RecordScreenStartSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/record_screen_tool_pb.ts": {
+    "messages": [
+      "RecordScreenToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/reflect_tool_pb.ts": {
+    "messages": [
+      "ReflectArgs",
+      "ReflectError",
+      "ReflectResult",
+      "ReflectResult_result",
+      "ReflectSuccess",
+      "ReflectToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/replace_env_tool_pb.ts": {
+    "messages": [
+      "ReplaceEnvArgs",
+      "ReplaceEnvConfig",
+      "ReplaceEnvFailure",
+      "ReplaceEnvResult",
+      "ReplaceEnvResult_result",
+      "ReplaceEnvSuccess",
+      "ReplaceEnvToolCall",
+      "ReplaceEnvToolCallDelta",
+      "RepoCheckoutRefOverride"
+    ],
+    "factories": []
+  },
+  "agent/v1/repo_pb.ts": {
+    "messages": [
+      "RepositoryIndexingInfo"
+    ],
+    "factories": []
+  },
+  "agent/v1/report_bug_tool_pb.ts": {
+    "messages": [
+      "ReportBugArgs",
+      "ReportBugError",
+      "ReportBugResult",
+      "ReportBugResult_result",
+      "ReportBugSuccess",
+      "ReportBugToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/report_bugfix_results_tool_pb.ts": {
+    "messages": [
+      "BugfixResultItem",
+      "ReportBugfixResultsArgs",
+      "ReportBugfixResultsError",
+      "ReportBugfixResultsResult",
+      "ReportBugfixResultsResult_result",
+      "ReportBugfixResultsSuccess",
+      "ReportBugfixResultsToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/request_context_exec_pb.ts": {
+    "messages": [
+      "DebugModeConfig",
+      "GitRepoInfo",
+      "HooksConfigInfo",
+      "MatchedInstalledPlugin",
+      "MountedAgentStore",
+      "PermissionsAutoRunInstructions",
+      "PrecomputedHumanChange",
+      "PrecomputedHumanChangeRenderedDiff",
+      "RecentlyAddedPlugin",
+      "RecentlyAddedPlugin_CapabilityDescriptor",
+      "RequestContext",
+      "RequestContextEnv",
+      "RequestContextPartReferences",
+      "SkillDescriptor",
+      "SkillOptions"
+    ],
+    "factories": []
+  },
+  "agent/v1/sandbox_pb.ts": {
+    "messages": [
+      "NetworkPolicy",
+      "NetworkPolicyLoggingConfig",
+      "SandboxPolicy"
+    ],
+    "factories": []
+  },
+  "agent/v1/search_conversations_tool_pb.ts": {
+    "messages": [
+      "SearchConversationsToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/selected_context_pb.ts": {
+    "messages": [
+      "CallFrame",
+      "ExtraContextEntry",
+      "ExtraContextEntry_data_or_blob_id",
+      "InvocationContext",
+      "InvocationContext_GithubPR",
+      "InvocationContext_IdeState",
+      "InvocationContext_IdeState_File",
+      "InvocationContext_IdeState_File_CursorPosition",
+      "InvocationContext_IdeState_ViewedPullRequest",
+      "InvocationContext_MicrosoftTeamsThread",
+      "InvocationContext_SlackThread",
+      "InvocationContext_data",
+      "PromptUploadRef",
+      "RecentAgent",
+      "RecentAgentsContext",
+      "SelectedAgenticGitAction",
+      "SelectedAgenticGitActionBabysitPrInCloudParams",
+      "SelectedAgenticGitActionCommitParams",
+      "SelectedAgenticGitActionCreateBranchParams",
+      "SelectedAgenticGitActionFixMergeConflictsParams",
+      "SelectedAgenticGitActionPullLocallyParams",
+      "SelectedAgenticGitActionPushParams",
+      "SelectedAgenticGitActionUpdateBranchParams",
+      "SelectedAgenticGitAction_params",
+      "SelectedAgenticGitFileWithStatus",
+      "SelectedBrowser",
+      "SelectedCodeSelection",
+      "SelectedConsoleLog",
+      "SelectedContext",
+      "SelectedCursorCommand",
+      "SelectedCursorRule",
+      "SelectedDocument",
+      "SelectedDocument_BlobIdWithData",
+      "SelectedDocument_data_or_blob_id",
+      "SelectedDocumentation",
+      "SelectedExternalLink",
+      "SelectedFile",
+      "SelectedFolder",
+      "SelectedGitBranchContext",
+      "SelectedGitCommit",
+      "SelectedGitDiff",
+      "SelectedGitDiffFromBranchToMain",
+      "SelectedGitPRDiffSelection",
+      "SelectedImage",
+      "SelectedImage_BlobIdWithData",
+      "SelectedImage_Dimension",
+      "SelectedImage_data_or_blob_id",
+      "SelectedPastChat",
+      "SelectedPluginCapabilityRef",
+      "SelectedPullRequest",
+      "SelectedSubagent",
+      "SelectedTerminal",
+      "SelectedTerminalSelection",
+      "SelectedUIElement",
+      "SelectedVideo",
+      "SelectedVideo_BlobIdWithData",
+      "SelectedVideo_SignedUrl",
+      "SelectedVideo_data_or_blob_id",
+      "StackTrace"
+    ],
+    "factories": []
+  },
+  "agent/v1/semsearch_tool_pb.ts": {
+    "messages": [
+      "SemSearchToolArgs",
+      "SemSearchToolCall",
+      "SemSearchToolError",
+      "SemSearchToolResult",
+      "SemSearchToolResult_result",
+      "SemSearchToolSuccess"
+    ],
+    "factories": []
+  },
+  "agent/v1/send_final_summary_tool_pb.ts": {
+    "messages": [
+      "SendFinalSummaryArgs",
+      "SendFinalSummaryError",
+      "SendFinalSummaryResult",
+      "SendFinalSummaryResult_result",
+      "SendFinalSummarySuccess",
+      "SendFinalSummaryToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/send_message_tool_pb.ts": {
+    "messages": [
+      "SendMessageArgs",
+      "SendMessageArgs_message",
+      "SendMessageAttachment",
+      "SendMessageError",
+      "SendMessageResult",
+      "SendMessageResult_result",
+      "SendMessageSuccess",
+      "SendMessageText",
+      "SendMessageToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/send_to_user_tool_pb.ts": {
+    "messages": [
+      "SendToUserArgs",
+      "SendToUserError",
+      "SendToUserResult",
+      "SendToUserResult_result",
+      "SendToUserSuccess",
+      "SendToUserToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/setup_vm_environment_tool_pb.ts": {
+    "messages": [
+      "SetupVmEnvironmentArgs",
+      "SetupVmEnvironmentResult",
+      "SetupVmEnvironmentResult_result",
+      "SetupVmEnvironmentSuccess",
+      "SetupVmEnvironmentToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/shell_exec_pb.ts": {
+    "messages": [
+      "CommandClassifierResult",
+      "CommandClassifierResult_ClassifiedCommand",
+      "ShellArgs",
+      "ShellCommandParsingResult",
+      "ShellCommandParsingResult_ExecutableCommand",
+      "ShellCommandParsingResult_ExecutableCommandArg",
+      "ShellCommandParsingResult_Redirect",
+      "ShellFailure",
+      "ShellHookApprovalRequirement",
+      "ShellOutputNotificationConfig",
+      "ShellPermissionDenied",
+      "ShellRejected",
+      "ShellResult",
+      "ShellResult_result",
+      "ShellSandboxUnsupported",
+      "ShellSpawnError",
+      "ShellStream",
+      "ShellStreamBackgrounded",
+      "ShellStreamExit",
+      "ShellStreamHookContext",
+      "ShellStreamStart",
+      "ShellStreamStderr",
+      "ShellStreamStdout",
+      "ShellStream_event",
+      "ShellSuccess",
+      "ShellTimeout"
+    ],
+    "factories": [
+      "ShellArgs",
+      "ShellCommandParsingResult",
+      "ShellStreamExit",
+      "ShellStreamStart",
+      "ShellStreamStderr",
+      "ShellStreamStdout"
+    ]
+  },
+  "agent/v1/shell_tool_pb.ts": {
+    "messages": [
+      "ShellToolCall",
+      "ShellToolCallDelta",
+      "ShellToolCallDelta_delta",
+      "ShellToolCallStderrDelta",
+      "ShellToolCallStdoutDelta"
+    ],
+    "factories": []
+  },
+  "agent/v1/start_grind_execution_tool_pb.ts": {
+    "messages": [
+      "StartGrindExecutionArgs",
+      "StartGrindExecutionError",
+      "StartGrindExecutionResult",
+      "StartGrindExecutionResult_result",
+      "StartGrindExecutionSuccess",
+      "StartGrindExecutionToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/start_grind_planning_tool_pb.ts": {
+    "messages": [
+      "StartGrindPlanningArgs",
+      "StartGrindPlanningError",
+      "StartGrindPlanningResult",
+      "StartGrindPlanningResult_result",
+      "StartGrindPlanningSuccess",
+      "StartGrindPlanningToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/subagents_pb.ts": {
+    "messages": [
+      "CustomSubagent",
+      "SubagentType",
+      "SubagentTypeBash",
+      "SubagentTypeBrowserUse",
+      "SubagentTypeComputerUse",
+      "SubagentTypeCursorGuide",
+      "SubagentTypeCustom",
+      "SubagentTypeDebug",
+      "SubagentTypeExplore",
+      "SubagentTypeMediaReview",
+      "SubagentTypeShell",
+      "SubagentTypeUnspecified",
+      "SubagentTypeVmSetupHelper",
+      "SubagentTypeWatchVideo",
+      "SubagentType_type"
+    ],
+    "factories": []
+  },
+  "agent/v1/switch_mode_tool_pb.ts": {
+    "messages": [
+      "SwitchModeArgs",
+      "SwitchModeError",
+      "SwitchModeRejected",
+      "SwitchModeRequestQuery",
+      "SwitchModeRequestResponse",
+      "SwitchModeRequestResponse_Approved",
+      "SwitchModeRequestResponse_Rejected",
+      "SwitchModeRequestResponse_result",
+      "SwitchModeResult",
+      "SwitchModeResult_result",
+      "SwitchModeSuccess",
+      "SwitchModeToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/system_prompt_pb.ts": {
+    "messages": [
+      "SystemPromptSpec",
+      "SystemPromptSpec_spec"
+    ],
+    "factories": []
+  },
+  "agent/v1/todo_tool_pb.ts": {
+    "messages": [
+      "ReadTodosArgs",
+      "ReadTodosError",
+      "ReadTodosResult",
+      "ReadTodosResult_result",
+      "ReadTodosSuccess",
+      "ReadTodosToolCall",
+      "TodoItem",
+      "UpdateTodosArgs",
+      "UpdateTodosError",
+      "UpdateTodosResult",
+      "UpdateTodosResult_result",
+      "UpdateTodosSuccess",
+      "UpdateTodosToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/update_pr_code_tour_tool_pb.ts": {
+    "messages": [
+      "UpdatePrCodeTourArgs",
+      "UpdatePrCodeTourError",
+      "UpdatePrCodeTourResult",
+      "UpdatePrCodeTourResult_result",
+      "UpdatePrCodeTourSuccess",
+      "UpdatePrCodeTourToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/utils_pb.ts": {
+    "messages": [
+      "OutputLocation",
+      "Position",
+      "Range",
+      "SmartModeApproval"
+    ],
+    "factories": []
+  },
+  "agent/v1/web_fetch_tool_pb.ts": {
+    "messages": [
+      "WebFetchArgs",
+      "WebFetchError",
+      "WebFetchRejected",
+      "WebFetchRequestQuery",
+      "WebFetchRequestResponse",
+      "WebFetchRequestResponse_Approved",
+      "WebFetchRequestResponse_Rejected",
+      "WebFetchRequestResponse_result",
+      "WebFetchResult",
+      "WebFetchResult_result",
+      "WebFetchSuccess",
+      "WebFetchToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/web_search_tool_pb.ts": {
+    "messages": [
+      "WebSearchArgs",
+      "WebSearchError",
+      "WebSearchReference",
+      "WebSearchRejected",
+      "WebSearchRequestQuery",
+      "WebSearchRequestResponse",
+      "WebSearchRequestResponse_Approved",
+      "WebSearchRequestResponse_Rejected",
+      "WebSearchRequestResponse_result",
+      "WebSearchResult",
+      "WebSearchResult_result",
+      "WebSearchSuccess",
+      "WebSearchToolCall"
+    ],
+    "factories": []
+  },
+  "agent/v1/write_shell_stdin_tool_pb.ts": {
+    "messages": [
+      "WriteShellStdinToolCall"
+    ],
+    "factories": []
+  },
+  "aiserver/v1/repository_pb.ts": {
+    "messages": [
+      "CodeResult"
+    ],
+    "factories": []
+  },
+  "aiserver/v1/utils_pb.ts": {
+    "messages": [
+      "CodeBlock",
+      "CodeBlock_Signatures",
+      "CursorPosition",
+      "CursorRange",
+      "DetailedLine",
+      "FileGit",
+      "GitCommit"
+    ],
+    "factories": []
+  }
+}

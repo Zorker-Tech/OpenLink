@@ -1,0 +1,37 @@
+// agent.v1 — agent/v1/pi_read_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/pi_common.proto";
+
+message PiReadToolCall {
+  optional .agent.v1.PiReadToolArgs args = 1 [json_name = "args"];
+  optional .agent.v1.PiReadToolResult result = 2 [json_name = "result"];
+}
+
+message PiReadToolArgs {
+  string path = 1 [json_name = "path"];
+  optional int32 offset = 2 [json_name = "offset"];
+  optional int32 limit = 3 [json_name = "limit"];
+}
+
+message PiReadToolResult {
+  oneof result {
+    .agent.v1.PiReadToolSuccess success = 1 [json_name = "success"];
+    .agent.v1.PiReadToolError error = 2 [json_name = "error"];
+  }
+}
+
+message PiReadToolSuccess {
+  string output = 1 [json_name = "output"];
+  optional .agent.v1.PiTruncation truncation = 2 [json_name = "truncation"];
+}
+
+message PiReadToolError {
+  string error = 1 [json_name = "error"];
+}

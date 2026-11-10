@@ -1,0 +1,15 @@
+// agent.v1 — agent/v1/system_prompt messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message SystemPromptSpec {
+  oneof spec {
+    string replace = 1 [json_name = "replace"];
+    string append = 2 [json_name = "append"];
+  }
+}

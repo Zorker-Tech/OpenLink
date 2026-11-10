@@ -1,0 +1,407 @@
+// agent.v1 — agent/v1/selected_context messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+import "agent/v1/agent_skills.proto";
+import "agent/v1/ls_exec.proto";
+import "agent/v1/rules.proto";
+import "agent/v1/utils.proto";
+
+message SelectedCursorCommand {
+  string name = 1 [json_name = "name"];
+  string content = 2 [json_name = "content"];
+  optional .agent.v1.SelectedPluginCapabilityRef plugin_capability = 3 [json_name = "pluginCapability"];
+  optional string full_path = 4 [json_name = "fullPath"];
+  optional string display_name = 5 [json_name = "displayName"];
+}
+
+message SelectedPastChat {
+  string agent_id = 1 [json_name = "agentId"];
+  string name = 2 [json_name = "name"];
+}
+
+message SelectedPluginCapabilityRef {
+  string plugin_id = 1 [json_name = "pluginId"];
+  .agent.v1.SelectedPluginCapabilityType capability_type = 2 [json_name = "capabilityType"];
+  string source_path = 3 [json_name = "sourcePath"];
+  string snapshot_token = 4 [json_name = "snapshotToken"];
+  optional string resolved_commit_sha = 5 [json_name = "resolvedCommitSha"];
+}
+
+message SelectedContext {
+  repeated .agent.v1.SelectedImage selected_images = 1 [json_name = "selectedImages"];
+  optional .agent.v1.InvocationContext invocation_context = 2 [json_name = "invocationContext"];
+  repeated string extra_context = 3 [json_name = "extraContext"];
+  repeated .agent.v1.SelectedFile files = 4 [json_name = "files"];
+  repeated .agent.v1.SelectedCodeSelection code_selections = 5 [json_name = "codeSelections"];
+  repeated .agent.v1.SelectedTerminal terminals = 6 [json_name = "terminals"];
+  repeated .agent.v1.SelectedTerminalSelection terminal_selections = 7 [json_name = "terminalSelections"];
+  repeated .agent.v1.SelectedFolder folders = 8 [json_name = "folders"];
+  repeated .agent.v1.SelectedExternalLink external_links = 9 [json_name = "externalLinks"];
+  repeated .agent.v1.SelectedCursorRule cursor_rules = 10 [json_name = "cursorRules"];
+  optional .agent.v1.SelectedGitDiffFromBranchToMain git_diff_from_branch_to_main = 11 [json_name = "gitDiffFromBranchToMain"];
+  repeated .agent.v1.SelectedCursorCommand cursor_commands = 12 [json_name = "cursorCommands"];
+  repeated .agent.v1.SelectedDocumentation documentations = 13 [json_name = "documentations"];
+  repeated .agent.v1.SelectedUIElement ui_elements = 14 [json_name = "uiElements"];
+  repeated .agent.v1.SelectedConsoleLog console_logs = 15 [json_name = "consoleLogs"];
+  repeated .agent.v1.ExtraContextEntry extra_context_entries = 16 [json_name = "extraContextEntries"];
+  repeated .agent.v1.SelectedGitCommit git_commits = 17 [json_name = "gitCommits"];
+  optional .agent.v1.SelectedGitDiff git_diff = 18 [json_name = "gitDiff"];
+  repeated .agent.v1.SelectedPastChat past_chats = 19 [json_name = "pastChats"];
+  repeated .agent.v1.SelectedGitPRDiffSelection git_pr_diff_selections = 20 [json_name = "gitPrDiffSelections"];
+  repeated .agent.v1.SelectedPullRequest selected_pull_requests = 21 [json_name = "selectedPullRequests"];
+  repeated .agent.v1.SelectedSubagent selected_subagents = 22 [json_name = "selectedSubagents"];
+  repeated .agent.v1.SelectedVideo selected_videos = 23 [json_name = "selectedVideos"];
+  repeated .agent.v1.SelectedBrowser selected_browsers = 24 [json_name = "selectedBrowsers"];
+  repeated .agent.v1.SelectedDocument selected_documents = 25 [json_name = "selectedDocuments"];
+  repeated .agent.v1.AgentSkill selected_skills = 26 [json_name = "selectedSkills"];
+  optional .agent.v1.RecentAgentsContext recent_agents_context = 27 [json_name = "recentAgentsContext"];
+  optional .agent.v1.SelectedAgenticGitAction selected_agentic_git_action = 34 [json_name = "selectedAgenticGitAction"];
+}
+
+message SelectedImage {
+  string uuid = 2 [json_name = "uuid"];
+  string path = 3 [json_name = "path"];
+  optional .agent.v1.SelectedImage.Dimension dimension = 4 [json_name = "dimension"];
+  string mime_type = 7 [json_name = "mimeType"];
+  oneof data_or_blob_id {
+    bytes blob_id = 1 [json_name = "blobId"];
+    bytes data = 8 [json_name = "data"];
+    .agent.v1.SelectedImage.BlobIdWithData blob_id_with_data = 9 [json_name = "blobIdWithData"];
+    .agent.v1.PromptUploadRef prompt_upload_ref = 10 [json_name = "promptUploadRef"];
+  }
+  message BlobIdWithData {
+    bytes blob_id = 1 [json_name = "blobId"];
+    bytes data = 2 [json_name = "data"];
+  }
+  message Dimension {
+    int32 width = 1 [json_name = "width"];
+    int32 height = 2 [json_name = "height"];
+  }
+}
+
+message InvocationContext {
+  oneof data {
+    .agent.v1.InvocationContext.SlackThread slack_thread = 1 [json_name = "slackThread"];
+    .agent.v1.InvocationContext.GithubPR github_pr = 2 [json_name = "githubPr"];
+    .agent.v1.InvocationContext.IdeState ide_state = 3 [json_name = "ideState"];
+    .agent.v1.InvocationContext.MicrosoftTeamsThread microsoft_teams_thread = 4 [json_name = "microsoftTeamsThread"];
+    bytes blob_id = 10 [json_name = "blobId"];
+  }
+  message SlackThread {
+    string thread = 1 [json_name = "thread"];
+    optional string channel_name = 2 [json_name = "channelName"];
+    optional string channel_purpose = 3 [json_name = "channelPurpose"];
+    optional string channel_topic = 4 [json_name = "channelTopic"];
+    optional string sender_name = 5 [json_name = "senderName"];
+    optional string sender_id = 6 [json_name = "senderId"];
+    optional string sender_type = 7 [json_name = "senderType"];
+    optional bool is_directly_addressed = 8 [json_name = "isDirectlyAddressed"];
+  }
+  message GithubPR {
+    string title = 1 [json_name = "title"];
+    string description = 2 [json_name = "description"];
+    string comments = 3 [json_name = "comments"];
+    optional string ci_failures = 4 [json_name = "ciFailures"];
+  }
+  message IdeState {
+    repeated .agent.v1.InvocationContext.IdeState.File visible_files = 1 [json_name = "visibleFiles"];
+    repeated .agent.v1.InvocationContext.IdeState.File recently_viewed_files = 2 [json_name = "recentlyViewedFiles"];
+    repeated .agent.v1.InvocationContext.IdeState.ViewedPullRequest currently_viewed_prs = 3 [json_name = "currentlyViewedPrs"];
+    message File {
+      string path = 1 [json_name = "path"];
+      optional string relative_path = 2 [json_name = "relativePath"];
+      optional .agent.v1.InvocationContext.IdeState.File.CursorPosition cursor_position = 3 [json_name = "cursorPosition"];
+      int32 total_lines = 4 [json_name = "totalLines"];
+      optional string active_command = 5 [json_name = "activeCommand"];
+      message CursorPosition {
+        int32 line = 1 [json_name = "line"];
+        string text = 2 [json_name = "text"];
+      }
+    }
+    message ViewedPullRequest {
+      int32 number = 1 [json_name = "number"];
+      string url = 2 [json_name = "url"];
+      optional string title = 3 [json_name = "title"];
+      optional string folder_path = 4 [json_name = "folderPath"];
+      optional string summary_json = 5 [json_name = "summaryJson"];
+      optional string description = 6 [json_name = "description"];
+    }
+  }
+  message MicrosoftTeamsThread {
+    string thread = 1 [json_name = "thread"];
+    optional string channel_name = 2 [json_name = "channelName"];
+    optional string team_name = 3 [json_name = "teamName"];
+    optional string channel_description = 4 [json_name = "channelDescription"];
+    optional string team_description = 5 [json_name = "teamDescription"];
+  }
+}
+
+message ExtraContextEntry {
+  oneof data_or_blob_id {
+    string data = 1 [json_name = "data"];
+    bytes blob_id = 2 [json_name = "blobId"];
+  }
+}
+
+message SelectedFile {
+  string content = 1 [json_name = "content"];
+  string path = 2 [json_name = "path"];
+  optional string relative_path = 3 [json_name = "relativePath"];
+}
+
+message SelectedCodeSelection {
+  string content = 1 [json_name = "content"];
+  string path = 2 [json_name = "path"];
+  optional string relative_path = 3 [json_name = "relativePath"];
+  optional .agent.v1.Range range = 4 [json_name = "range"];
+}
+
+message SelectedTerminal {
+  string content = 1 [json_name = "content"];
+  optional string title = 2 [json_name = "title"];
+  optional string path = 3 [json_name = "path"];
+}
+
+message SelectedTerminalSelection {
+  string content = 1 [json_name = "content"];
+  optional string title = 2 [json_name = "title"];
+  optional string path = 3 [json_name = "path"];
+  optional .agent.v1.Range range = 4 [json_name = "range"];
+}
+
+message SelectedFolder {
+  string path = 1 [json_name = "path"];
+  optional string relative_path = 2 [json_name = "relativePath"];
+  optional .agent.v1.LsDirectoryTreeNode directory_tree = 3 [json_name = "directoryTree"];
+}
+
+message SelectedExternalLink {
+  string url = 1 [json_name = "url"];
+  string uuid = 2 [json_name = "uuid"];
+  optional string pdf_content = 3 [json_name = "pdfContent"];
+  optional bool is_pdf = 4 [json_name = "isPdf"];
+  optional string filename = 5 [json_name = "filename"];
+  optional bytes blob_id = 6 [json_name = "blobId"];
+}
+
+message SelectedCursorRule {
+  optional .agent.v1.CursorRule rule = 1 [json_name = "rule"];
+}
+
+message SelectedGitDiff {
+  string content = 1 [json_name = "content"];
+  int32 full_content_length_char_count = 2 [json_name = "fullContentLengthCharCount"];
+}
+
+message SelectedGitDiffFromBranchToMain {
+  string content = 1 [json_name = "content"];
+  int32 full_content_length_char_count = 2 [json_name = "fullContentLengthCharCount"];
+}
+
+message SelectedDocumentation {
+  string doc_id = 1 [json_name = "docId"];
+  string name = 2 [json_name = "name"];
+}
+
+message SelectedUIElement {
+  string element = 1 [json_name = "element"];
+  string xpath = 2 [json_name = "xpath"];
+  string text_content = 3 [json_name = "textContent"];
+  string extra = 4 [json_name = "extra"];
+  optional string component = 5 [json_name = "component"];
+  optional string component_props_json = 6 [json_name = "componentPropsJson"];
+}
+
+message SelectedConsoleLog {
+  string message = 1 [json_name = "message"];
+  double timestamp = 2 [json_name = "timestamp"];
+  string level = 3 [json_name = "level"];
+  string client_name = 4 [json_name = "clientName"];
+  string session_id = 5 [json_name = "sessionId"];
+  optional .agent.v1.StackTrace stack_trace = 6 [json_name = "stackTrace"];
+  optional string object_data_json = 7 [json_name = "objectDataJson"];
+}
+
+message SelectedGitCommit {
+  string sha = 1 [json_name = "sha"];
+  string message = 2 [json_name = "message"];
+  optional string description = 3 [json_name = "description"];
+  string diff = 4 [json_name = "diff"];
+}
+
+message SelectedGitPRDiffSelection {
+  string pr_url = 1 [json_name = "prUrl"];
+  string file_path = 2 [json_name = "filePath"];
+  int32 start_line = 3 [json_name = "startLine"];
+  int32 end_line = 4 [json_name = "endLine"];
+  optional string diff_content = 5 [json_name = "diffContent"];
+  optional bytes blob_id = 6 [json_name = "blobId"];
+}
+
+message SelectedPullRequest {
+  int32 number = 1 [json_name = "number"];
+  string url = 2 [json_name = "url"];
+  optional string title = 3 [json_name = "title"];
+  string folder_path = 4 [json_name = "folderPath"];
+  optional string summary_json = 5 [json_name = "summaryJson"];
+  optional string description = 6 [json_name = "description"];
+  optional bytes blob_id = 7 [json_name = "blobId"];
+}
+
+message SelectedSubagent {
+  string name = 1 [json_name = "name"];
+}
+
+message SelectedVideo {
+  string uuid = 2 [json_name = "uuid"];
+  string path = 3 [json_name = "path"];
+  optional float fps = 4 [json_name = "fps"];
+  string mime_type = 7 [json_name = "mimeType"];
+  string filename = 10 [json_name = "filename"];
+  bool materialize_to_filesystem = 12 [json_name = "materializeToFilesystem"];
+  oneof data_or_blob_id {
+    bytes blob_id = 1 [json_name = "blobId"];
+    bytes data = 8 [json_name = "data"];
+    .agent.v1.SelectedVideo.BlobIdWithData blob_id_with_data = 9 [json_name = "blobIdWithData"];
+    .agent.v1.SelectedVideo.SignedUrl signed_url = 11 [json_name = "signedUrl"];
+  }
+  message BlobIdWithData {
+    bytes blob_id = 1 [json_name = "blobId"];
+    bytes data = 2 [json_name = "data"];
+  }
+  message SignedUrl {
+    string url = 1 [json_name = "url"];
+    string key = 2 [json_name = "key"];
+    int64 expires_at_unix_ms = 3 [json_name = "expiresAtUnixMs"];
+    int64 refresh_after_unix_ms = 4 [json_name = "refreshAfterUnixMs"];
+    string conversation_id = 5 [json_name = "conversationId"];
+  }
+}
+
+message SelectedBrowser {
+  string browser_id = 1 [json_name = "browserId"];
+  string url = 2 [json_name = "url"];
+  optional string page_title = 3 [json_name = "pageTitle"];
+}
+
+message SelectedDocument {
+  string uuid = 2 [json_name = "uuid"];
+  string filename = 3 [json_name = "filename"];
+  string mime_type = 4 [json_name = "mimeType"];
+  string path = 7 [json_name = "path"];
+  oneof data_or_blob_id {
+    bytes blob_id = 1 [json_name = "blobId"];
+    bytes data = 8 [json_name = "data"];
+    .agent.v1.SelectedDocument.BlobIdWithData blob_id_with_data = 9 [json_name = "blobIdWithData"];
+    .agent.v1.PromptUploadRef prompt_upload_ref = 10 [json_name = "promptUploadRef"];
+  }
+  message BlobIdWithData {
+    bytes blob_id = 1 [json_name = "blobId"];
+    bytes data = 2 [json_name = "data"];
+  }
+}
+
+message RecentAgentsContext {
+  repeated .agent.v1.RecentAgent recent_agents = 1 [json_name = "recentAgents"];
+}
+
+message SelectedAgenticGitAction {
+  optional .agent.v1.SelectedGitBranchContext branch_context = 5 [json_name = "branchContext"];
+  optional string path_to_template_file = 9 [json_name = "pathToTemplateFile"];
+  optional string path_to_template_dir = 10 [json_name = "pathToTemplateDir"];
+  oneof params {
+    .agent.v1.SelectedAgenticGitActionCommitParams commit_params = 2 [json_name = "commitParams"];
+    .agent.v1.SelectedAgenticGitActionPushParams push_params = 3 [json_name = "pushParams"];
+    .agent.v1.SelectedAgenticGitActionFixMergeConflictsParams fix_merge_conflicts_params = 4 [json_name = "fixMergeConflictsParams"];
+    .agent.v1.SelectedAgenticGitActionCommitParams commit_and_push_params = 6 [json_name = "commitAndPushParams"];
+    .agent.v1.SelectedAgenticGitActionPushParams create_pr_params = 7 [json_name = "createPrParams"];
+    .agent.v1.SelectedAgenticGitActionCommitParams create_pr_with_changes_params = 8 [json_name = "createPrWithChangesParams"];
+    .agent.v1.SelectedAgenticGitActionBabysitPrInCloudParams babysit_pr_in_cloud_params = 11 [json_name = "babysitPrInCloudParams"];
+    .agent.v1.SelectedAgenticGitActionCommitParams create_branch_and_commit_params = 12 [json_name = "createBranchAndCommitParams"];
+    .agent.v1.SelectedAgenticGitActionCommitParams create_branch_commit_and_push_params = 13 [json_name = "createBranchCommitAndPushParams"];
+    .agent.v1.SelectedAgenticGitActionPullLocallyParams apply_locally_params = 14 [json_name = "applyLocallyParams"];
+    .agent.v1.SelectedAgenticGitActionPullLocallyParams checkout_branch_params = 15 [json_name = "checkoutBranchParams"];
+    .agent.v1.SelectedAgenticGitActionUpdateBranchParams update_branch_params = 16 [json_name = "updateBranchParams"];
+    .agent.v1.SelectedAgenticGitActionCreateBranchParams create_branch_params = 17 [json_name = "createBranchParams"];
+  }
+}
+
+message SelectedAgenticGitActionCommitParams {
+  repeated string files_to_commit = 1 [json_name = "filesToCommit"];
+  repeated string files_to_exclude_from_commit = 2 [json_name = "filesToExcludeFromCommit"];
+  bool should_stage_all_changes = 3 [json_name = "shouldStageAllChanges"];
+  optional bool create_pr_draft = 4 [json_name = "createPrDraft"];
+  repeated .agent.v1.SelectedAgenticGitFileWithStatus files_to_commit_with_status = 5 [json_name = "filesToCommitWithStatus"];
+  repeated .agent.v1.SelectedAgenticGitFileWithStatus files_to_exclude_from_commit_with_status = 6 [json_name = "filesToExcludeFromCommitWithStatus"];
+}
+
+message SelectedAgenticGitActionPushParams {
+  repeated string files_to_push = 1 [json_name = "filesToPush"];
+  optional bool create_pr_draft = 2 [json_name = "createPrDraft"];
+}
+
+message SelectedAgenticGitActionFixMergeConflictsParams {
+  optional string base_branch = 1 [json_name = "baseBranch"];
+  optional string pr_url = 2 [json_name = "prUrl"];
+}
+
+message SelectedAgenticGitActionBabysitPrInCloudParams {
+  optional string base_branch = 1 [json_name = "baseBranch"];
+}
+
+message SelectedAgenticGitActionPullLocallyParams {
+  string remote_branch = 1 [json_name = "remoteBranch"];
+}
+
+message SelectedAgenticGitActionUpdateBranchParams {
+  optional string base_branch = 1 [json_name = "baseBranch"];
+}
+
+message SelectedAgenticGitActionCreateBranchParams {
+}
+
+message SelectedGitBranchContext {
+  optional string current_branch = 1 [json_name = "currentBranch"];
+  optional string base_branch = 2 [json_name = "baseBranch"];
+  optional string agent_branch_prefix = 3 [json_name = "agentBranchPrefix"];
+}
+
+message SelectedAgenticGitFileWithStatus {
+  string path = 1 [json_name = "path"];
+  optional string status = 2 [json_name = "status"];
+}
+
+message RecentAgent {
+  string name = 1 [json_name = "name"];
+  string path = 2 [json_name = "path"];
+  optional string overview = 3 [json_name = "overview"];
+}
+
+message PromptUploadRef {
+  string upload_id = 1 [json_name = "uploadId"];
+}
+
+message StackTrace {
+  repeated .agent.v1.CallFrame call_frames = 1 [json_name = "callFrames"];
+  optional string raw_stack_trace = 2 [json_name = "rawStackTrace"];
+}
+
+message CallFrame {
+  optional string function_name = 1 [json_name = "functionName"];
+  optional string url = 2 [json_name = "url"];
+  optional int32 line_number = 3 [json_name = "lineNumber"];
+  optional int32 column_number = 4 [json_name = "columnNumber"];
+}
+
+enum SelectedPluginCapabilityType {
+  SELECTED_PLUGIN_CAPABILITY_TYPE_UNSPECIFIED = 0;
+  SELECTED_PLUGIN_CAPABILITY_TYPE_COMMAND = 1;
+  SELECTED_PLUGIN_CAPABILITY_TYPE_SKILL = 2;
+  SELECTED_PLUGIN_CAPABILITY_TYPE_SUBAGENT = 3;
+}

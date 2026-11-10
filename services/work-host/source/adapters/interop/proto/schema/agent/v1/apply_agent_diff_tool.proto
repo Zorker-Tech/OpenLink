@@ -1,0 +1,48 @@
+// agent.v1 — agent/v1/apply_agent_diff_tool messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message ApplyAgentDiffResult {
+  oneof result {
+    .agent.v1.ApplyAgentDiffSuccess success = 1 [json_name = "success"];
+    .agent.v1.ApplyAgentDiffError error = 2 [json_name = "error"];
+  }
+}
+
+message ApplyAgentDiffSuccess {
+  repeated .agent.v1.AppliedAgentChange applied_changes = 1 [json_name = "appliedChanges"];
+}
+
+message ApplyAgentDiffError {
+  string error = 1 [json_name = "error"];
+  repeated .agent.v1.AppliedAgentChange applied_changes = 2 [json_name = "appliedChanges"];
+}
+
+message AppliedAgentChange {
+  string path = 1 [json_name = "path"];
+  .agent.v1.AppliedAgentChange.ChangeType change_type = 2 [json_name = "changeType"];
+  optional string before_content = 3 [json_name = "beforeContent"];
+  optional string after_content = 4 [json_name = "afterContent"];
+  optional string error = 5 [json_name = "error"];
+  optional string message_for_model = 6 [json_name = "messageForModel"];
+  enum ChangeType {
+    CHANGE_TYPE_UNSPECIFIED = 0;
+    CHANGE_TYPE_CREATED = 1;
+    CHANGE_TYPE_MODIFIED = 2;
+    CHANGE_TYPE_DELETED = 3;
+  }
+}
+
+message ApplyAgentDiffToolCall {
+  optional .agent.v1.ApplyAgentDiffArgs args = 1 [json_name = "args"];
+  optional .agent.v1.ApplyAgentDiffResult result = 2 [json_name = "result"];
+}
+
+message ApplyAgentDiffArgs {
+  string agent_id = 1 [json_name = "agentId"];
+}

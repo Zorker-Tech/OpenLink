@@ -1,0 +1,63 @@
+// agent.v1 — agent/v1/read_exec messages, enums and services.
+//
+// Generated from this repository's schema (source/adapters/interop/proto/schema) by
+// `pnpm --filter @slate/work-host schema:generate`. Wire-visible names come from the schema.
+
+syntax = "proto3";
+
+package agent.v1;
+
+message ReadArgs {
+  string path = 1 [json_name = "path"];
+  string tool_call_id = 2 [json_name = "toolCallId"];
+  optional int32 offset = 4 [json_name = "offset"];
+  optional uint32 limit = 5 [json_name = "limit"];
+  optional string encoding_hint = 6 [json_name = "encodingHint"];
+}
+
+message ReadResult {
+  oneof result {
+    .agent.v1.ReadSuccess success = 1 [json_name = "success"];
+    .agent.v1.ReadError error = 2 [json_name = "error"];
+    .agent.v1.ReadRejected rejected = 3 [json_name = "rejected"];
+    .agent.v1.ReadFileNotFound file_not_found = 4 [json_name = "fileNotFound"];
+    .agent.v1.ReadPermissionDenied permission_denied = 5 [json_name = "permissionDenied"];
+    .agent.v1.ReadInvalidFile invalid_file = 6 [json_name = "invalidFile"];
+  }
+}
+
+message ReadSuccess {
+  string path = 1 [json_name = "path"];
+  int32 total_lines = 3 [json_name = "totalLines"];
+  int64 file_size = 4 [json_name = "fileSize"];
+  bool truncated = 6 [json_name = "truncated"];
+  optional bytes output_blob_id = 7 [json_name = "outputBlobId"];
+  bool range_applied = 8 [json_name = "rangeApplied"];
+  oneof output {
+    string content = 2 [json_name = "content"];
+    bytes data = 5 [json_name = "data"];
+  }
+}
+
+message ReadError {
+  string path = 1 [json_name = "path"];
+  string error = 2 [json_name = "error"];
+}
+
+message ReadRejected {
+  string path = 1 [json_name = "path"];
+  string reason = 2 [json_name = "reason"];
+}
+
+message ReadFileNotFound {
+  string path = 1 [json_name = "path"];
+}
+
+message ReadPermissionDenied {
+  string path = 1 [json_name = "path"];
+}
+
+message ReadInvalidFile {
+  string path = 1 [json_name = "path"];
+  string reason = 2 [json_name = "reason"];
+}

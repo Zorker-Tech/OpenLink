@@ -1,0 +1,49 @@
+/**
+ * An agent awaiting a review, the gate a reviewed turn waits at, the tool an agent speaks with, the errors
+ * a reader is shown and the router that picks a transcript's mirror.
+ */
+
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import { awaitingReasonFor, AUTO_REVIEW_AWAITING_TAB_ID } from "../../source/host/extensions/auto-review/slate-auto-review-awaiting.ts";
+import { createAutoReviewGate, AutoReviewApprovalWaitError } from "../../source/host/runner/auto-review-gate.ts";
+import { defineCommunicateTool, SLATE_TOOL_MARKER } from "../../source/adapters/interop/agent/communicate-tool-adapter.ts";
+import { MAX_TRAY_ACTIONS, PROVIDER_OVERLOAD_ERROR_TITLE, SLATE_WEBSITE_ORIGIN } from "../../source/host/transcript/agent-run-error.ts";
+import { MirrorRouter } from "../../source/host/transcript/mirror/transcript-mirror-router.ts";
+
+describe("an agent whose review is waiting", () => {
+  it("is shown in the tab the platform keeps for it", () => {
+    assert.equal(AUTO_REVIEW_AWAITING_TAB_ID, "auto-review");
+    assert.equal(typeof awaitingReasonFor, "function");
+  });
+});
+
+describe("the gate a reviewed turn waits at", () => {
+  it("names the error a pending approval raises", () => {
+    assert.equal(typeof createAutoReviewGate, "function");
+    assert.equal(typeof AutoReviewApprovalWaitError, "function");
+  });
+});
+
+describe("the tool an agent speaks with", () => {
+  it("is defined rather than imported for effect, and marks its own calls", () => {
+    assert.equal(typeof defineCommunicateTool, "function");
+    assert.equal(typeof SLATE_TOOL_MARKER, "string");
+  });
+});
+
+describe("the errors a reader is shown", () => {
+  it("names an overloaded provider, bounds the tray actions and points at our own site", () => {
+    assert.equal(PROVIDER_OVERLOAD_ERROR_TITLE, "Model provider is overloaded");
+    assert.equal(MAX_TRAY_ACTIONS, 3);
+    assert.equal(SLATE_WEBSITE_ORIGIN, "https://slate.invalid");
+    assert.equal(SLATE_WEBSITE_ORIGIN.includes("cursor"), false);
+  });
+});
+
+describe("which mirror a transcript is written through", () => {
+  it("is a router the host can build", () => {
+    assert.equal(typeof MirrorRouter, "function");
+  });
+});

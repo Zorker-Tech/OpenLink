@@ -1,0 +1,11 @@
+# Wire schemas required to communicate with external services. These do not define Slate's Work API.
+#
+# These files are inputs to the generated bindings in generated/ and are never edited by hand.
+#
+# Wire-visible names belong to the counterpart protocols, so the
+# schema is not linted for naming style: a rename here is a protocol change, not a cleanup.
+version: v2
+modules:
+  - path: schema
+lint:
+  use: []
