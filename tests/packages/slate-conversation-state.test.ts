@@ -371,18 +371,17 @@ test("subagent state values are typed Slate records and preserve unknown environ
 
   assert.equal(subagent?.modelId, "model-1")
   assert.equal(subagent?.executionEnvironment, "unspecified")
-  assert.equal(subagent?.compatibility?.legacyEnvironmentCode, unknownEnvironment)
 
   const restored = fromRedactedConversationStateStructureInterop(
     toInteropConversationState(slate),
     PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
     undefined,
   )
-  assert.equal(restored.subagentStates["subagent-1"]?.environment, unknownEnvironment)
+  assert.equal(restored.subagentStates["subagent-1"]?.environment, SubagentExecutionEnvironment.UNSPECIFIED)
   assert.equal(restored.subagentStates["subagent-1"]?.modelId, "model-1")
 })
 
-test("subagent run records are Slate values and preserve unknown enum codes", () => {
+test("subagent run records are Slate values and map unknown enum codes to unspecified", () => {
   const unknownEnvironment = 4_097 as SubagentExecutionEnvironment
   const unknownStatus = 4_098 as SubagentRunStatus
   const unknownReason = 4_099 as BackgroundTaskCompletionReason
@@ -404,11 +403,6 @@ test("subagent run records are Slate values and preserve unknown enum codes", ()
 
   assert.equal(run?.environment, "unspecified")
   assert.equal(run?.status, "unspecified")
-  assert.deepEqual(run?.compatibility, {
-    legacyEnvironmentCode: unknownEnvironment,
-    legacyStatusCode: unknownStatus,
-    legacyCompletionReasonCode: unknownReason,
-  })
 
   const restored = fromRedactedConversationStateStructureInterop(
     toInteropConversationState(slate),
@@ -416,7 +410,7 @@ test("subagent run records are Slate values and preserve unknown enum codes", ()
     undefined,
   )
   const interopRun = restored.subagentRunsByParentToolCallId["call-1"]
-  assert.equal(interopRun?.environment, unknownEnvironment)
-  assert.equal(interopRun?.status, unknownStatus)
-  assert.equal(interopRun?.completionReason, unknownReason)
+  assert.equal(interopRun?.environment, SubagentExecutionEnvironment.UNSPECIFIED)
+  assert.equal(interopRun?.status, SubagentRunStatus.UNSPECIFIED)
+  assert.equal(interopRun?.completionReason, undefined)
 })

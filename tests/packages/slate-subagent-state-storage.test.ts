@@ -1,23 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 
-import {
-  AgentMode,
-  CloudSubagentReference,
-  ConversationStateStructure,
-  SubagentExecutionEnvironment,
-  SubagentPersistedState,
-  TargetMachine,
-  NewCloudVmTarget,
-} from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
-import {
-  SubagentType,
-  SubagentTypeCustom,
-} from "../../source/adapters/interop/proto/generated/agent/v1/subagents_pb.ts"
-import {
-  createSlateSubagentPersistedStateSerde,
-  deserializeSlateSubagentPersistedStateInterop,
-} from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
+import { createSlateSubagentPersistedStateSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
 import { createSlateSubagentPersistedState } from "../../source/packages/agent/subagent-persisted-state.ts"
 import { createSlateSubagentType, SlateSubagentKind } from "../../source/packages/agent/subagent-type.ts"
 import { DataClassification, PrivacyCapability } from "../../source/packages/redaction/classification.ts"
@@ -174,52 +158,6 @@ test("Slate subagent state v1 placement migrates to the Slate v2 vocabulary", ()
     baseBranch: "release",
     environmentBuildId: "build-4",
   })
-})
-
-test("legacy subagent blobs upgrade to Slate while preserving enum values and nested unknown fields", () => {
-  const nested = new ConversationStateStructure({
-    turns: [new Uint8Array([9])],
-    mode: 987654 as AgentMode,
-  })
-  ConversationStateStructure.runtime.bin.onUnknownField(nested, 111, 0, new Uint8Array([2]))
-  const type = new SubagentType({ type: { case: "custom", value: new SubagentTypeCustom({ name: "helper" }) } })
-  SubagentType.runtime.bin.onUnknownField(type, 112, 0, new Uint8Array([3]))
-  const cloudAgent = new CloudSubagentReference({ bcId: "worker-1", transcriptPath: "/tmp/transcript.jsonl" })
-  CloudSubagentReference.runtime.bin.onUnknownField(cloudAgent, 113, 0, new Uint8Array([4]))
-  const legacy = new SubagentPersistedState({
-    conversationState: nested,
-    createdTimestampMs: BigInt(30),
-    lastUsedTimestampMs: BigInt(40),
-    subagentType: type,
-    modelId: "model-2",
-    environment: 987 as SubagentExecutionEnvironment,
-    cloudSubagent: cloudAgent,
-    firstClassBcId: "agent-1",
-    cloudRequestedEnvironmentBuildId: "build-2",
-    machine: new TargetMachine({ machine: { case: "newCloudVm", value: new NewCloudVmTarget({ baseBranch: "main" }) } }),
-  })
-  SubagentPersistedState.runtime.bin.onUnknownField(legacy, 114, 0, new Uint8Array([5]))
-
-  const codec = serde()
-  const imported = codec.deserialize(legacy.toBinary())
-  assert.equal(imported.executionEnvironment, "unspecified")
-  assert.equal(imported.compatibility?.legacyEnvironmentCode, 987)
-  assert.equal(imported.compatibility?.legacyUnknownFields?.length, 4)
-  assert.equal(imported.subagentType?.kind, "custom")
-  assert.equal(imported.subagentType?.customName, "helper")
-
-  const migrated = codec.serialize(imported)
-  assert.ok(new TextDecoder().decode(migrated).startsWith("SLATE-AGENT-SUBAGENT-STATE\n"))
-  const runnerView = deserializeSlateSubagentPersistedStateInterop(migrated)
-  assert.equal(runnerView.environment, 987)
-  assert.equal(runnerView.createdTimestampMs, BigInt(30))
-  assert.equal(runnerView.lastUsedTimestampMs, BigInt(40))
-  assert.equal(runnerView.conversationState?.mode, AgentMode.UNSPECIFIED)
-  assert.equal(runnerView.cloudSubagent?.bcId, "worker-1")
-  assert.equal(SubagentPersistedState.runtime.bin.listUnknownFields(runnerView).length, 1)
-  assert.equal(ConversationStateStructure.runtime.bin.listUnknownFields(runnerView.conversationState!).length, 1)
-  assert.equal(SubagentType.runtime.bin.listUnknownFields(runnerView.subagentType!).length, 1)
-  assert.equal(CloudSubagentReference.runtime.bin.listUnknownFields(runnerView.cloudSubagent!).length, 1)
 })
 
 test("malformed Slate subagent envelopes are rejected instead of parsed as legacy records", () => {

@@ -115,16 +115,11 @@ test("a blank first completion still leaves a bounded, explicit run record", () 
   })
 })
 
-test("an unknown persisted enum survives progress and retires on explicit Slate updates", () => {
+test("progress keeps the existing Slate status and an explicit update replaces it", () => {
   const existingRun = {
     parentToolCallId: "call-1",
     environment: "unspecified" as const,
     status: "unspecified" as const,
-    compatibility: {
-      legacyEnvironmentCode: 41,
-      legacyStatusCode: 42,
-      legacyCompletionReasonCode: 43,
-    },
   }
   const progress = updateSlateSubagentRun({
     completion: completion({ status: "unknown", reason: undefined }),
@@ -133,7 +128,7 @@ test("an unknown persisted enum survives progress and retires on explicit Slate 
     existingRun,
     completedTimestampMs: 45n,
   })
-  assert.deepEqual(progress.compatibility, existingRun.compatibility)
+  assert.equal(progress.status, "unspecified")
 
   const updated = updateSlateSubagentRun({
     completion: completion({ status: "success", reason: "task-progress" }),
@@ -142,26 +137,7 @@ test("an unknown persisted enum survives progress and retires on explicit Slate 
     existingRun,
     completedTimestampMs: 46n,
   })
-  assert.equal(updated.compatibility, undefined)
   assert.equal(updated.status, "success")
   assert.equal(updated.environment, "cloud")
   assert.equal(updated.completionReason, "task-progress")
-})
-
-test("unknown completion enum codes carry into durable run migration metadata", () => {
-  const updated = updateSlateSubagentRun({
-    completion: completion({
-      status: "unknown",
-      reason: undefined,
-      compatibility: { legacyStatusCode: 52, legacyReasonCode: 57 },
-    }),
-    parentToolCallId: "call-1",
-    completedTimestampMs: 47n,
-  })
-
-  assert.equal(updated.status, "unspecified")
-  assert.deepEqual(updated.compatibility, {
-    legacyStatusCode: 52,
-    legacyCompletionReasonCode: 57,
-  })
 })

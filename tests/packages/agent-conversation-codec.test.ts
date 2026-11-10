@@ -1,13 +1,11 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { ConversationStateStructure, SubagentPersistedState } from "../../source/adapters/interop/proto/generated/agent/v1/agent_pb.ts"
 import {
   createSlateAgentConversationCodec,
   interopAgentConversationCheckpointFromSlate,
 } from "../../source/adapters/interop/agent/agent-conversation-protobuf-adapter.ts"
 import { createSlateSubagentPersistedStateSerde } from "../../source/adapters/interop/agent/agent-state-message-serdes-adapter.ts"
-import { slateCheckpointSubagentFromInterop } from "../../source/adapters/interop/agent/slate-agent-checkpoint-interop-adapter.ts"
 import { runnerConversationStateFromStoreCheckpoint } from "../../source/adapters/interop/agent/turn-agent-run-projection-adapter.ts"
 import { getBlobId } from "../../source/packages/agent-kv/blob-store.ts"
 import { toHex } from "../../source/packages/agent-kv/serde.ts"
@@ -108,39 +106,6 @@ test("subconversation resolution returns Slate checkpoint records for inline and
   assert.equal(resolved.referenced?.createdTimestampMs, 12n)
   assert.equal(resolved.referenced?.lastUsedTimestampMs, 34n)
   assert.equal(resolved.referenced?.subagentType, undefined)
-})
-
-test("unknown fields in referenced subagent records survive the Slate V2 projection", () => {
-  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
-    const result = new Uint8Array(bytes.length + 3)
-    result.set(bytes)
-    result.set([0xa0, 0x06, 0x07], bytes.length)
-    return result
-  }
-  const nestedConversation = ConversationStateStructure.fromBinary(appendUnknownVarint(
-    new ConversationStateStructure({ turns: [new Uint8Array([1, 2])] }).toBinary(),
-  ))
-  const legacySubagent = SubagentPersistedState.fromBinary(appendUnknownVarint(
-    new SubagentPersistedState({ conversationState: nestedConversation, createdTimestampMs: 7n }).toBinary(),
-  ))
-  const subagentUnknown = SubagentPersistedState.runtime.bin.listUnknownFields(legacySubagent)
-  const nestedUnknown = ConversationStateStructure.runtime.bin.listUnknownFields(legacySubagent.conversationState!)
-
-  const slateSubagent = slateCheckpointSubagentFromInterop(legacySubagent)
-  assert.equal(slateSubagent.compatibility?.legacyUnknownFields?.length, 2)
-  const checkpoint = {
-    ...createEmptySlateConversationCheckpointV2(),
-    subagents: { child: slateSubagent },
-  }
-  assert.equal(isSlateConversationCheckpointV2(checkpoint), true)
-
-  const roundTrip = interopAgentConversationCheckpointFromSlate(checkpoint)
-  const restored = roundTrip.subagentStates.child!
-  assert.deepEqual(SubagentPersistedState.runtime.bin.listUnknownFields(restored), subagentUnknown)
-  assert.deepEqual(
-    ConversationStateStructure.runtime.bin.listUnknownFields(restored.conversationState!),
-    nestedUnknown,
-  )
 })
 
 test("full conversation hydration returns Slate shell values from stored shell blobs", async () => {

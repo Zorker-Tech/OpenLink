@@ -111,7 +111,6 @@ import {
 import {
   createSlateSubagentPersistedState,
   type SlateSubagentPersistedState,
-  type SlateSubagentStateCompatibility,
 } from "./subagent-persisted-state.ts"
 import { isEqual } from "./array-equality.ts"
 import { createCounter, createHistogram } from "../metrics/index.ts"
@@ -837,42 +836,6 @@ type SubagentTracking = {
   readonly lastUsedAtMs: bigint;
   readonly subagentType?: SlateSubagentType | undefined;
 };
-
-function subagentCompatibilityAfterTransition(args: {
-  readonly existing: SlateSubagentPersistedState | undefined;
-  readonly update: Partial<SlateSubagentPersistedState>;
-  readonly nextType: SlateSubagentType;
-}): SlateSubagentStateCompatibility | undefined {
-  const { existing, update, nextType } = args;
-  const existingCompatibility = existing?.compatibility
-  const updatedCompatibility = update.compatibility
-  const environmentChanged = existing !== undefined && update.executionEnvironment !== undefined &&
-    update.executionEnvironment !== existing.executionEnvironment
-  const typeChanged = existing !== undefined && (
-    existing.subagentType === undefined ||
-    slateSubagentTypeName(existing.subagentType) !== slateSubagentTypeName(nextType)
-  )
-  const rawFields = [
-    ...(existingCompatibility?.legacyUnknownFields ?? []),
-    ...(updatedCompatibility?.legacyUnknownFields ?? []),
-  ]
-  const seen = new Set<string>()
-  const legacyUnknownFields = rawFields.filter(field => {
-    if (typeChanged && field.path[0] !== undefined && "field" in field.path[0] && field.path[0].field === "subagentType") return false
-    const id = JSON.stringify([field.path, field.number, field.wireType, field.dataHex])
-    if (seen.has(id)) return false
-    seen.add(id)
-    return true
-  })
-  const legacyEnvironmentCode = environmentChanged
-    ? undefined
-    : updatedCompatibility?.legacyEnvironmentCode ?? existingCompatibility?.legacyEnvironmentCode
-  if (legacyUnknownFields.length === 0 && legacyEnvironmentCode === undefined) return undefined
-  return {
-    ...(legacyEnvironmentCode === undefined ? {} : { legacyEnvironmentCode }),
-    ...(legacyUnknownFields.length === 0 ? {} : { legacyUnknownFields }),
-  }
-}
 
 function subagentTracking(
   subagentStates: ReadonlyMap<string, SubagentTracking>,
@@ -2848,7 +2811,6 @@ These images can be copied for use in other locations.
     const knownState = this.subagentStates.get(subagentId);
     const createdAt = knownState?.createdAtMs ?? now;
     const persistedModelId = state.modelId ?? knownState?.modelId;
-    const compatibility = subagentCompatibilityAfterTransition({ existing: knownState, update: state, nextType: subagentType });
     const updatedState = createSlateSubagentPersistedState({
       ...knownState,
       ...state,
@@ -2856,7 +2818,6 @@ These images can be copied for use in other locations.
       lastUsedAtMs: now,
       subagentType,
       modelId: persistedModelId!,
-      compatibility,
     });
     this.subagentStates.set(subagentId, updatedState);
     const typeName = slateSubagentTypeName(subagentType);

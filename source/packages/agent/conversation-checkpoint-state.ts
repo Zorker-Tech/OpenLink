@@ -96,7 +96,6 @@ export type SlateCheckpointSubagentKind =
 export interface SlateCheckpointSubagentType {
   readonly kind: SlateCheckpointSubagentKind
   readonly customName?: string
-  readonly compatibility?: { readonly legacyDiscriminator?: string }
 }
 
 export type SlateCheckpointTargetMachine =
@@ -113,10 +112,6 @@ export interface SlateCheckpointSubagent {
   readonly type?: SlateCheckpointSubagentType
   readonly modelId?: string
   readonly environment: SlateCheckpointEnvironment
-  readonly compatibility?: {
-    readonly legacyEnvironmentCode?: number
-    readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[]
-  }
   readonly cloudWorker?: { readonly workerId: string; readonly transcriptPath?: string }
   readonly firstClassCloudRunId?: string
   readonly requestedRuntimeBuildId?: string
@@ -134,11 +129,6 @@ export interface SlateCheckpointSubagentRun {
   readonly outputPath?: string
   readonly completedAtMs?: string
   readonly completionReason?: SlateCheckpointCompletionReason
-  readonly compatibility?: {
-    readonly legacyEnvironmentCode?: number
-    readonly legacyStatusCode?: number
-    readonly legacyCompletionReasonCode?: number
-  }
 }
 
 export interface SlateCheckpointGoal {
@@ -387,12 +377,8 @@ function isCommunicationTurn(value: unknown): boolean {
 }
 
 function isSubagentType(value: unknown): boolean {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["kind", "customName", "compatibility"]) ||
-      !isText(value.kind) || !SUBAGENT_KINDS.has(value.kind) || !isOptionalText(value.customName)) return false
-  return value.compatibility === undefined || (
-    isRecord(value.compatibility) && hasOnlyKeys(value.compatibility, ["legacyDiscriminator"]) &&
-    isOptionalText(value.compatibility.legacyDiscriminator)
-  )
+  return isRecord(value) && hasOnlyKeys(value, ["kind", "customName"]) &&
+    isText(value.kind) && SUBAGENT_KINDS.has(value.kind) && isOptionalText(value.customName)
 }
 
 function isTargetMachine(value: unknown): boolean {
@@ -418,7 +404,7 @@ function isTargetMachine(value: unknown): boolean {
 function isSubagent(value: unknown): value is SlateCheckpointSubagent {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "conversation", "createdAtMs", "lastUsedAtMs", "type", "modelId", "environment",
-    "compatibility", "cloudWorker", "firstClassCloudRunId", "requestedRuntimeBuildId", "targetMachine",
+    "cloudWorker", "firstClassCloudRunId", "requestedRuntimeBuildId", "targetMachine",
   ])) return false
   if (!isDecimal(value.createdAtMs) || !isDecimal(value.lastUsedAtMs) || !isText(value.environment) ||
       !ENVIRONMENTS.has(value.environment) ||
@@ -426,12 +412,6 @@ function isSubagent(value: unknown): value is SlateCheckpointSubagent {
       !isOptionalText(value.requestedRuntimeBuildId) ||
       (value.type !== undefined && !isSubagentType(value.type)) ||
       (value.targetMachine !== undefined && !isTargetMachine(value.targetMachine))) return false
-  if (value.compatibility !== undefined &&
-      (!isRecord(value.compatibility) || !hasOnlyKeys(value.compatibility, ["legacyEnvironmentCode", "legacyUnknownFields"]) ||
-        (value.compatibility.legacyEnvironmentCode !== undefined &&
-          (!isEnumCode(value.compatibility.legacyEnvironmentCode) || value.environment !== "unspecified")) ||
-        (value.compatibility.legacyUnknownFields !== undefined &&
-          (!Array.isArray(value.compatibility.legacyUnknownFields) || !value.compatibility.legacyUnknownFields.every(isUnknownField))))) return false
   if (value.cloudWorker !== undefined) {
     const worker = value.cloudWorker
     if (!isRecord(worker) || !hasOnlyKeys(worker, ["workerId", "transcriptPath"]) ||
@@ -444,24 +424,12 @@ function isSubagentRun(value: unknown): boolean {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     "parentCallId", "subagentId", "environment", "status",
     "title", "detail", "transcriptPath", "outputPath", "completedAtMs", "completionReason",
-    "compatibility",
   ])) return false
   return isText(value.parentCallId) && isOptionalText(value.subagentId) && isText(value.environment) &&
     ENVIRONMENTS.has(value.environment) && isText(value.status) && RUN_STATUSES.has(value.status) &&
     isOptionalText(value.title) && isOptionalText(value.detail) && isOptionalText(value.transcriptPath) &&
     isOptionalText(value.outputPath) && isDecimalOptional(value.completedAtMs) &&
-    (value.completionReason === undefined || value.completionReason === "task-progress" || value.completionReason === "worker-reparented") &&
-    (value.compatibility === undefined || (
-      isRecord(value.compatibility) && hasOnlyKeys(value.compatibility, [
-        "legacyEnvironmentCode", "legacyStatusCode", "legacyCompletionReasonCode",
-      ]) &&
-      (value.compatibility.legacyEnvironmentCode === undefined ||
-        (isEnumCode(value.compatibility.legacyEnvironmentCode) && value.environment === "unspecified")) &&
-      (value.compatibility.legacyStatusCode === undefined ||
-        (isEnumCode(value.compatibility.legacyStatusCode) && value.status === "unspecified")) &&
-      (value.compatibility.legacyCompletionReasonCode === undefined ||
-        (isEnumCode(value.compatibility.legacyCompletionReasonCode) && value.completionReason === undefined))
-    ))
+    (value.completionReason === undefined || value.completionReason === "task-progress" || value.completionReason === "worker-reparented")
 }
 
 function isGoal(value: unknown): boolean {

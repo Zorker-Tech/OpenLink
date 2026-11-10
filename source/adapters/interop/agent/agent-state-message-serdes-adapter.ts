@@ -233,7 +233,6 @@ import {
 import type {
   SlateSubagentPersistedState,
   SlateSubagentConversationSnapshot,
-  SlateSubagentStateCompatibility,
 } from "../../../packages/agent/subagent-persisted-state.ts"
 import type { SlateSubagentRunState } from "../../../packages/agent/subagent-run-state.ts"
 import { createSlateSubagentPersistedState } from "../../../packages/agent/subagent-persisted-state.ts"
@@ -4139,7 +4138,6 @@ export function deserializeSlateUserMessageInterop(bytes: Uint8Array): UserMessa
 interface StoredSlateSubagentType {
   readonly kind: string
   readonly customName?: string
-  readonly compatibility?: { readonly legacyDiscriminator?: string }
 }
 
 interface StoredSlateSubagentState {
@@ -4153,7 +4151,6 @@ interface StoredSlateSubagentState {
   readonly firstClassAgentId?: string
   readonly requestedRuntimeBuildId?: string
   readonly targetMachine?: Record<string, unknown>
-  readonly compatibility?: SlateSubagentStateCompatibility
 }
 
 interface StoredSlateSubagentStateEnvelope {
@@ -4167,13 +4164,9 @@ function isRecordValue(value: unknown): value is Record<string, unknown> {
 }
 
 function isStoredSlateSubagentType(value: unknown): value is StoredSlateSubagentType {
-  if (!isRecordValue(value) || !hasOnlyKeys(value, ["kind", "customName", "compatibility"]) ||
-      typeof value.kind !== "string" || value.kind.length === 0 ||
-      (value.customName !== undefined && typeof value.customName !== "string")) return false
-  if (value.compatibility === undefined) return true
-  return isRecordValue(value.compatibility) &&
-    hasOnlyKeys(value.compatibility, ["legacyDiscriminator"]) &&
-    (value.compatibility.legacyDiscriminator === undefined || typeof value.compatibility.legacyDiscriminator === "string")
+  return isRecordValue(value) && hasOnlyKeys(value, ["kind", "customName"]) &&
+    typeof value.kind === "string" && value.kind.length > 0 &&
+    (value.customName === undefined || typeof value.customName === "string")
 }
 
 function isStoredLegacyTaskTargetMachine(value: unknown): boolean {
@@ -4242,22 +4235,13 @@ function taskTargetMachineFromV1(value: unknown): TaskTargetMachine {
   }
 }
 
-function isStoredSlateSubagentCompatibility(value: unknown): value is SlateSubagentStateCompatibility {
-  return isRecordValue(value) && hasOnlyKeys(value, ["legacyEnvironmentCode", "legacyUnknownFields"]) &&
-    (value.legacyEnvironmentCode === undefined ||
-      (typeof value.legacyEnvironmentCode === "number" && Number.isInteger(value.legacyEnvironmentCode) &&
-        value.legacyEnvironmentCode >= -2_147_483_648 && value.legacyEnvironmentCode <= 2_147_483_647)) &&
-    (value.legacyUnknownFields === undefined ||
-      (Array.isArray(value.legacyUnknownFields) && value.legacyUnknownFields.every(isStepUnknownField)))
-}
-
 function isStoredSlateSubagentStateEnvelope(value: unknown): value is StoredSlateSubagentStateEnvelope {
   if (!isRecordValue(value) || !hasOnlyKeys(value, ["format", "version", "state"]) ||
       value.format !== SUBAGENT_STATE_STORAGE_FORMAT || (value.version !== 1 && value.version !== 2) || !isRecordValue(value.state)) return false
   const state = value.state
   return hasOnlyKeys(state, [
     "createdAtMs", "lastUsedAtMs", "executionEnvironment", "conversationSnapshot", "subagentType", "modelId",
-    "cloudAgent", "firstClassAgentId", "requestedRuntimeBuildId", "targetMachine", "compatibility",
+    "cloudAgent", "firstClassAgentId", "requestedRuntimeBuildId", "targetMachine",
   ]) &&
     typeof state.createdAtMs === "string" && isUnsignedTimestamp(state.createdAtMs) &&
     typeof state.lastUsedAtMs === "string" && isUnsignedTimestamp(state.lastUsedAtMs) &&
@@ -4272,8 +4256,7 @@ function isStoredSlateSubagentStateEnvelope(value: unknown): value is StoredSlat
     (state.requestedRuntimeBuildId === undefined || typeof state.requestedRuntimeBuildId === "string") &&
     (state.targetMachine === undefined || (value.version === 1
       ? isStoredLegacyTaskTargetMachine(state.targetMachine)
-      : isStoredSlateTargetMachine(state.targetMachine))) &&
-    (state.compatibility === undefined || isStoredSlateSubagentCompatibility(state.compatibility))
+      : isStoredSlateTargetMachine(state.targetMachine)))
 }
 
 function isUnsignedTimestamp(value: string): boolean {
@@ -4327,7 +4310,6 @@ export function createSlateSubagentPersistedStateSerde(privacyMode: PrivacyMode)
           ...(state.firstClassAgentId === undefined ? {} : { firstClassAgentId: state.firstClassAgentId }),
           ...(state.requestedRuntimeBuildId === undefined ? {} : { requestedRuntimeBuildId: state.requestedRuntimeBuildId }),
           ...(state.targetMachine === undefined ? {} : { targetMachine: state.targetMachine }),
-          ...(state.compatibility === undefined ? {} : { compatibility: state.compatibility }),
         },
       }
       if (state.conversationSnapshot !== undefined && !isStoredSlateValue(envelope.state.conversationSnapshot)) {
@@ -4339,21 +4321,11 @@ export function createSlateSubagentPersistedStateSerde(privacyMode: PrivacyMode)
       if (state.targetMachine !== undefined && !isStoredSlateTargetMachine(state.targetMachine)) {
         throw new TypeError("Slate subagent target machine is invalid")
       }
-      if (state.compatibility !== undefined && !isStoredSlateSubagentCompatibility(state.compatibility)) {
-        throw new TypeError("Slate subagent compatibility data is invalid")
-      }
       return utf8Serde.serialize(`SLATE-AGENT-SUBAGENT-STATE\n${JSON.stringify(envelope)}`)
     },
     deserialize(bytes) {
       if (!beginsWith(bytes, SUBAGENT_STATE_STORAGE_HEADER)) {
-        const legacy = SubagentPersistedState.fromBinary(bytes)
-        const redacted = toRedactedSubagentPersistedState(legacy, privacyMode)
-        const projected = fromRedactedSubagentPersistedStateInterop(
-          redacted as never,
-          PrivacyCapability.UNSAFE_ALWAYS_ALLOWED,
-          undefined,
-        )
-        return fromInteropSubagentPersistedState(projected, privacyMode, collectStepUnknownFields(legacy))
+        throw new TypeError("Stored Slate subagent state envelope is unsupported")
       }
       let parsed: unknown
       try {
@@ -4392,9 +4364,6 @@ export function createSlateSubagentPersistedStateSerde(privacyMode: PrivacyMode)
           : { targetMachine: parsed.version === 1
             ? taskTargetMachineFromV1(parsed.state.targetMachine)
             : parsed.state.targetMachine as TaskTargetMachine }),
-        ...(parsed.state.compatibility === undefined
-          ? {}
-          : { compatibility: parsed.state.compatibility as SlateSubagentStateCompatibility }),
       })
     },
     getBlobType() {

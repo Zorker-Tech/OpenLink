@@ -14,7 +14,7 @@ describe("Slate subagent types", () => {
     assert.equal(slateSubagentTypeName(createSlateSubagentType("computer-use")), "computerUse")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("explore")), "explore")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("shell")), "shell")
-    assert.equal(slateSubagentTypeName(createSlateSubagentType("browser-use")), "browserUse")
+    assert.equal(slateSubagentTypeName(createSlateSubagentType("browser-use")), "browser-use")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("debug")), "debug")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("guide")), "cursor-guide")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("video-review")), "videoReview")
@@ -28,9 +28,6 @@ describe("Slate subagent types", () => {
     assert.equal(slateSubagentTypeName(custom), "releaseBot")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("custom")), "unknown")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("unknown")), "unknown")
-    assert.equal(slateSubagentTypeName(createSlateSubagentType("unknown", {
-      compatibility: { legacyDiscriminator: "futureType" },
-    })), "futureType")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("future-product-kind")), "future-product-kind")
   })
 
