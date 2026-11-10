@@ -1,4 +1,4 @@
-/** Maps Slate task records to external tool messages and owns the legacy storage importer. */
+/** Maps Slate task records to external tool messages. */
 
 import { TodoItem as InteropTodoItem, TodoStatus } from "../proto/generated/agent/v1/todo_tool_pb.ts";
 import {
@@ -17,8 +17,7 @@ import {
   type SlateStoredTodoItem,
   type SlateTodoStatus,
 } from "../../../packages/agent/tools/core/todo/contracts.ts";
-import type { SlateCheckpointUnknownField } from "../../../packages/agent/conversation-checkpoint-state.ts";
-import { fromHex, toHex, utf8Serde } from "../../../packages/agent-kv/serde.ts";
+import { utf8Serde } from "../../../packages/agent-kv/serde.ts";
 import type { Serde } from "../../../packages/agent-kv/serde-contracts.ts";
 
 export type RedactedInteropTodoItem = Parameters<typeof fromRedactedTodoItem>[0];
@@ -50,62 +49,16 @@ const SLATE_TODO_STATUSES = new Set<SlateTodoStatus>([
   "unspecified",
 ]);
 
-function collectTodoUnknownFields(item: InteropTodoItem): SlateCheckpointUnknownField[] {
-  return item.getType().runtime.bin.listUnknownFields(item).map(field => ({
-    path: [],
-    number: field.no,
-    wireType: field.wireType,
-    dataHex: toHex(field.data),
-  }));
-}
-
-function restoreTodoUnknownFields(
-  item: InteropTodoItem,
-  fields: readonly SlateCheckpointUnknownField[] | undefined,
-): void {
-  for (const field of fields ?? []) {
-    if (field.path.length !== 0) throw new TypeError("Todo legacy-field path must be empty")
-    InteropTodoItem.runtime.bin.onUnknownField(
-      item,
-      field.number,
-      field.wireType as Parameters<typeof InteropTodoItem.runtime.bin.onUnknownField>[2],
-      fromHex(field.dataHex),
-    );
-  }
-}
-
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   return Object.keys(value).every(key => keys.includes(key));
-}
-
-function isTodoUnknownField(value: unknown): value is SlateCheckpointUnknownField {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const field = value as Record<string, unknown>;
-  return hasOnlyKeys(field, ["path", "number", "wireType", "dataHex"]) &&
-    Array.isArray(field.path) && field.path.length === 0 &&
-    Number.isInteger(field.number) && (field.number as number) >= 1 && (field.number as number) <= 536_870_911 &&
-    Number.isInteger(field.wireType) && (field.wireType as number) >= 0 && (field.wireType as number) <= 5 &&
-    typeof field.dataHex === "string" && /^(?:[0-9a-f]{2})*$/.test(field.dataHex);
 }
 
 function isStoredTodoEnvelope(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const envelope = value as Record<string, unknown>;
-  if (!hasOnlyKeys(envelope, ["format", "version", "item", "compatibility"]) ||
+  if (!hasOnlyKeys(envelope, ["format", "version", "item"]) ||
       envelope.format !== TODO_STORAGE_FORMAT || envelope.version !== 1 ||
       envelope.item === null || typeof envelope.item !== "object" || Array.isArray(envelope.item)) return false;
-  if (envelope.compatibility !== undefined) {
-    if (envelope.compatibility === null || typeof envelope.compatibility !== "object" || Array.isArray(envelope.compatibility)) return false;
-    const compatibility = envelope.compatibility as Record<string, unknown>;
-    if (!hasOnlyKeys(compatibility, ["legacyStatusCode", "legacyUnknownFields"]) ||
-        (compatibility.legacyStatusCode !== undefined &&
-          (!Number.isSafeInteger(compatibility.legacyStatusCode) ||
-            (compatibility.legacyStatusCode as number) < -2_147_483_648 ||
-            (compatibility.legacyStatusCode as number) > 2_147_483_647)) ||
-        (compatibility.legacyUnknownFields !== undefined &&
-          (!Array.isArray(compatibility.legacyUnknownFields) ||
-            !compatibility.legacyUnknownFields.every(isTodoUnknownField)))) return false;
-  }
   const item = envelope.item as Record<string, unknown>;
   if (!hasOnlyKeys(item, ["id", "content", "status", "createdAt", "updatedAt", "dependencies"]) ||
       typeof item.id !== "string" || item.content === null || typeof item.content !== "object" || Array.isArray(item.content) ||
@@ -143,45 +96,27 @@ export function toInteropTodoStatus(status: SlateTodoStatus): TodoStatus {
 export function fromInteropTodoItem(
   item: InteropTodoItem,
 ): SlateTodoItem {
-  const status = fromInteropTodoStatus(item.status)
-  const legacyStatusCode = status === "unspecified" && item.status !== TodoStatus.UNSPECIFIED
-    ? item.status
-    : undefined
-  const legacyUnknownFields = collectTodoUnknownFields(item)
   return {
     id: item.id,
     content: item.content,
-    status,
+    status: fromInteropTodoStatus(item.status),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     ...(item.dependencies.length === 0 ? {} : { dependencies: [...item.dependencies] }),
-    ...(legacyStatusCode === undefined && legacyUnknownFields.length === 0
-      ? {}
-      : {
-          compatibility: {
-            ...(legacyStatusCode === undefined ? {} : { legacyStatusCode }),
-            ...(legacyUnknownFields.length === 0 ? {} : { legacyUnknownFields }),
-          },
-        }),
   };
 }
 
 export function toInteropTodoItem(item: SlateTodoItem | SlateStoredTodoItem): InteropTodoItem {
-  const compatibility = "compatibility" in item ? item.compatibility : undefined
-  const interop = new InteropTodoItem({
+  return new InteropTodoItem({
     id: item.id,
     content: item.content instanceof RedactedString
       ? item.content.unwrap(PrivacyCapability.UNSAFE_ALWAYS_ALLOWED)
       : item.content,
-    status: item.status === "unspecified" && compatibility?.legacyStatusCode !== undefined
-      ? compatibility.legacyStatusCode as TodoStatus
-      : toInteropTodoStatus(item.status),
+    status: toInteropTodoStatus(item.status),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     ...(item.dependencies === undefined ? {} : { dependencies: [...item.dependencies] }),
   });
-  restoreTodoUnknownFields(interop, compatibility?.legacyUnknownFields);
-  return interop;
 }
 
 export function fromRedactedInteropTodoItem(
@@ -213,7 +148,7 @@ export function readStoredTodos(
       return fromRedactedInteropTodoItem(stored as RedactedInteropTodoItem)
     }
     const slate = stored as SlateTodoItem | SlateStoredTodoItem
-    return slate.content instanceof RedactedString || "compatibility" in slate
+    return slate.content instanceof RedactedString
       ? slateTodoItemWithReadableContent(slate as SlateStoredTodoItem)
       : cloneSlateTodoItem(slate as SlateTodoItem)
   }))
@@ -228,15 +163,6 @@ function serializeSlateTodoItem(item: SlateStoredTodoItem): Uint8Array {
   }
   if (item.dependencies !== undefined && (!Array.isArray(item.dependencies) || !item.dependencies.every(value => typeof value === "string"))) {
     throw new TypeError("Slate todo dependencies must be text values")
-  }
-  const legacyStatusCode = item.compatibility?.legacyStatusCode
-  if (legacyStatusCode !== undefined && (!Number.isSafeInteger(legacyStatusCode) ||
-      legacyStatusCode < -2_147_483_648 || legacyStatusCode > 2_147_483_647)) {
-    throw new TypeError("Slate todo compatibility status is invalid")
-  }
-  const unknownFields = item.compatibility?.legacyUnknownFields
-  if (unknownFields?.some(field => !isTodoUnknownField(field))) {
-    throw new TypeError("Slate todo compatibility fields are invalid")
   }
   const content = item.content instanceof RedactedString
     ? {
@@ -260,14 +186,6 @@ function serializeSlateTodoItem(item: SlateStoredTodoItem): Uint8Array {
       updatedAt: item.updatedAt.toString(),
       ...(item.dependencies === undefined ? {} : { dependencies: [...item.dependencies] }),
     },
-    ...(legacyStatusCode === undefined && (unknownFields === undefined || unknownFields.length === 0)
-      ? {}
-      : {
-          compatibility: {
-            ...(legacyStatusCode === undefined ? {} : { legacyStatusCode }),
-            ...(unknownFields === undefined || unknownFields.length === 0 ? {} : { legacyUnknownFields: unknownFields }),
-          },
-        }),
   }
   return utf8Serde.serialize(`SLATE-AGENT-TODO\n${JSON.stringify(envelope)}`)
 }
@@ -276,52 +194,26 @@ export function createSlateTodoItemSerde(privacyMode: PrivacyMode): Serde<SlateS
   return {
     serialize: serializeSlateTodoItem,
     deserialize(bytes) {
-      if (bytes.length >= TODO_STORAGE_HEADER.length &&
-          TODO_STORAGE_HEADER.every((byte, index) => bytes[index] === byte)) {
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(utf8Serde.deserialize(bytes.subarray(TODO_STORAGE_HEADER.length)))
-        } catch (error) {
-          throw new TypeError("Stored Slate todo is not valid JSON", { cause: error })
-        }
-        if (!isStoredTodoEnvelope(parsed)) throw new TypeError("Stored Slate todo envelope is invalid")
-        const envelope = parsed as {
-          readonly item: StoredSlateTodoItemV1
-          readonly compatibility?: NonNullable<SlateStoredTodoItem["compatibility"]>
-        }
-        const item = envelope.item
-        return {
-          id: item.id,
-          content: createRedactedString(item.content.text, item.content.classification, item.content.fieldName, privacyMode),
-          status: item.status,
-          createdAt: BigInt(item.createdAt),
-          updatedAt: BigInt(item.updatedAt),
-          ...(item.dependencies === undefined ? {} : { dependencies: [...item.dependencies] }),
-          ...(envelope.compatibility === undefined ? {} : { compatibility: envelope.compatibility }),
-        }
+      if (bytes.length < TODO_STORAGE_HEADER.length ||
+          !TODO_STORAGE_HEADER.every((byte, index) => bytes[index] === byte)) {
+        throw new TypeError("Stored Slate todo envelope is unsupported")
       }
-
-      const legacy = InteropTodoItem.fromBinary(bytes)
-      const unknownFields = collectTodoUnknownFields(legacy)
-      const status = fromInteropTodoStatus(legacy.status)
-      const legacyStatusCode = status === "unspecified" && legacy.status !== TodoStatus.UNSPECIFIED
-        ? legacy.status
-        : undefined
-      const compatibility = legacyStatusCode === undefined && unknownFields.length === 0
-        ? undefined
-        : {
-            ...(legacyStatusCode === undefined ? {} : { legacyStatusCode }),
-            ...(unknownFields.length === 0 ? {} : { legacyUnknownFields: unknownFields }),
-          }
-      const redacted = toRedactedTodoItem(legacy, privacyMode)
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(utf8Serde.deserialize(bytes.subarray(TODO_STORAGE_HEADER.length)))
+      } catch (error) {
+        throw new TypeError("Stored Slate todo is not valid JSON", { cause: error })
+      }
+      if (!isStoredTodoEnvelope(parsed)) throw new TypeError("Stored Slate todo envelope is invalid")
+      const envelope = parsed as { readonly item: StoredSlateTodoItemV1 }
+      const item = envelope.item
       return {
-        id: legacy.id,
-        content: redacted.content as unknown as SlateStoredTodoItem["content"],
-        status,
-        createdAt: legacy.createdAt,
-        updatedAt: legacy.updatedAt,
-        ...(legacy.dependencies.length === 0 ? {} : { dependencies: [...legacy.dependencies] }),
-        ...(compatibility === undefined ? {} : { compatibility }),
+        id: item.id,
+        content: createRedactedString(item.content.text, item.content.classification, item.content.fieldName, privacyMode),
+        status: item.status,
+        createdAt: BigInt(item.createdAt),
+        updatedAt: BigInt(item.updatedAt),
+        ...(item.dependencies === undefined ? {} : { dependencies: [...item.dependencies] }),
       }
     },
     getBlobType() {

@@ -96,7 +96,6 @@ export interface SlatePlanDraftTodo {
   readonly createdAt: bigint
   readonly updatedAt: bigint
   readonly dependencies?: readonly string[]
-  readonly compatibility?: { readonly legacyStatusCode?: number }
 }
 
 export interface SlatePlanDraftPhase {
@@ -509,7 +508,6 @@ export function createSlatePlanDraftToolCall(input: {
   const cloneTodo = (todo: SlatePlanDraftTodo): SlatePlanDraftTodo => ({
     ...todo,
     ...(todo.dependencies === undefined ? {} : { dependencies: [...todo.dependencies] }),
-    ...(todo.compatibility === undefined ? {} : { compatibility: { ...todo.compatibility } }),
   })
   const args = input.args === undefined
     ? undefined

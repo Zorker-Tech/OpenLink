@@ -60,18 +60,6 @@ export function createTodoItem(
   existingTodo?: SlateTodoItem,
   now = BigInt(Date.now()),
 ): SlateTodoItem {
-  const legacyStatusCode = existingTodo?.status === rawTodo.status
-    ? existingTodo.compatibility?.legacyStatusCode
-    : undefined
-  const legacyUnknownFields = existingTodo?.compatibility?.legacyUnknownFields
-  const compatibility = legacyStatusCode === undefined && legacyUnknownFields === undefined
-    ? undefined
-    : {
-        ...(legacyStatusCode === undefined ? {} : { legacyStatusCode }),
-        ...(legacyUnknownFields === undefined
-          ? {}
-          : { legacyUnknownFields: legacyUnknownFields.map(field => ({ ...field, path: field.path.map(step => ({ ...step })) })) }),
-      }
   return {
     id: rawTodo.id,
     content: rawTodo.content || existingTodo?.content || "",
@@ -79,7 +67,6 @@ export function createTodoItem(
     createdAt: existingTodo?.createdAt ?? now,
     updatedAt: now,
     ...(existingTodo?.dependencies === undefined ? {} : { dependencies: existingTodo.dependencies }),
-    ...(compatibility === undefined ? {} : { compatibility }),
   };
 }
 

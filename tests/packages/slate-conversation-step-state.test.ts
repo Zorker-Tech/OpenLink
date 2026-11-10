@@ -1213,21 +1213,9 @@ test("invalid Slate summary operation data is rejected before it can be stored",
 })
 
 test("plan-draft tool calls use Slate plan, phase, todo, and result values", () => {
-  const appendUnknownVarint = (bytes: Uint8Array): Uint8Array => {
-    const result = new Uint8Array(bytes.length + 3)
-    result.set(bytes)
-    result.set([0xa0, 0x06, 0x07], bytes.length)
-    return result
-  }
   const todos = [
-    TodoItem.fromBinary(appendUnknownVarint(new TodoItem({
-      id: "todo-1",
-      content: "Read files",
-      status: TodoStatus.PENDING,
-      createdAt: 12n,
-      updatedAt: 14n,
-    }).toBinary())),
-    new TodoItem({ id: "todo-2", content: "Unknown state", status: 99 as TodoStatus, createdAt: 13n, updatedAt: 15n }),
+    new TodoItem({ id: "todo-1", content: "Read files", status: TodoStatus.PENDING, createdAt: 12n, updatedAt: 14n }),
+    new TodoItem({ id: "todo-2", content: "Second task", status: TodoStatus.IN_PROGRESS, createdAt: 13n, updatedAt: 15n }),
   ]
   const args = new CreatePlanArgs({
     plan: "# Release plan",
@@ -1279,17 +1267,12 @@ test("plan-draft tool calls use Slate plan, phase, todo, and result values", () 
   assert.equal(plan.tool.args?.content, "# Release plan")
   assert.equal(plan.tool.args?.isProjectPlan, true)
   assert.equal(plan.tool.args?.phases[0]?.name, "Prepare")
-  assert.equal(plan.tool.args?.todos[1]?.status, "unspecified")
-  assert.equal(plan.tool.args?.todos[1]?.compatibility?.legacyStatusCode, 99)
+  assert.equal(plan.tool.args?.todos[1]?.status, "in_progress")
   assert.deepEqual(plan.tool.result, { kind: "created", planUri: "slate-plan://release" })
   const roundTrip = toInteropConversationStep(serde.deserialize(serde.serialize(plan)))
   if (roundTrip.message.case !== "toolCall" || roundTrip.message.value.tool.case !== "createPlanToolCall") {
     assert.fail("expected a reconstructed plan-draft call")
   }
-  assert.deepEqual(
-    TodoItem.runtime.bin.listUnknownFields(roundTrip.message.value.tool.value.args!.todos[0]!),
-    TodoItem.runtime.bin.listUnknownFields(todos[0]!),
-  )
 
   const redactedStep = fromInteropToolCallStep(toRedactedToolCallInterop(new ToolCall({
     tool: { case: "createPlanToolCall", value: new CreatePlanToolCall({ args }) },

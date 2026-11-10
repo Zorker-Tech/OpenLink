@@ -1,15 +1,9 @@
 import type { Context } from "../../../../context/context.ts";
 import { PrivacyCapability } from "../../../../redaction/classification.ts";
 import { RedactedString } from "../../../../redaction/redacted-values.ts";
-import type { SlateCheckpointUnknownField } from "../../../conversation-checkpoint-state.ts";
 
 export type SlateTodoStatus = "pending" | "in_progress" | "completed" | "cancelled" | "unspecified";
 export type EditableTodoStatus = Exclude<SlateTodoStatus, "unspecified">;
-
-export interface SlateTodoCompatibility {
-  readonly legacyStatusCode?: number;
-  readonly legacyUnknownFields?: readonly SlateCheckpointUnknownField[];
-}
 
 /** A task record owned by Slate. External tool messages are mapped at their adapter boundary. */
 export interface SlateTodoItem {
@@ -19,44 +13,23 @@ export interface SlateTodoItem {
   readonly createdAt: bigint;
   readonly updatedAt: bigint;
   readonly dependencies?: readonly string[] | undefined;
-  /** Import metadata for preserving forward-compatible values until their Slate mapping is known. */
-  readonly compatibility?: SlateTodoCompatibility | undefined;
 }
 
-/** Durable todo value after applying the active privacy policy and migration metadata. */
+/** Durable todo value after applying the active privacy policy. */
 export interface SlateStoredTodoItem extends Omit<SlateTodoItem, "content"> {
   readonly content: string | RedactedString;
 }
 
-function cloneTodoCompatibility(compatibility: SlateTodoCompatibility | undefined): SlateTodoCompatibility | undefined {
-  return compatibility === undefined
-    ? undefined
-    : {
-        ...(compatibility.legacyStatusCode === undefined ? {} : { legacyStatusCode: compatibility.legacyStatusCode }),
-        ...(compatibility.legacyUnknownFields === undefined
-          ? {}
-          : {
-              legacyUnknownFields: compatibility.legacyUnknownFields.map(field => ({
-                ...field,
-                path: field.path.map(step => ({ ...step })),
-              })),
-            }),
-      }
-}
-
 /** Copies every mutable field so state references cannot be changed through a caller-owned array. */
 export function cloneSlateTodoItem(item: SlateTodoItem): SlateTodoItem {
-  const compatibility = cloneTodoCompatibility(item.compatibility)
   return {
     ...item,
     ...(item.dependencies === undefined ? {} : { dependencies: [...item.dependencies] }),
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
 /** Exposes todo content to a domain operation only after an explicit capability check. */
 export function slateTodoItemWithReadableContent(item: SlateStoredTodoItem): SlateTodoItem {
-  const compatibility = cloneTodoCompatibility(item.compatibility)
   return {
     id: item.id,
     content: item.content instanceof RedactedString
@@ -66,16 +39,13 @@ export function slateTodoItemWithReadableContent(item: SlateStoredTodoItem): Sla
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     ...(item.dependencies === undefined ? {} : { dependencies: [...item.dependencies] }),
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
 export function cloneSlateStoredTodoItem(item: SlateStoredTodoItem): SlateStoredTodoItem {
-  const compatibility = cloneTodoCompatibility(item.compatibility)
   return {
     ...item,
     ...(item.dependencies === undefined ? {} : { dependencies: [...item.dependencies] }),
-    ...(compatibility === undefined ? {} : { compatibility }),
   }
 }
 
