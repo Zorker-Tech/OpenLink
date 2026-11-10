@@ -159,14 +159,14 @@ test("the context keys carry one fact each", () => {
 });
 
 test("a user message's images take the descriptions given for them", () => {
-  const message = { role: "user", content: [{ type: "text", text: "look" }, { type: "image", providerOptions: { cursor: { existing: true } } }] };
+  const message = { role: "user", content: [{ type: "text", text: "look" }, { type: "image", providerOptions: { slate: { existing: true } } }] };
   const before = JSON.stringify(message);
   const stamped = stampImageDescriptionsOnMessage(message, [{ partIndex: 1, description: "a screenshot" }]);
   assert.deepEqual(stamped, {
     role: "user",
     content: [
       { type: "text", text: "look" },
-      { type: "image", providerOptions: { cursor: { existing: true, imageDescription: "a screenshot" } } },
+      { type: "image", providerOptions: { slate: { existing: true, imageDescription: "a screenshot" } } },
     ],
   });
   // The message the caller owns is untouched.
@@ -185,7 +185,7 @@ test("a tool result's image descriptions are merged under their index", () => {
     content: [{
       type: "tool-result",
       experimental_content: [{ type: "text" }, { type: "image" }],
-      providerOptions: { cursor: { imageDescriptions: { 0: "known" }, other: 1 } },
+      providerOptions: { slate: { imageDescriptions: { 0: "known" }, other: 1 } },
     }],
   };
   const before = JSON.stringify(message);
@@ -197,7 +197,7 @@ test("a tool result's image descriptions are merged under their index", () => {
     content: [{
       type: "tool-result",
       experimental_content: [{ type: "text" }, { type: "image" }],
-      providerOptions: { cursor: { imageDescriptions: { 0: "known", 1: "described" }, other: 1 } },
+      providerOptions: { slate: { imageDescriptions: { 0: "known", 1: "described" }, other: 1 } },
     }],
   });
 });
@@ -410,8 +410,8 @@ test("a response frame is settled as the answer a prompt surface hands back", as
     id: "assistant-1",
     role: "assistant",
     content: [
-      { type: "reasoning", text: "thinking", providerOptions: { cursor: { modelName: "thinking-model" } }, signature: "sig-1" },
-      { type: "redacted-reasoning", data: "secret", providerOptions: { cursor: { modelName: "other-model" } } },
+      { type: "reasoning", text: "thinking", providerOptions: { slate: { modelName: "thinking-model" } }, signature: "sig-1" },
+      { type: "redacted-reasoning", data: "secret", providerOptions: { slate: { modelName: "other-model" } } },
       { type: "reasoning", text: "plain" },
       { type: "text", text: "the answer" },
       { type: "tool-call", toolCallId: "call-1", toolName: "tool-1", args: { a: 1 } },
@@ -575,8 +575,8 @@ test("image descriptions the stream reports are written onto the messages that w
   const result = executor.stream(createContext(), undefined, [], {});
   await collect(result.fullStream);
   assert.deepEqual(builder.getMessages(), [
-    { role: "user", content: [{ type: "text", text: "look" }, { type: "image", providerOptions: { cursor: { imageDescription: "a screen" } } }] },
-    { role: "tool", content: [{ type: "tool-result", experimental_content: [{ type: "image" }], providerOptions: { cursor: { imageDescriptions: { 0: "a tool image" } } } }] },
+    { role: "user", content: [{ type: "text", text: "look" }, { type: "image", providerOptions: { slate: { imageDescription: "a screen" } } }] },
+    { role: "tool", content: [{ type: "tool-result", experimental_content: [{ type: "image" }], providerOptions: { slate: { imageDescriptions: { 0: "a tool image" } } } }] },
   ]);
 });
 

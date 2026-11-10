@@ -41,8 +41,8 @@ export interface ReadToolSuccessModel {
   path: string
   readRange?: ReadRangeModel
   includeLineNumbers?: boolean
-  relatedCursorRulePaths?: string[]
-  relatedCursorRules?: ReadRuleModel[]
+  relatedRulePaths?: string[]
+  relatedRules?: ReadRuleModel[]
 }
 
 export type ReadToolResultModel = {

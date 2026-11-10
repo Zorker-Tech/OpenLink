@@ -20,8 +20,8 @@ export function collectAttachedSkillBlocksFromConversation(
 
 function carriesSummaryMarker(providerOptions: unknown): boolean {
   if (typeof providerOptions !== "object" || providerOptions === null) return false
-  const cursor = (providerOptions as Record<string, unknown>).cursor
-  return typeof cursor === "object" && cursor !== null && (cursor as Record<string, unknown>).isSummary === true
+  const slateOptions = (providerOptions as Record<string, unknown>).slate
+  return typeof slateOptions === "object" && slateOptions !== null && (slateOptions as Record<string, unknown>).isSummary === true
 }
 
 function readableTextSegments(content: unknown): string[] {

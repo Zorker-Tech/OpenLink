@@ -82,11 +82,11 @@ test("every kind of user part becomes the part it names, or an empty text", () =
 test("an assistant message keeps its text, calls, reasoning and provider metadata", () => {
   const message = jsonOf(coreMessageToProto({
     role: "assistant",
-    providerOptions: { cursor: { modelProviderMessageId: "msg-1", openaiPhase: null } },
+    providerOptions: { slate: { modelProviderMessageId: "msg-1", openaiPhase: null } },
     content: [
       { type: "text", text: "thinking out loud" },
       { type: "tool-call", toolCallId: "call-1", toolName: "Read", args: { path: "/a" } },
-      { type: "reasoning", text: "reason", signature: "sig", providerOptions: { cursor: { modelName: "model-x" } } },
+      { type: "reasoning", text: "reason", signature: "sig", providerOptions: { slate: { modelName: "model-x" } } },
       { type: "redacted-reasoning", data: "redacted" },
     ],
   }))
@@ -99,7 +99,7 @@ test("an assistant message keeps its text, calls, reasoning and provider metadat
 })
 
 test("a string assistant message has no parts, and an openai phase can be a word", () => {
-  const message = jsonOf(coreMessageToProto({ role: "assistant", content: "answer", providerOptions: { cursor: { openaiPhase: "final" } } }))
+  const message = jsonOf(coreMessageToProto({ role: "assistant", content: "answer", providerOptions: { slate: { openaiPhase: "final" } } }))
   assert.equal(message.text, "answer")
   assert.equal(message.openaiPhase, "final")
 })
@@ -201,7 +201,7 @@ test("provider options on a part are exactly the ones the protocol understands",
       text: "hi",
       providerOptions: {
         anthropic: { cacheControl: { type: "ephemeral" } },
-        cursor: { imageDescription: "described", imageDescriptions: { "0": "first", bad: "ignored" } },
+        slate: { imageDescription: "described", imageDescriptions: { "0": "first", bad: "ignored" } },
       },
     }],
   }))
@@ -210,10 +210,10 @@ test("provider options on a part are exactly the ones the protocol understands",
   })
   const empty = jsonOf(coreMessageToProto({
     role: "user",
-    content: [{ type: "text", text: "hi", providerOptions: { cursor: { imageDescription: "", imageDescriptions: { bad: "ignored" } } } }],
+    content: [{ type: "text", text: "hi", providerOptions: { slate: { imageDescription: "", imageDescriptions: { bad: "ignored" } } } }],
   }))
   assert.deepEqual(empty.parts.parts[0], { text: { text: "hi" } })
-  const emptyCursor = jsonOf(coreMessageToProto({ role: "user", content: [{ type: "text", text: "hi", providerOptions: { cursor: {} } }] }))
+  const emptyCursor = jsonOf(coreMessageToProto({ role: "user", content: [{ type: "text", text: "hi", providerOptions: { slate: {} } }] }))
   assert.deepEqual(emptyCursor.parts.parts[0], { text: { text: "hi" } })
 })
 
@@ -233,7 +233,7 @@ test("adjacent text parts are joined into the message's text", () => {
 test("a tool call keeps its explicit raw arguments and a result keeps its options", () => {
   const assistant = jsonOf(coreMessageToProto({
     role: "assistant",
-    content: [{ type: "tool-call", toolCallId: "call-1", toolName: "Read", args: { path: "/a" }, providerOptions: { cursor: { rawToolCallArgs: "raw-call" } } }],
+    content: [{ type: "tool-call", toolCallId: "call-1", toolName: "Read", args: { path: "/a" }, providerOptions: { slate: { rawToolCallArgs: "raw-call" } } }],
   }))
   assert.deepEqual(assistant.toolCalls[0], { toolCallId: "call-1", toolName: "Read", args: { path: "/a" }, rawToolCallArgs: "raw-call" })
   const tool = jsonOf(coreMessageToProto({

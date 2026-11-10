@@ -16,7 +16,7 @@ describe("Slate subagent types", () => {
     assert.equal(slateSubagentTypeName(createSlateSubagentType("shell")), "shell")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("browser-use")), "browser-use")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("debug")), "debug")
-    assert.equal(slateSubagentTypeName(createSlateSubagentType("guide")), "cursor-guide")
+    assert.equal(slateSubagentTypeName(createSlateSubagentType("guide")), "guide")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("video-review")), "videoReview")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("watch-video")), "watchVideo")
     assert.equal(slateSubagentTypeName(createSlateSubagentType("environment-setup")), "vmSetupHelper")

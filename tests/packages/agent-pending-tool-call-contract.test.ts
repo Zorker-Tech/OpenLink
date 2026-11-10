@@ -116,7 +116,7 @@ test("a call whose arguments are not an object is recorded without an inner tool
 
 test("the contracts a message carries are read back", () => {
   const contract = build()
-  const message = { providerOptions: { cursor: { pendingToolExecutionContracts: { "call-1": contract } } } }
+  const message = { providerOptions: { slate: { pendingToolExecutionContracts: { "call-1": contract } } } }
   const read = readPendingToolExecutionContracts(message)
   assert.equal(read.size, 1)
   assert.deepEqual(read.get("call-1"), contract)
@@ -125,12 +125,12 @@ test("the contracts a message carries are read back", () => {
 test("a message with no contracts carries none", () => {
   assert.equal(readPendingToolExecutionContracts({}).size, 0)
   assert.equal(readPendingToolExecutionContracts({ providerOptions: {} }).size, 0)
-  assert.equal(readPendingToolExecutionContracts({ providerOptions: { cursor: {} } }).size, 0)
-  assert.equal(readPendingToolExecutionContracts({ providerOptions: { cursor: { pendingToolExecutionContracts: null } } }).size, 0)
+  assert.equal(readPendingToolExecutionContracts({ providerOptions: { slate: {} } }).size, 0)
+  assert.equal(readPendingToolExecutionContracts({ providerOptions: { slate: { pendingToolExecutionContracts: null } } }).size, 0)
 })
 
 test("a contract that is not whole is not read back", () => {
-  const message = (value: unknown) => ({ providerOptions: { cursor: { pendingToolExecutionContracts: { "call-1": value } } } })
+  const message = (value: unknown) => ({ providerOptions: { slate: { pendingToolExecutionContracts: { "call-1": value } } } })
   assert.equal(readPendingToolExecutionContracts(message({ toolCallId: "call-1" })).size, 0)
   assert.equal(readPendingToolExecutionContracts(message({ toolCallId: "call-1", outerToolName: "Read" })).size, 0)
   assert.equal(readPendingToolExecutionContracts(message({
@@ -151,7 +151,7 @@ test("a contract that is not whole is not read back", () => {
 
 test("a contract stored under another call's id is not that call's", () => {
   const contract = build({ toolCallId: "call-2" })
-  const read = readPendingToolExecutionContracts({ providerOptions: { cursor: { pendingToolExecutionContracts: { "call-1": contract } } } })
+  const read = readPendingToolExecutionContracts({ providerOptions: { slate: { pendingToolExecutionContracts: { "call-1": contract } } } })
   assert.equal(read.size, 0)
 })
 
@@ -167,27 +167,27 @@ test("a pending message is enriched with a contract for each of its calls", () =
       { type: "text", text: "and then" },
     ],
   }), { resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: ["Read"], pendingToolCallStartedAtMs: 1_000 })
-  const parsed = JSON.parse(enriched) as { providerOptions: { cursor: { pendingToolExecutionContracts: Record<string, unknown>; pendingToolCallStartedAtMs: number } } }
-  assert.equal(Object.keys(parsed.providerOptions.cursor.pendingToolExecutionContracts).length, 1)
-  assert.equal(parsed.providerOptions.cursor.pendingToolCallStartedAtMs, 1_000)
+  const parsed = JSON.parse(enriched) as { providerOptions: { slate: { pendingToolExecutionContracts: Record<string, unknown>; pendingToolCallStartedAtMs: number } } }
+  assert.equal(Object.keys(parsed.providerOptions.slate.pendingToolExecutionContracts).length, 1)
+  assert.equal(parsed.providerOptions.slate.pendingToolCallStartedAtMs, 1_000)
 })
 
 test("a start time that is already there is kept", () => {
   const enriched = enrichPendingToolCallJson(JSON.stringify({
     role: "assistant",
     content: [],
-    providerOptions: { cursor: { pendingToolCallStartedAtMs: 500 } },
+    providerOptions: { slate: { pendingToolCallStartedAtMs: 500 } },
   }), { resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: [], pendingToolCallStartedAtMs: 1_000 })
-  const parsed = JSON.parse(enriched) as { providerOptions: { cursor: { pendingToolCallStartedAtMs: number } } }
-  assert.equal(parsed.providerOptions.cursor.pendingToolCallStartedAtMs, 500)
+  const parsed = JSON.parse(enriched) as { providerOptions: { slate: { pendingToolCallStartedAtMs: number } } }
+  assert.equal(parsed.providerOptions.slate.pendingToolCallStartedAtMs, 500)
 })
 
 test("a start time is not invented when the caller does not have one", () => {
   const enriched = enrichPendingToolCallJson(JSON.stringify({ role: "assistant", content: [] }), {
     resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: [],
   })
-  const parsed = JSON.parse(enriched) as { providerOptions: { cursor: { pendingToolCallStartedAtMs?: number } } }
-  assert.equal(parsed.providerOptions.cursor.pendingToolCallStartedAtMs, undefined)
+  const parsed = JSON.parse(enriched) as { providerOptions: { slate: { pendingToolCallStartedAtMs?: number } } }
+  assert.equal(parsed.providerOptions.slate.pendingToolCallStartedAtMs, undefined)
 })
 
 test("contracts already on the message are kept when it is enriched again", () => {
@@ -205,8 +205,8 @@ test("contracts already on the message are kept when it is enriched again", () =
     toolExecutionSet: executionSet(tools),
     allowedToolNames: ["Read"],
   })
-  const parsed = JSON.parse(second) as { providerOptions: { cursor: { pendingToolExecutionContracts: Record<string, unknown> } } }
-  assert.deepEqual(Object.keys(parsed.providerOptions.cursor.pendingToolExecutionContracts).sort(), ["call-1", "call-2"])
+  const parsed = JSON.parse(second) as { providerOptions: { slate: { pendingToolExecutionContracts: Record<string, unknown> } } }
+  assert.deepEqual(Object.keys(parsed.providerOptions.slate.pendingToolExecutionContracts).sort(), ["call-1", "call-2"])
 })
 
 test("a message that cannot be read is left as it was", () => {
@@ -217,8 +217,8 @@ test("a message with nothing to enrich is still given its contracts field", () =
   const enriched = enrichPendingToolCallJson(JSON.stringify({ role: "assistant", content: "a string body" }), {
     resolveIdentity, toolExecutionSet: executionSet(tools), allowedToolNames: [],
   })
-  const parsed = JSON.parse(enriched) as { providerOptions: { cursor: { pendingToolExecutionContracts: Record<string, unknown> } } }
-  assert.deepEqual(parsed.providerOptions.cursor.pendingToolExecutionContracts, {})
+  const parsed = JSON.parse(enriched) as { providerOptions: { slate: { pendingToolExecutionContracts: Record<string, unknown> } } }
+  assert.deepEqual(parsed.providerOptions.slate.pendingToolExecutionContracts, {})
 })
 
 // ---------------------------------------------------------------------------------------------

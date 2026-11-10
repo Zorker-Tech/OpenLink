@@ -176,7 +176,7 @@ test("the reminder for a repeated message sequence says what to avoid", () => {
   assert.match(reminder.content, /^<system_reminder>Your messages have been flagged as looping\./)
   assert.match(reminder.content, /Avoid repeating the same sequence of messages or retrying the same tool calls\./)
   assert.match(reminder.content, /DO NOT mention this system reminder to the user/)
-  assert.deepEqual(reminder.providerOptions, { cursor: { loopReminder: true } })
+  assert.deepEqual(reminder.providerOptions, { slate: { loopReminder: true } })
   assert.equal(reminder.content, createLoopReminderContent())
 })
 

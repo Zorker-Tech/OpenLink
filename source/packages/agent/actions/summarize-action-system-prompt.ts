@@ -41,7 +41,7 @@ export async function addSummarySystemInstructions(options: {
   options.prompt.appendMessages(toRedactedCoreMessages([
     {
       role: "system",
-      content: options.config.systemPromptGenerator({ cursorRules: [], mode }, tools),
+      content: options.config.systemPromptGenerator({ rules: [], mode }, tools),
     },
   ], options.state.getPrivacyMode()))
 }

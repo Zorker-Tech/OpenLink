@@ -104,13 +104,13 @@ describe("SendMessage behavior contract", () => {
       reply_to: "turn-1",
     });
 
-    const remoteAgent = await buildSlateSendMessage(context, { type: "slate-agent", bcId: " bc-7 " }, dependencies({
+    const remoteAgent = await buildSlateSendMessage(context, { type: "slate-agent", agentId: " bc-7 " }, dependencies({
       resolveCloudAgentTitle: async (_ctx, id) => {
         assert.equal(id, "bc-7");
         return "  Build helper  ";
       },
     }));
-    assert.deepEqual(remoteAgent, { type: "slate-agent", bcId: "bc-7", title: "Build helper" });
+    assert.deepEqual(remoteAgent, { type: "slate-agent", agentId: "bc-7", title: "Build helper" });
 
     const secret = await buildSlateSendMessage(context, {
       type: "secret-request",

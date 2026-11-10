@@ -96,7 +96,7 @@ function providerOptions(settings: unknown): InferenceProviderOptions | undefine
     });
     hasContent = true;
   }
-  const cursor = cursorOptions(fields.cursor);
+  const cursor = cursorOptions(fields.slate);
   if (cursor !== undefined) {
     converted.cursor = cursor;
     hasContent = true;
@@ -126,7 +126,7 @@ function reasoningPartToProto(part: LooseRecord, redacted: boolean): InferenceRe
 /** One tool call, with the arguments the platform already normalised. */
 function toolCallToProto(part: LooseRecord): InferenceToolCall {
     const call = new InferenceToolCall({ toolCallId: part.toolCallId, toolName: part.toolName });
-    const raw = part.providerOptions?.cursor?.rawToolCallArgs;
+    const raw = part.providerOptions?.slate?.rawToolCallArgs;
     applyToolCallArgs(call, part.args, typeof raw === "string" ? raw : undefined);
     return call;
 }
@@ -213,9 +213,9 @@ export function coreMessageToProto(entry: LooseRecord): InferenceCoreMessage {
 
 /** The ids and phase an assistant message carries from the provider, when it has them. */
 function responsesMetadata(entry: LooseRecord): { modelProviderMessageId?: string; openaiPhase?: string | null } {
-  const cursor = entry.providerOptions?.cursor;
-  const modelProviderMessageId = cursor?.modelProviderMessageId;
-  const openaiPhase = cursor?.openaiPhase;
+  const slateOptions = entry.providerOptions?.slate;
+  const modelProviderMessageId = slateOptions?.modelProviderMessageId;
+  const openaiPhase = slateOptions?.openaiPhase;
   return {
     ...(typeof modelProviderMessageId === "string" ? { modelProviderMessageId } : {}),
     ...(typeof openaiPhase === "string" || openaiPhase === null ? { openaiPhase } : {}),

@@ -35,7 +35,7 @@ type TranscriptContentPart = {
 interface TranscriptMessage {
   readonly role: string
   readonly content?: string | readonly TranscriptContentPart[]
-  readonly providerOptions?: { readonly cursor?: { readonly isSummary?: boolean } }
+  readonly providerOptions?: { readonly slate?: { readonly isSummary?: boolean } }
 }
 
 export interface TranscriptState {
@@ -114,7 +114,7 @@ const deserializeMessage = (blob: Uint8Array): TranscriptMessage => {
   return JSON.parse(json, json.includes(BINARY_TYPE_MARKER) ? jsonReviver : undefined) as TranscriptMessage
 }
 
-const isSummaryMessage = (message: TranscriptMessage): boolean => message.providerOptions?.cursor?.isSummary === true
+const isSummaryMessage = (message: TranscriptMessage): boolean => message.providerOptions?.slate?.isSummary === true
 
 /** A blob's size as a note says it: megabytes with one decimal. */
 const blobSizeNote = (byteLength: number): string => `${(byteLength / 1e6).toFixed(1)} MB`

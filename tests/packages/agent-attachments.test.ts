@@ -263,7 +263,7 @@ test("a type message becomes the name the platform uses", () => {
   assert.equal(subagentTypeNameFromInterop({ type: { case: "shell" } } as never), "shell")
   assert.equal(subagentTypeNameFromInterop({ type: { case: "browserUse" } } as never), "browser-use")
   assert.equal(subagentTypeNameFromInterop({ type: { case: "mediaReview" } } as never), "videoReview")
-  assert.equal(subagentTypeNameFromInterop({ type: { case: "cursorGuide" } } as never), "cursor-guide")
+  assert.equal(subagentTypeNameFromInterop({ type: { case: "cursorGuide" } } as never), "guide")
 })
 
 test("the media-watching types are one family", () => {

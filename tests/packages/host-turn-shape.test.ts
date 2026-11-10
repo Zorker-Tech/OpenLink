@@ -19,9 +19,9 @@ const user = (value: string) => ({ role: "user", content: value });
 const toolResult = (toolCallId: string, isError = false) => ({
   role: "tool",
   content: [{ type: "tool-result", toolCallId }],
-  providerOptions: { cursor: { highLevelToolCallResult: { isError } } },
+  providerOptions: { slate: { highLevelToolCallResult: { isError } } },
 });
-const reminder = () => ({ role: "assistant", content: [text("")], providerOptions: { cursor: { slateStartOfTurnAckReminder: true } } });
+const reminder = () => ({ role: "assistant", content: [text("")], providerOptions: { slate: { slateStartOfTurnAckReminder: true } } });
 
 describe("reading transcript messages", () => {
   it("accepts only objects with a role and content", () => {

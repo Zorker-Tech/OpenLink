@@ -39,10 +39,10 @@ test("hidden reminder construction retains the marker that tells transcript read
   const reminder = buildOpeningMessageReminder("a reminder")
   assert.equal(reminder.role, "user")
   assert.equal(isOpeningMessageReminder(reminder), true)
-  assert.deepEqual(reminder.providerOptions?.cursor, { slateOpeningMessageReminder: true })
-  assert.equal(isOpeningMessageReminder({ role: "user", content: "an earlier reminder", providerOptions: { cursor: { slateStartOfTurnAckReminder: true } } }), true)
+  assert.deepEqual(reminder.providerOptions?.slate, { slateOpeningMessageReminder: true })
+  assert.equal(isOpeningMessageReminder({ role: "user", content: "an earlier reminder", providerOptions: { slate: { slateStartOfTurnAckReminder: true } } }), true)
   assert.equal(isOpeningMessageReminder({ role: "user", content: "a reminder" }), false)
-  assert.equal(isOpeningMessageReminder({ role: "user", content: "a reminder", providerOptions: { cursor: { slateStartOfTurnAckReminder: "true" } } }), false)
+  assert.equal(isOpeningMessageReminder({ role: "user", content: "a reminder", providerOptions: { slate: { slateStartOfTurnAckReminder: "true" } } }), false)
 })
 
 test("only a text SendMessage call counts as an opening acknowledgement", () => {

@@ -20,7 +20,7 @@ import { PrivacyCapability } from "../../redaction/classification.ts"
 import type { Context } from "../../context/context.ts"
 import {
   projectInteropAgentSkills,
-  projectInteropCursorRules,
+  projectInteropRules,
   projectInteropEnvironment,
 } from "../../../adapters/interop/agent/user-info-input-adapter.ts"
 import { renderManuallyAttachedSkillsSection } from "../manually-attached-skills.ts"
@@ -272,7 +272,7 @@ function countCursorRuleTokens(params: {
   let ruleTokens = 0
   const workspacePaths = projectInteropEnvironment(params.requestContext.env)?.workspacePaths ?? []
   const { globalRules, agentRequestableRules, userRules } = categorizePromptRules(
-    projectInteropCursorRules(params.rules),
+    projectInteropRules(params.rules),
     workspacePaths,
     params.userInfoDisplayOptions?.agentType,
   )
@@ -297,7 +297,7 @@ function countAvailableSkillPromptUsage(params: {
 }): { readonly availableSkillTokens: number; readonly availableSkillCount: number } {
   const { section, skillCount, renderedEstimatedTokens, uncappedEstimatedTokens, omittedSkillCount, strategy } =
     buildAvailableSkillsPromptSection({
-      workspaceRules: projectInteropCursorRules(params.requestContext.rules),
+      workspaceRules: projectInteropRules(params.requestContext.rules),
       agentSkills: projectInteropAgentSkills(params.requestContext.agentSkills),
       displayOptions: params.userInfoDisplayOptions,
       env: projectInteropEnvironment(params.requestContext.env),

@@ -159,8 +159,8 @@ export const SHORTER_OUTPUT_RETRY_PROMPT = `
 	
 Additional instruction: Write a shorter summary that focuses on the highest-signal context. Avoid long code snippets and avoid unnecessarily exhaustive detail. Prioritize the most recent user intent, recent implementation work, and unresolved blockers.
 IMPORTANT: When listing user messages, you do not need to repeat each message verbatim. Concisely capture user intent.`
-export const SUMMARIZATION_CURSOR_PROVIDER_OPTIONS = {
-  cursor: {
+export const SUMMARIZATION_PROVIDER_OPTIONS = {
+  slate: {
     inferenceReason: "agent-summarization",
     featureType: "agenticComposerSummary",
   },
@@ -182,7 +182,7 @@ async function runSummarizationCall(
     {
       role: "user",
       content: prompt,
-      providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
+      providerOptions: SUMMARIZATION_PROVIDER_OPTIONS,
     },
   ])
   const callOptions = outputCap !== undefined ? { maxTokens: outputCap } : {}
@@ -1022,8 +1022,8 @@ export class SummarizationHandler {
       for (let index = summarized.length - 1; index >= 0; index--) {
         const entry = summarized[index]!
         // A carrier entry is the platform's own text, not something the user said.
-        const providerCursor = (entry.providerOptions as { cursor?: { isSummary?: unknown } } | undefined)?.cursor
-        if (entry.role === "user" && providerCursor?.isSummary !== true) {
+        const providerOptions = (entry.providerOptions as { slate?: { isSummary?: unknown } } | undefined)?.slate
+        if (entry.role === "user" && providerOptions?.isSummary !== true) {
           lastUserAt = index
           break
         }
@@ -1172,7 +1172,7 @@ export class SummarizationHandler {
       ? {
           role: "user",
           content: carrier,
-          providerOptions: { cursor: { isSummary: true } },
+          providerOptions: { slate: { isSummary: true } },
         }
       : {
           role: "user",
@@ -1181,7 +1181,7 @@ export class SummarizationHandler {
             { type: "text", text: PRESERVED_IMAGE_NOTE },
             toUserMessageImagePart(image),
           ],
-          providerOptions: { cursor: { isSummary: true } },
+          providerOptions: { slate: { isSummary: true } },
         }
     return {
       message: toRedactedCoreMessage(carrierMessage, mode),

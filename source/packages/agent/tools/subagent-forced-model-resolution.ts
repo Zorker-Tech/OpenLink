@@ -30,7 +30,7 @@ export async function resolveForcedSubagentModel(input: ForcedSubagentModelInput
       if (selectedComposerModel !== undefined) {
         return input.logForcedModel({
           candidateModelId: selectedComposerModel,
-          modelResolutionReason: "force_model_user_composer_selection",
+          modelResolutionReason: "force_model_user_agent_selection",
           reasonDetails: {
             forceModelId: input.forceModelId,
             userSelectedForcedComposerModelId: selectedComposerModel,

@@ -67,7 +67,7 @@ function withImageDescription(part: Loose, description: string): Loose {
     ...part,
     providerOptions: {
       ...part.providerOptions,
-      cursor: { ...part.providerOptions?.cursor, imageDescription: description },
+      slate: { ...part.providerOptions?.slate, imageDescription: description },
     },
   };
 }
@@ -78,8 +78,8 @@ function withToolResultImageDescription(part: Loose, expContentIndex: number, de
     ...part,
     providerOptions: {
       ...part.providerOptions,
-      cursor: {
-        ...part.providerOptions?.cursor,
+      slate: {
+        ...part.providerOptions?.slate,
         imageDescriptions: { ...known, [expContentIndex]: description },
       },
     },
@@ -109,7 +109,7 @@ function withToolResultImageDescriptions(content: readonly Loose[], entries: rea
     const part = stamped[entry.partIndex];
     if (part === undefined || part.type !== "tool-result" || !Array.isArray(part.experimental_content) ||
         part.experimental_content[entry.expContentIndex]?.type !== "image") continue;
-    const known = part.providerOptions?.cursor?.imageDescriptions ?? {};
+    const known = part.providerOptions?.slate?.imageDescriptions ?? {};
     stamped[entry.partIndex] = withToolResultImageDescription(part, entry.expContentIndex, entry.description, known);
     updated = true;
   }

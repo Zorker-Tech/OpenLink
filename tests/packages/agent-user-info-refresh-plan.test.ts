@@ -32,7 +32,7 @@ function priorUserInfo(
   ], PrivacyMode.UNSPECIFIED)
   return [{
     ...message!,
-    providerOptions: { cursor: metadata },
+    providerOptions: { slate: metadata },
   }] as unknown as readonly PriorUserInfoMessage[]
 }
 

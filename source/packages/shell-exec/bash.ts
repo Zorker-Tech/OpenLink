@@ -150,7 +150,7 @@ class BashState {
     let stateInPath: string | undefined;
     let stateOutPath: string | undefined;
     if (localFileTransport) {
-      temporaryDirectory = await mkdtemp(join(tmpdir(), "cursor-bash-state-"));
+      temporaryDirectory = await mkdtemp(join(tmpdir(), "slate-bash-state-"));
       stateInPath = join(temporaryDirectory, "state-in");
       stateOutPath = join(temporaryDirectory, "state-out");
       await writeFile(stateInPath, this.state, "utf8");

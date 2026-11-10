@@ -28,7 +28,7 @@ const TOOLS = getExecutableTools({
 const assistantMessage = (content: unknown[], options: { startedAtMs?: number; role?: string } = {}) => JSON.stringify({
   role: options.role ?? "assistant",
   content,
-  ...(options.startedAtMs === undefined ? {} : { providerOptions: { cursor: { pendingToolCallStartedAtMs: options.startedAtMs } } }),
+  ...(options.startedAtMs === undefined ? {} : { providerOptions: { slate: { pendingToolCallStartedAtMs: options.startedAtMs } } }),
 })
 
 const toolCall = (toolCallId: string, toolName: string) => ({ type: "tool-call", toolCallId, toolName, args: "{}" })
@@ -53,7 +53,7 @@ const readBack = (messages: ReturnType<typeof buildInterruptedPendingToolCallMes
 const toolMessageOf = (messages: ReturnType<typeof buildInterruptedPendingToolCallMessages>) => {
   const tool = readBack(messages).find(message => message.role === "tool")
   assert.notEqual(tool, undefined)
-  return tool as { content: Array<Record<string, unknown>>; providerOptions: { cursor: { highLevelToolCallResult: { output: string[]; isError: boolean; rawErrorMessages: string[] } } } }
+  return tool as { content: Array<Record<string, unknown>>; providerOptions: { slate: { highLevelToolCallResult: { output: string[]; isError: boolean; rawErrorMessages: string[] } } } }
 }
 
 const resolutionFor = (toolCallId: string, resolution: InterruptedPendingToolCallResolution["resolution"]) =>
@@ -136,8 +136,8 @@ test("several tool calls in one message are each answered", () => {
   const messages = harness([assistantMessage([toolCall("call-1", "Read"), toolCall("call-2", "Shell")])])
   const tool = toolMessageOf(messages)
   assert.deepEqual(tool.content.map(entry => entry.toolCallId), ["call-1", "call-2"])
-  assert.equal(tool.providerOptions.cursor.highLevelToolCallResult.rawErrorMessages.length, 2)
-  assert.equal(tool.providerOptions.cursor.highLevelToolCallResult.isError, true)
+  assert.equal(tool.providerOptions.slate.highLevelToolCallResult.rawErrorMessages.length, 2)
+  assert.equal(tool.providerOptions.slate.highLevelToolCallResult.isError, true)
 })
 
 test("an entry that is not a tool call is ignored", () => {
@@ -168,8 +168,8 @@ test("a recorded shell result is rendered as the result the model reads", () => 
   // The folder the session uses fills in the one the recorded result did not carry.
   assert.match(String(entry.result), /\/repo\/\.slate\/projects\/workspace-1\/terminals\/3\.txt/)
   // A recorded success is not an error, so it is not repeated among the raw error messages.
-  assert.deepEqual(tool.providerOptions.cursor.highLevelToolCallResult.rawErrorMessages, [])
-  assert.equal(tool.providerOptions.cursor.highLevelToolCallResult.isError, false)
+  assert.deepEqual(tool.providerOptions.slate.highLevelToolCallResult.rawErrorMessages, [])
+  assert.equal(tool.providerOptions.slate.highLevelToolCallResult.isError, false)
 })
 
 test("a recorded shell failure is reported as an error", () => {
@@ -179,14 +179,14 @@ test("a recorded shell failure is reported as an error", () => {
   })
   const tool = toolMessageOf(harness([assistantMessage([toolCall("call-1", "Shell")])], { resolutions }))
   assert.match(String((tool.content[0] as Record<string, unknown>).result), /^Declined: /)
-  assert.equal(tool.providerOptions.cursor.highLevelToolCallResult.isError, true)
+  assert.equal(tool.providerOptions.slate.highLevelToolCallResult.isError, true)
 })
 
 test("a recorded shell result with no outcome is an unknown error", () => {
   const resolutions = resolutionFor("call-1", { case: "shellResult", value: new ShellResult() })
   const tool = toolMessageOf(harness([assistantMessage([toolCall("call-1", "Shell")])], { resolutions }))
   assert.equal((tool.content[0] as Record<string, unknown>).result, "Unknown error")
-  assert.equal(tool.providerOptions.cursor.highLevelToolCallResult.isError, true)
+  assert.equal(tool.providerOptions.slate.highLevelToolCallResult.isError, true)
 })
 
 test("a recorded subagent result is rendered as a finished subagent's", () => {
@@ -196,7 +196,7 @@ test("a recorded subagent result is rendered as a finished subagent's", () => {
   })
   const tool = toolMessageOf(harness([assistantMessage([toolCall("call-1", "Task")])], { resolutions }))
   assert.equal((tool.content[0] as Record<string, unknown>).result, "Error: the subagent died")
-  assert.equal(tool.providerOptions.cursor.highLevelToolCallResult.isError, true)
+  assert.equal(tool.providerOptions.slate.highLevelToolCallResult.isError, true)
 })
 
 test("a record for another call does not answer this one", () => {
@@ -226,7 +226,7 @@ test("the answer is appended as a tool message the host can read", () => {
   const read = readBack(messages)
   assert.deepEqual(read.map(message => message.role), ["assistant", "tool", "assistant", "tool"])
   const tool = toolMessageOf(messages)
-  assert.deepEqual(tool.providerOptions.cursor.highLevelToolCallResult.output, tool.content.map(entry => entry.result))
+  assert.deepEqual(tool.providerOptions.slate.highLevelToolCallResult.output, tool.content.map(entry => entry.result))
 })
 
 test("every appended message is redacted for storage", () => {

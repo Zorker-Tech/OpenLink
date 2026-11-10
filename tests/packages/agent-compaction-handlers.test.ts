@@ -21,7 +21,7 @@ const message = (role: string, content: unknown, options: { isSummary?: boolean 
   toRedactedCoreMessage({
     role,
     content,
-    ...(options.isSummary === true ? { providerOptions: { cursor: { isSummary: true } } } : {}),
+    ...(options.isSummary === true ? { providerOptions: { slate: { isSummary: true } } } : {}),
   } as never, PrivacyMode.NO_STORAGE)
 
 const textOf = (entry: unknown) => {

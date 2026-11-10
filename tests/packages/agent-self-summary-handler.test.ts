@@ -400,7 +400,7 @@ test("the summary is stored as a carrier the platform can recognize", () => {
   const partitioned = summarizer.separateMessages(conversation(), {} as never)
   const built = summarizer.formatSummaryCarrier({ text: "the summary" }, partitioned, { skillBlocks: [] } as never)
   assert.equal(built.message.role, "user")
-  assert.equal((built.message.providerOptions as { cursor?: { isSummary?: boolean } }).cursor?.isSummary, true)
+  assert.equal((built.message.providerOptions as { slate?: { isSummary?: boolean } }).slate?.isSummary, true)
 })
 
 test("the conversation becomes the summary with the tail it kept", () => {

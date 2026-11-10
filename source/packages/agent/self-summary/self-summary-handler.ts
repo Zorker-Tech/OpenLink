@@ -42,7 +42,7 @@ import { prepareMessagesForCompaction } from "../../agent-summarization/prepare-
 import { collectAttachedSkillBlocksFromConversation } from "../../../adapters/interop/agent/compaction-skill-message-adapter.ts"
 import {
   SHORTER_OUTPUT_RETRY_PROMPT,
-  SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
+  SUMMARIZATION_PROVIDER_OPTIONS,
 } from "../../agent-summarization/summarization-handler.ts"
 import { toUnredactedInteractionListener } from "../../../adapters/interop/agent/redacted-interaction-listener-adapter.ts"
 import type { Context } from "../../context/context.ts"
@@ -569,7 +569,7 @@ export class SelfSummarizer {
         _privacyMode: privacyCarrier._privacyMode,
         role: "user",
         content: safeString(SELF_SUMMARIZATION_PROMPT),
-        providerOptions: SUMMARIZATION_CURSOR_PROVIDER_OPTIONS,
+        providerOptions: SUMMARIZATION_PROVIDER_OPTIONS,
       },
     ]
     const unredactMessage = (message: RedactedCoreMessage) =>
@@ -622,7 +622,7 @@ If the task is complete, respond to the user. Otherwise, continue working on the
       message: toRedactedCoreMessage({
         role: "user",
         content: summaryBody,
-        providerOptions: { cursor: { isSummary: true } },
+        providerOptions: { slate: { isSummary: true } },
       }, summaryPrivacyMode),
       summaryTextLength: summaryBody.length,
     }

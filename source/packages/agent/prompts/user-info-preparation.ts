@@ -44,7 +44,7 @@ function userMessagePlainText(message: { readonly content: UserMessageContent })
 export type PriorUserInfoMessage = Parameters<typeof fromRedactedCoreMessage>[0] & {
   readonly role: string
   readonly providerOptions?: {
-    readonly cursor?: {
+    readonly slate?: {
       readonly requestContextCompleteness?: unknown
       readonly userInfoSummarizationEpoch?: unknown
       readonly omitCloudWorkerProcedure?: unknown
@@ -151,28 +151,28 @@ export function shouldRerenderUserInfo(
 export function getFirstUserInfoRequestContextCompleteness(priorMessages: readonly PriorUserInfoMessage[]) {
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
-  return parseRequestContextCompletenessMetadata(firstMsg.providerOptions?.cursor?.requestContextCompleteness)
+  return parseRequestContextCompletenessMetadata(firstMsg.providerOptions?.slate?.requestContextCompleteness)
 }
 
 export function getFirstUserInfoSummarizationEpoch(priorMessages: readonly PriorUserInfoMessage[]) {
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
-  return parseUserInfoSummarizationEpochMetadata(firstMsg.providerOptions?.cursor?.userInfoSummarizationEpoch)
+  return parseUserInfoSummarizationEpochMetadata(firstMsg.providerOptions?.slate?.userInfoSummarizationEpoch)
 }
 
 export function getFirstUserInfoOmitCloudWorkerProcedure(priorMessages: readonly PriorUserInfoMessage[]): boolean {
-  return priorMessages[0]?.providerOptions?.cursor?.omitCloudWorkerProcedure === true
+  return priorMessages[0]?.providerOptions?.slate?.omitCloudWorkerProcedure === true
 }
 
 export function hasSummaryCarrierMessage(priorMessages: readonly PriorUserInfoMessage[]): boolean {
-  return priorMessages.some(message => message.providerOptions?.cursor?.isSummary === true)
+  return priorMessages.some(message => message.providerOptions?.slate?.isSummary === true)
 }
 
 export function getFirstUserInfoCloudTestingSectionsPlacement(priorMessages: readonly PriorUserInfoMessage[]) {
   const firstMsg = priorMessages[0]
   if (firstMsg?.role !== "user") return undefined
   const placement = parseCloudTestingSectionsPlacementMetadata(
-    firstMsg.providerOptions?.cursor?.composer2CloudTestingSectionsPlacement,
+    firstMsg.providerOptions?.slate?.composer2CloudTestingSectionsPlacement,
   )
   if (placement !== undefined) return placement
   return getFirstUserInfoMessageContent(priorMessages) !== undefined ? "user_info" : undefined

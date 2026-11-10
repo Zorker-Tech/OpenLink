@@ -112,48 +112,48 @@ export class SlateCloudAgentManager {
     return launchCloudAgent(this.getClient(), () => this.getDashboardClient(), args);
   }
 
-  awaitCompletion(bcId: string, options?: { waitForRestart?: boolean }) {
-    return this.completionPoller.awaitCompletion(bcId, options);
+  awaitCompletion(agentId: string, options?: { waitForRestart?: boolean }) {
+    return this.completionPoller.awaitCompletion(agentId, options);
   }
 
   async list(args?: { limit?: number; includeArchived?: boolean }) {
     return listCloudAgents(this.getClient(), args);
   }
 
-  async get(bcId: string) {
-    return getCloudAgent(this.getClient(), bcId);
+  async get(agentId: string) {
+    return getCloudAgent(this.getClient(), agentId);
   }
 
-  async reply(args: { bcId: string; prompt: string; images?: readonly { data: Uint8Array; path?: string; mimeType?: string }[]; interrupt?: boolean; modelId?: string; modelParams?: Readonly<Record<string, string>> }) {
+  async reply(args: { agentId: string; prompt: string; images?: readonly { data: Uint8Array; path?: string; mimeType?: string }[]; interrupt?: boolean; modelId?: string; modelParams?: Readonly<Record<string, string>> }) {
     return replyToCloudAgent(this.getClient(), args);
   }
 
-  async cancel(bcId: string): Promise<void> {
-    await pauseCloudAgent(this.getClient(), bcId);
+  async cancel(agentId: string): Promise<void> {
+    await pauseCloudAgent(this.getClient(), agentId);
   }
 
-  async rename(bcId: string, newName: string): Promise<void> {
-    await renameCloudAgent(this.getClient(), bcId, newName);
+  async rename(agentId: string, newName: string): Promise<void> {
+    await renameCloudAgent(this.getClient(), agentId, newName);
   }
 
-  async setArchived(bcId: string, archived: boolean): Promise<void> {
-    await setCloudAgentArchived(this.getClient(), bcId, archived);
+  async setArchived(agentId: string, archived: boolean): Promise<void> {
+    await setCloudAgentArchived(this.getClient(), agentId, archived);
   }
 
-  async delete(bcId: string): Promise<void> {
-    await deleteCloudAgent(this.getClient(), bcId);
+  async delete(agentId: string): Promise<void> {
+    await deleteCloudAgent(this.getClient(), agentId);
   }
 
-  async listArtifacts(bcId: string) {
-    return listCloudAgentArtifacts(this.getClient(), bcId);
+  async listArtifacts(agentId: string) {
+    return listCloudAgentArtifacts(this.getClient(), agentId);
   }
 
-  async getTranscriptDump(args: { bcId: string }) {
-    return getCloudAgentTranscriptDump(this.getClient(), this.options.convertConversationMessagesToTrace, args.bcId);
+  async getTranscriptDump(args: { agentId: string }) {
+    return getCloudAgentTranscriptDump(this.getClient(), this.options.convertConversationMessagesToTrace, args.agentId);
   }
 
-  async getInfo(bcId: string, includeFiles = true) {
-    return getCloudAgentInfo(this.getClient(), bcId, includeFiles);
+  async getInfo(agentId: string, includeFiles = true) {
+    return getCloudAgentInfo(this.getClient(), agentId, includeFiles);
   }
 
   /** What the pull request says about itself now: a merged one is never asked again. */
@@ -162,7 +162,7 @@ export class SlateCloudAgentManager {
   }
 
   /** The files a run changed, up to what a surface is told about. */
-  async fetchFileChanges(bcId: string) {
-    return fetchCloudAgentFileChanges(this.getClient(), bcId);
+  async fetchFileChanges(agentId: string) {
+    return fetchCloudAgentFileChanges(this.getClient(), agentId);
   }
 }

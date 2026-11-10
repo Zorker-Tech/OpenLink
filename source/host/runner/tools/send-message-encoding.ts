@@ -22,7 +22,7 @@ export function encodeSendMessage(message: EncodableMessage) {
       return attachmentMessageArgs(String(message.url ?? ""), typeof message.alt === "string" ? message.alt : undefined);
     case "slate-agent": {
       const title = typeof message.title === "string" ? message.title.trim() : "";
-      const agentId = String(message.bcId ?? "");
+      const agentId = String(message.agentId ?? "");
       const cardLabel = title.length > 0 ? ` (${title})` : "";
       return textMessageArgs(`Referenced Slate cloud agent ${agentId}${cardLabel}`);
     }

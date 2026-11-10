@@ -337,7 +337,7 @@ test("the instruction is a marked prompt-suggestion inference", async () => {
   assert.equal(appended.length, 1);
   assert.equal(appended[0]?.role, "user");
   assert.notEqual(appended[0]?.content, undefined);
-  assert.deepEqual(appended[0]?.providerOptions, { cursor: { inferenceReason: "prompt-suggestion", featureType: "promptSuggestion" } });
+  assert.deepEqual(appended[0]?.providerOptions, { slate: { inferenceReason: "prompt-suggestion", featureType: "promptSuggestion" } });
   assert.deepEqual(updates, ["suggestion"]);
 });
 

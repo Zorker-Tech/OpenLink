@@ -968,7 +968,7 @@ interface UserMessageActionHandlerConfigLike {
   readonly messageHistoryModifier?: ((turnMessages: CoreMessageLike[]) => CoreMessageLike[] | undefined) | undefined;
   readonly systemPromptGenerator: (toolArgs: {
     readonly requestContext: RequestContextInterop;
-    readonly cursorRules: ReturnType<typeof getAllRules>;
+    readonly rules: ReturnType<typeof getAllRules>;
     readonly env: unknown;
     readonly browserTools: readonly string[];
     readonly cloudRule: unknown;
@@ -2038,7 +2038,7 @@ export class AbstractUserMessageActionHandler {
             workspacePaths: requestState.env?.workspacePaths,
             userAutoRunInstructions,
             projectAutoRunInstructions,
-            cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+            rules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
             agentSkills: requestState.agentSkills ?? [],
             contextInjectionSignal: this.conversationActionReceiver.getContextInjectionToolSignal?.(),
           },
@@ -2125,7 +2125,7 @@ export class AbstractUserMessageActionHandler {
               workspacePaths: requestState.env?.workspacePaths,
               userAutoRunInstructions,
               projectAutoRunInstructions,
-              cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+              rules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
               agentSkills: requestState.agentSkills ?? [],
             },
             automationTriggerContext: this.getAutomationTriggerContext(promptExecutor.getMessages()),
@@ -3369,7 +3369,7 @@ export class AbstractUserMessageActionHandler {
       workspacePaths: requestState.env?.workspacePaths,
       userAutoRunInstructions,
       projectAutoRunInstructions,
-      cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+      rules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
       agentSkills: requestState.agentSkills ?? [],
       contextInjectionSignal: this.conversationActionReceiver.getContextInjectionToolSignal?.(),
     };
@@ -3532,7 +3532,7 @@ export class AbstractUserMessageActionHandler {
           role: "system",
           content: this.config.systemPromptGenerator({
             requestContext: requestState,
-            cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+            rules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
             env: requestState.env,
             browserTools: getBrowserToolNames(mcpToolSet as Parameters<typeof getBrowserToolNames>[0]),
             cloudRule: requestState.cloudRule,
@@ -3675,7 +3675,7 @@ export class AbstractUserMessageActionHandler {
       workspacePaths: requestState.env?.workspacePaths,
       userAutoRunInstructions,
       projectAutoRunInstructions,
-      cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+      rules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
       agentSkills: requestState.agentSkills ?? [],
       contextInjectionSignal: this.conversationActionReceiver.getContextInjectionToolSignal?.(),
     };
@@ -4115,7 +4115,7 @@ export class AbstractUserMessageActionHandler {
           workspacePaths: requestState.env?.workspacePaths,
           userAutoRunInstructions: await this.getUserPermissionsFileAutoRunInstructions(runContext, requestState),
           projectAutoRunInstructions: this.getProjectPermissionsFileAutoRunInstructions(requestState),
-          cursorRules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
+          rules: getAllRules(requestState, this.config.nonFileRules, this.config.featureFlags),
           agentSkills: requestState.agentSkills ?? [],
         },
         automationTriggerContext: this.getAutomationTriggerContext(promptExecutor.getMessages()),

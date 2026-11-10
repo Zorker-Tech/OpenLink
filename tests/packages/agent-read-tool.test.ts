@@ -422,7 +422,7 @@ test("the rules that belong to the file are attached to the result and shown wit
     { fullPath: "/repo/.cursor/rules/other.md", content: "Not about this file." },
   ] as unknown as CursorRule[]
   const { tool } = buildTool(() => contentResult("x", { path: "/repo/.cursor/rules/typescript.md" }))
-  const result = await runRead(tool, { path: "/repo/.cursor/rules/typescript.md" }, { cursorRules: rules })
+  const result = await runRead(tool, { path: "/repo/.cursor/rules/typescript.md" }, { rules })
   if (result.result.case !== "success") throw new Error("expected a success")
   assert.equal(result.result.value.relatedCursorRules.length, 1)
   assert.equal(result.result.value.relatedCursorRules[0]?.fullPath, "/repo/.cursor/rules/typescript.md")
@@ -662,7 +662,7 @@ test("a notebook is written out as cells rather than as JSON", async () => {
   })
   const rules = [{ fullPath: "/repo/nb.ipynb", content: "A rule for the notebook." }] as unknown as CursorRule[]
   const { tool } = buildTool(() => contentResult(notebook, { path: "/repo/nb.ipynb" }))
-  const result = await runRead(tool, { path: "/repo/nb.ipynb" }, { cursorRules: rules })
+  const result = await runRead(tool, { path: "/repo/nb.ipynb" }, { rules })
   const rendered = textOf(await tool.render(createContext(), result))
   assert.match(rendered, /Cell 0:/)
   assert.match(rendered, /print\('hi'\)/)

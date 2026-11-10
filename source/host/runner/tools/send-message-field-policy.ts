@@ -10,7 +10,7 @@ export const TYPE_FIELD_RULES: readonly SendMessageFieldRule[] = [
   { field: "url", acceptedTypes: ["attachment"] },
   { field: "alt", acceptedTypes: ["attachment"] },
   { field: "widget", acceptedTypes: ["widget"] },
-  { field: "bcId", acceptedTypes: ["slate-agent"] },
+  { field: "agentId", acceptedTypes: ["slate-agent"] },
   { field: "secret", acceptedTypes: ["secret-request"] },
 ];
 

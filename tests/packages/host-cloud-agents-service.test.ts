@@ -112,7 +112,7 @@ describe("what each read answers", () => {
   it("launches with the repository, the model and the environment it was given, and answers with where it is", async () => {
     const world = managerWorld();
     const launched = await world.manager.launch({ prompt: "do it", repoUrl: "https://host.test/o/r.git", startingRef: "main", modelId: "slate-fast", modelParams: { effort: "low" }, title: "  A run  " });
-    assert.deepEqual(launched, { bcId: "bc-named", url: cloudAgentUrl("bc-named") });
+    assert.deepEqual(launched, { agentId: "bc-named", url: cloudAgentUrl("bc-named") });
     const request = world.named("start")[0]!.args as Record<string, unknown>;
     assert.deepEqual([request.source, request.autoBranch, request.autoCreatePr, request.snapshotWorkspaceRootPath, request.returnImmediately], ["slate", true, true, "/workspace", true]);
     assert.equal(request.name, "A run");
@@ -137,15 +137,15 @@ describe("what each read answers", () => {
         { bcId: "bc-2", name: "Two", status: 2, isArchived: true },
       ],
     });
-    assert.deepEqual((await world.manager.list()).map((entry) => [entry.bcId, entry.status, entry.url]), [["bc-1", "running", cloudAgentUrl("bc-1")]]);
-    assert.deepEqual((await world.manager.list({ includeArchived: true, limit: 5 })).map((entry) => entry.bcId), ["bc-1", "bc-2"]);
+    assert.deepEqual((await world.manager.list()).map((entry) => [entry.agentId, entry.status, entry.url]), [["bc-1", "running", cloudAgentUrl("bc-1")]]);
+    assert.deepEqual((await world.manager.list({ includeArchived: true, limit: 5 })).map((entry) => entry.agentId), ["bc-1", "bc-2"]);
     assert.deepEqual(world.named("list").map((call) => call.args), [{ n: 20 }, { n: 5 }]);
   });
 
   it("reads one run, with the platform's own limit message when that is why it stopped", async () => {
     const world = managerWorld({ info: { composer: composer({ filesChanged: 3, linesAdded: 5, linesRemoved: 1, error: undefined }) } });
     const detail = (await world.manager.get(" bc-1 "))!;
-    assert.deepEqual([detail.bcId, detail.status, detail.branchName, detail.prUrl, detail.createdAtMs], ["bc-1", "finished", "feat/x", "https://pr.test/1", 0]);
+    assert.deepEqual([detail.agentId, detail.status, detail.branchName, detail.prUrl, detail.createdAtMs], ["bc-1", "finished", "feat/x", "https://pr.test/1", 0]);
     // A run that is not there at all is nothing, not a run with empty fields.
     assert.equal(await world.manager.get("   "), null);
     assert.equal(await managerWorld({ info: { composer: {} } }).manager.get("bc-1"), null);
@@ -153,10 +153,10 @@ describe("what each read answers", () => {
 
   it("replies with the model it was given, and interrupts only when asked", async () => {
     const world = managerWorld();
-    assert.deepEqual(await world.manager.reply({ bcId: "bc-1", prompt: "more", modelId: "slate-fast" }), { runId: "run-1" });
+    assert.deepEqual(await world.manager.reply({ agentId: "bc-1", prompt: "more", modelId: "slate-fast" }), { runId: "run-1" });
     const followup = world.named("followup")[0]!.args as Record<string, unknown>;
     assert.deepEqual([followup.followupSource, followup.synchronous, (followup.requestedModel as { modelId: string }).modelId], ["slate", false, "slate-fast"]);
-    await world.manager.reply({ bcId: "bc-1", prompt: "stop", interrupt: true });
+    await world.manager.reply({ agentId: "bc-1", prompt: "stop", interrupt: true });
     assert.deepEqual((world.named("followup")[1]!.args as Record<string, unknown>).requestedModel, undefined);
     assert.equal((world.named("followup")[1]!.args as Record<string, unknown>).synchronous, true);
   });
@@ -177,11 +177,11 @@ describe("what each read answers", () => {
 
   it("writes a transcript dump with the run's status, and never fails the dump over a status", async () => {
     const world = managerWorld({ conversation: { messages: [{ role: "user" }] }, info: { composer: composer({ status: 1 }) } });
-    assert.deepEqual(await world.manager.getTranscriptDump({ bcId: " bc-1 " }), { jsonl: '{"role":"user"}\n', lineCount: 1, status: "running" });
-    assert.equal(await world.manager.getTranscriptDump({ bcId: "  " }), null);
+    assert.deepEqual(await world.manager.getTranscriptDump({ agentId: " bc-1 " }), { jsonl: '{"role":"user"}\n', lineCount: 1, status: "running" });
+    assert.equal(await world.manager.getTranscriptDump({ agentId: "  " }), null);
     // A status that could not be read leaves the transcript as it is, at unknown.
     const broken = managerWorld({ conversation: { messages: [] }, infoFails: new Error("the backend is down") });
-    assert.deepEqual(await broken.manager.getTranscriptDump({ bcId: "bc-1" }), { jsonl: "", lineCount: 0, status: "unknown" });
+    assert.deepEqual(await broken.manager.getTranscriptDump({ agentId: "bc-1" }), { jsonl: "", lineCount: 0, status: "unknown" });
   });
 
   it("answers a full read with the run, its pull request and the files it changed", async () => {

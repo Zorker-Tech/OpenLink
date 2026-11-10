@@ -1,7 +1,7 @@
 export const SLATE_AGENT_MODE = "slate-agent";
 
 export interface LabelMessage {
-  readonly providerOptions?: { readonly cursor?: { readonly inferenceReason?: string } };
+  readonly providerOptions?: { readonly slate?: { readonly inferenceReason?: string } };
   readonly [key: string]: unknown;
 }
 

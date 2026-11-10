@@ -25,9 +25,9 @@ import {
 } from "../../source/adapters/interop/agent/plan-file-uri-adapter.ts"
 
 test("legacy plan document URIs are formed only at the interop boundary", () => {
-  assert.equal(planDocumentUri("agent-1", "plan.plan.md"), "cursor-plan://agent-1/plan.plan.md")
-  assert.equal(planDocumentUri(undefined, "plan.plan.md"), "cursor-plan:///plan.plan.md")
-  assert.equal(unavailablePlanDocumentUri(), "cursor-plan://plan.md")
+  assert.equal(planDocumentUri("agent-1", "plan.plan.md"), "slate-plan://agent-1/plan.plan.md")
+  assert.equal(planDocumentUri(undefined, "plan.plan.md"), "slate-plan:///plan.plan.md")
+  assert.equal(unavailablePlanDocumentUri(), "slate-plan://plan.md")
 })
 
 test("the action boundary decodes plan fields and maps known modes into host modes", () => {

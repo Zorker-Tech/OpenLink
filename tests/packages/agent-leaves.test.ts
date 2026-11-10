@@ -452,7 +452,7 @@ test("a side-channel action recomputes the state and runs no tool", async () => 
 })
 
 test("a summary and a notification are not real user messages", () => {
-  assert.equal(isSyntheticUserMessage({ role: "user", providerOptions: { cursor: { isSummary: true } } } as never), true)
+  assert.equal(isSyntheticUserMessage({ role: "user", providerOptions: { slate: { isSummary: true } } } as never), true)
   assert.equal(isSyntheticUserMessage({ role: "user", content: "hello" }), false)
   assert.equal(
     isSyntheticUserMessage({ role: "user", content: `<${NOTIFICATION_TAG_NAMES[0]}>wake up</${NOTIFICATION_TAG_NAMES[0]}>` }),

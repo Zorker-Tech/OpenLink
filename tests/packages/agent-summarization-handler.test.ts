@@ -35,7 +35,7 @@ const message = (role: string, content: unknown, options: { isSummary?: boolean 
   toRedactedCoreMessage({
     role,
     content,
-    ...(options.isSummary === true ? { providerOptions: { cursor: { isSummary: true } } } : {}),
+    ...(options.isSummary === true ? { providerOptions: { slate: { isSummary: true } } } : {}),
   } as never, PrivacyMode.NO_STORAGE)
 
 const textMessage = (role: string, text: string) => message(role, text)
@@ -497,7 +497,7 @@ test("the summary text is stored redacted, without the carrier's prefix", () => 
   const carrier = toRedactedCoreMessage({
     role: "user",
     content: `${prefix}the summary`,
-    providerOptions: { cursor: { isSummary: true } },
+    providerOptions: { slate: { isSummary: true } },
   } as never, PrivacyMode.NO_STORAGE)
   const content = (carrier as unknown as { content: unknown }).content
   assert.equal(isRedactedString(content), true)

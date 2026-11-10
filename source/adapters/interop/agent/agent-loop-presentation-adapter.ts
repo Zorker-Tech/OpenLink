@@ -40,6 +40,6 @@ export function createLoopReminderMessage(options?: { readonly kind?: string | u
   return {
     role: "user" as const,
     content: createLoopReminderContent(options),
-    providerOptions: { cursor: { loopReminder: true } },
+    providerOptions: { slate: { loopReminder: true } },
   }
 }

@@ -1954,7 +1954,7 @@ These images can be copied for use in other locations.
       const message = {
         role: "user",
         content: contentParts,
-        ...(requestIdentifier !== undefined ? { providerOptions: { cursor: { requestId: requestIdentifier } } } : {}),
+        ...(requestIdentifier !== undefined ? { providerOptions: { slate: { requestId: requestIdentifier } } } : {}),
       };
       const redactedPrompt = toRedactedCoreMessage(message, this.privacyMode);
       plainToRedacted.set(message, redactedPrompt);

@@ -42,17 +42,17 @@ const catalog: CloudModelCatalogEntry[] = [
   { id: "slate-fast", displayName: "Fast", aliases: ["fast"], params: [{ id: "effort", values: [{ value: "low" }, { value: "high" }] }], incompatibilities: ["effort=high cannot be combined with fast"] },
 ];
 
-const summary = (bcId: string, extra: Partial<CloudAgentDetail> = {}): CloudAgentDetail => ({ bcId, name: `agent ${bcId}`, status: "running", isArchived: false, branchName: "", prUrl: "", url: `https://cloud.test/${bcId}`, filesChanged: 0, linesAdded: 0, linesRemoved: 0, ...extra });
+const summary = (agentId: string, extra: Partial<CloudAgentDetail> = {}): CloudAgentDetail => ({ agentId, name: `agent ${agentId}`, status: "running", isArchived: false, branchName: "", prUrl: "", url: `https://cloud.test/${agentId}`, filesChanged: 0, linesAdded: 0, linesRemoved: 0, ...extra });
 
 function toolWorld(options: { watch?: boolean; review?: (args: CloudAgentToolArgs) => { allowed: boolean; reason: string }; detail?: CloudAgentDetail | null; transcript?: { status: string; lineCount: number; jsonl: string } | null; replyFails?: unknown; renameFails?: unknown; launchFails?: unknown; models?: CloudModelCatalogEntry[]; modelsFail?: boolean; summaries?: CloudAgentDetail[]; artifacts?: readonly { path: string; sizeBytes: number }[] } = {}) {
   const calls: { name: string; args: unknown }[] = [];
   const watchCalls: { id: string; options: unknown }[] = [];
-  const launchedIds = new Set<string>(options.summaries?.map((entry) => entry.bcId) ?? []);
+  const launchedIds = new Set<string>(options.summaries?.map((entry) => entry.agentId) ?? []);
   const api: CloudAgentApi = {
     launch: async (args) => {
       calls.push({ name: "launch", args });
       if (options.launchFails !== undefined) throw options.launchFails;
-      return { bcId: "bc-new", url: "https://cloud.test/bc-new" };
+      return { agentId: "bc-new", url: "https://cloud.test/bc-new" };
     },
     list: async (args) => {
       calls.push({ name: "list", args });
@@ -343,7 +343,7 @@ describe("what the tool does", () => {
   it("replies, telling an interrupted run from one that had nothing to interrupt", async () => {
     const running = toolWorld({ detail: summary("bc-1", { status: "running" }) });
     assert.match(await runCloudAgentAction(running.ctx, { action: "reply", agent_id: "bc-1", prompt: "more", interrupt: true, model: "slate-fast" }, running.deps), /^Interrupted bc-1's active run and delivered the follow-up immediately \(run run-1\); it starts processing now\./);
-    assert.deepEqual(running.named("reply")[0]!.args, { bcId: "bc-1", prompt: "more", modelId: "slate-fast", modelParams: undefined, images: [], interrupt: true });
+    assert.deepEqual(running.named("reply")[0]!.args, { agentId: "bc-1", prompt: "more", modelId: "slate-fast", modelParams: undefined, images: [], interrupt: true });
     assert.deepEqual(running.watchCalls, [{ id: "bc-1", options: { afterFollowup: true, quietOrigin: "quiet-origin" } }]);
     const idle = toolWorld({ detail: summary("bc-1", { status: "finished" }) });
     assert.match(await runCloudAgentAction(idle.ctx, { action: "reply", agent_id: "bc-1", prompt: "more", interrupt: true }, idle.deps), /^Sent follow-up to bc-1 \(run run-1\); it wasn't running, so there was nothing to interrupt/);

@@ -54,10 +54,10 @@ describe("events that are held until they can be sent", () => {
 
 describe("the model a request names", () => {
   it("reads it from the provider's own options, and only when it says something", () => {
-    assert.equal(getProviderModelName({ providerOptions: { cursor: { modelName: "a-model" } } }), "a-model");
-    assert.equal(getProviderModelName({ providerOptions: { cursor: { modelName: "" } } }), "");
+    assert.equal(getProviderModelName({ providerOptions: { slate: { modelName: "a-model" } } }), "a-model");
+    assert.equal(getProviderModelName({ providerOptions: { slate: { modelName: "" } } }), "");
     assert.equal(getProviderModelName({}), undefined);
-    assert.equal(getProviderModelName({ providerOptions: { cursor: { modelName: 7 } } }), undefined);
+    assert.equal(getProviderModelName({ providerOptions: { slate: { modelName: 7 } } }), undefined);
   });
 });
 

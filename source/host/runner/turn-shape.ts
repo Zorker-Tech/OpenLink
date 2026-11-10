@@ -24,7 +24,7 @@ export interface CoreMessage {
   readonly role: string;
   readonly content: string | readonly CorePart[];
   readonly providerOptions?: {
-    readonly cursor?: { readonly highLevelToolCallResult?: unknown };
+    readonly slate?: { readonly highLevelToolCallResult?: unknown };
   };
 }
 
@@ -77,7 +77,7 @@ function erroredToolResultIds(
       || transcriptMessage.role !== "tool"
       || typeof transcriptMessage.content === "string"
     ) continue;
-    const highLevelResult = transcriptMessage.providerOptions?.cursor
+    const highLevelResult = transcriptMessage.providerOptions?.slate
       ?.highLevelToolCallResult;
     if (
       typeof highLevelResult !== "object"

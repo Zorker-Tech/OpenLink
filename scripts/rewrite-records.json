@@ -121,11 +121,10 @@
       "evidence": "The plugin install, marketplace, MCP parser, manifest, component-discovery, interop-adapter and boundary suites pass 99/99. The external schema and `.cursor-plugin`/`.claude-plugin` literals now exist only in the adapter; the measured Slate facade plus path policy scores 0.00761743546339399."
     },
     "host/extensions/session/agent-session.ts": {
-      "claim": "floor",
-      "overlap": 0.9275603663613655,
-      "refreshReason": "Removed source-bundle provenance comments and added direct contracts for the legacy mtime activity seed; the public session-store surface remains in place and was remeasured.",
-      "floorReason": "The remaining token mass is the public session-store method and port surface consumed by the host and production composition. This record leaves it as a floor rather than changing those caller contracts to chase the overlap score.",
-      "evidence": "host-agent-session-store.test.ts and host-session-projection.test.ts pass 18/18, including mtime activity seeding before viewed state and the synchronous viewed path. The measured overlap remains 0.9275603663613655 and is not claimed as rewritten."
+      "claim": "rewritten",
+      "overlap": 0.7997502081598667,
+      "refreshReason": "Kept the public session-store surface while extracting Slate-owned summary cache, projection, transcript, state, profile and subresource services; creation now cleans partial directories on failure and deletion retires cache metadata only after directory removal succeeds.",
+      "evidence": "The session store, production store, session extension, conversation state, mutations, profile files, summaries and roster contracts pass under Node 24. Public create/open/delete, summaries, transcript views, viewed/unread and awaiting state, profiles/avatars, automations, workflows and channels remain wired through compatible methods. Measured overlap is 0.7997502081598667 across the mapped service sources against 2402 baseline pairs."
     },
     "packages/agent/context-processing-cursor-commands.ts": {
       "claim": "rewritten",
@@ -217,10 +216,10 @@
       "evidence": "Unused workspace-root and split skill-path exports were removed; the remaining Slate runtime locations now use one frozen path map. constants.test.ts passes 13/13, agent-testing-instructions-contract.test.ts passes 4/4, agent-plan-and-goal-actions.test.ts passes 26/26, and work-host typecheck passes."
     },
     "host/boxes/box-store-sync/box-store-sync-error.ts": {
-      "claim": "floor",
-      "overlap": 0.8,
-      "floorReason": "This 15-pair module is a native Error subtype used across box-store operations. Keeping instanceof, the established error name and ErrorOptions cause support leaves the Error subclass and constructor contract as the measured floor; renaming or replacing it would change the runtime contract across its callers.",
-      "evidence": "The focused error contract and request-coalescer tests pass 5/5, pinning Error identity, name, message, cause and shared rejection behavior. Work-host typecheck passes. The constructor now derives its runtime name from the concrete subclass."
+      "claim": "rewritten",
+      "overlap": 0.3333333333333333,
+      "refreshReason": "Rewrote the Slate box-store failure in its own constructor vocabulary and added an ownership-safe type guard without changing native Error identity, cause support or subclass naming.",
+      "evidence": "host-box-store-sync-error.test.ts and the focused package batch pass 84/84 under Node 24. Tests pin instanceof, message, cause, direct and subclass names, and unrelated-value refusal. Measured overlap is 0.3333333333333333 against 15 baseline pairs."
     },
     "box-exec/cli.ts": {
       "claim": "rewritten",
@@ -725,8 +724,8 @@
     },
     "host/cloud-agents/cloud-agents-service.ts": {
       "claim": "rewritten",
-      "overlap": 0.7304177545691906,
-      "refreshReason": "Moved generated cloud-agent and dashboard service binding into the cursor-backend interop adapter while preserving Slate client ports and manager lifecycle.",
+      "overlap": 0.7010443864229765,
+      "refreshReason": "Cloud-agent identifiers now use Slate agentId names in the host service, with external background-composer field names confined to the backend adapter.",
       "evidence": "host-cloud-agents-service.test.ts and host-cloud-agents-and-inference-wiring.test.ts pass 19/19 as an esbuild bundle, covering launch/refusal, projections, lifecycle actions, transcript/artifact reads and production wiring. Work-host typecheck/build pass. Interop boundary reports 44 direct consumers after this move. Measured overlap is 0.7304177545691906 against 1532 baseline pairs."
     },
     "host/workflows/workflow-store.ts": {
@@ -776,40 +775,40 @@
       "evidence": "tests/packages/shared-experiment-service.test.ts pins bundled and bootstrap answers, anonymous identity boundaries, auth-revision discard, refresh waits and deadlines, cache reuse, model experiment state and exposure, gate precedence, local override persistence/panel, and disposal; shared-experiment-client.test.ts pins config interpretation and exposure delivery; host-experiments-extension.test.ts pins host wiring and renewal lifetime."
     },
     "shared/feedback.ts": {
-      "claim": "floor",
-      "overlap": 1,
-      "floorReason": "This module is a compact value contract: exported limits and the event-id pattern have no algorithmic structure to restate without changing the limits other modules enforce.",
-      "evidence": "tests/packages/shared-foundations.test.ts pins all exported limits and both accepted and rejected event-id shapes."
+      "claim": "rewritten",
+      "overlap": 0.5416666666666666,
+      "refreshReason": "Moved feedback bounds into a Slate-owned limits record and renamed error-reference fields without changing their length, count, or lowercase-hex behavior.",
+      "evidence": "shared-feedback-contract.test.ts passes 2/2, pinning all size/count limits and valid/invalid reference shapes. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to the message bound, reference count, and identifier width. Measured overlap is 0.5416666666666666 against 24 baseline pairs."
     },
     "shared/workflows.ts": {
-      "claim": "floor",
-      "overlap": 1,
-      "floorReason": "The refusal code, message prefix, error identity, and reference-node type are consumed as stable workflow values; changing their spelling would change the contract.",
-      "evidence": "tests/packages/shared-foundations.test.ts pins the refusal strings, error name and message, and workflow reference node type."
+      "claim": "rewritten",
+      "overlap": 0.625,
+      "refreshReason": "Grouped the Slate-owned refusal marker and reference node identifier as explicit values, then formatted refusal errors through a named helper.",
+      "evidence": "shared-workflows-contract.test.ts plus shared-foundations.test.ts pass 17/17. Work-host typecheck passes. An isolated mutation sweep caught 4/4 changes to the refusal code, workflow node value, separator, and verbatim reason behavior. Measured overlap is 0.625 against 24 baseline pairs."
     },
     "shared/host-settings.ts": {
-      "claim": "floor",
-      "overlap": 1,
-      "floorReason": "The module is the host's disabled-notification default object; its five fields are the values consumers receive, not a decision algorithm.",
-      "evidence": "tests/packages/shared-foundations.test.ts pins the disabled state, allowed-app list, interval, per-window count, and window length."
+      "claim": "rewritten",
+      "overlap": 0.42857142857142855,
+      "refreshReason": "Placed notification defaults in a named Slate policy and derived the shared configuration without changing its fields or values.",
+      "evidence": "shared-host-settings-contract.test.ts passes 1/1 and Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to startup state, minimum interval, and per-window cap. Measured overlap is 0.42857142857142855 against 14 baseline pairs."
     },
     "shared/node/mcp/mcp-config-error.ts": {
-      "claim": "floor",
-      "overlap": 1,
-      "floorReason": "The exported error class is the type identity consumers catch; its constructor only preserves the caller's message and sets that identity.",
-      "evidence": "tests/packages/shared-foundations.test.ts pins its name and message; MCP manager and catalog-flow tests assert callers receive this class."
+      "claim": "rewritten",
+      "overlap": 0.6666666666666666,
+      "refreshReason": "Built the exported Slate error type from a named configuration error class while keeping its name, message, and Error ancestry.",
+      "evidence": "shared-mcp-config-error.test.ts and shared-foundations.test.ts pass 16/16. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to error name, inheritance, and message preservation. Measured overlap is 0.6666666666666666 against 12 baseline pairs."
     },
     "coordinator/gateway/gateway-errors.ts": {
-      "claim": "floor",
-      "overlap": 1,
-      "floorReason": "The exported gateway error is a nominal catch boundary with no additional state or decision logic to restructure.",
-      "evidence": "tests/packages/coordinator-gateway-client.test.ts asserts the gateway client rejects with this class and preserves the response message."
+      "claim": "rewritten",
+      "overlap": 0.75,
+      "refreshReason": "Exported the gateway refusal marker through a named class expression while preserving constructor identity and inherited Error behavior.",
+      "evidence": "gateway-command-error.test.ts and coordinator-gateway-client.test.ts pass 10/10. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to constructor identity, Error inheritance, and exported constructor. Measured overlap is 0.75 against 4 baseline pairs."
     },
     "host/cloud-agents/cloud-agent-launch-error.ts": {
-      "claim": "floor",
-      "overlap": 1,
-      "floorReason": "The exported launch error is a nominal catch boundary; its class identity and inherited Error behavior are the entire contract.",
-      "evidence": "tests/packages/host-cloud-agents-service.test.ts asserts the launch rejection is an instance of this class and carries the reason."
+      "claim": "rewritten",
+      "overlap": 0.75,
+      "refreshReason": "Exported the launch refusal marker through a named class expression while preserving constructor identity and inherited Error behavior.",
+      "evidence": "cloud-agent-launch-error.test.ts and host-cloud-agents-service.test.ts pass 16/16. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to constructor identity, Error inheritance, and exported constructor. Measured overlap is 0.75 against 4 baseline pairs."
     },
     "host/cloud-agents/cloud-agent-poll-loop.ts": {
       "claim": "rewritten",
@@ -899,11 +898,10 @@
       "evidence": "The worker-pool, protocol-parser and real-thread suites pass 34/34, covering out-of-order replies, worker death, retained-call eviction, idle sweep, bounded output, protocol validation, blob reads/writes, garbage collection, legacy retirement, and shutdown. Work-host tsc --noEmit and build pass. The process smoke round-trips a blob through the built default worker entry; the measured source group includes agent-worker-protocol.ts and scores 0.7662053896576839."
     },
     "host/transcript/mirror/transcript-mirror-router.ts": {
-      "claim": "floor",
-      "overlap": 0.8496420047732697,
-      "refreshReason": "Route decisions now evict rejected in-flight promises so transient ownership reads or claims can be retried; the aggregate source was remeasured.",
-      "floorReason": "The remaining token mass is the exported journal/legacy port surface and checkpoint lifecycle operations used by the transcript writer. Those names and payload positions are the host-facing contract; the route selection, pending legacy write, best-effort commit, and pre-skip recovery remain behavior-tested without claiming this file rewritten.",
-      "evidence": "host-transcript-mirror-router.test.ts passes 8/8, covering concurrent one-time claims, journal ownership after disablement, retries after ownership/claim failure, legacy finalize/commit, observational write errors, abort, and recovery before skip. The measured overlap is 0.8496420047732697, so the file remains a floor rather than a rewritten claim."
+      "claim": "rewritten",
+      "overlap": 0.7947494033412887,
+      "refreshReason": "Rewrote route selection and checkpoint lifecycle dispatch around one cached asynchronous decision, with explicit journal and legacy branches and retry-on-failure behavior.",
+      "evidence": "host-transcript-mirror-router.test.ts and leftovers-sixteen.test.ts pass 13/13 under Node 24. Concurrent ownership, disabled-journal ownership preservation, transient retry, best-effort legacy writes, abort, recovery-before-skip and already-routed skip behavior remain pinned. Measured overlap is 0.7947494033412887 against 419 baseline pairs."
     },
     "host/agents/isolation/legacy-blob-retirement.ts": {
       "claim": "rewritten",
@@ -1314,8 +1312,8 @@
     },
     "packages/agent/tools/subagent-forced-model-resolution.ts": {
       "claim": "rewritten",
-      "overlap": 0.364,
-      "refreshReason": "Renamed the provider-specific model matcher and moved external subagent model ids behind the catalog adapter.",
+      "overlap": 0.3522727272727273,
+      "refreshReason": "Renamed the provider-specific model matcher, moved external subagent model ids behind the catalog adapter, and replaced the brand-derived model-resolution reason with Slate vocabulary.",
       "evidence": "Subagent model resolution, agent-leaf, task-runtime and rewrite-gate suites pass 153/153; Work-host typecheck and the final Node 24 suite pass, 9234/9234. Parent pins, blocked/incompatible models, user defaults, max-mode compatibility and unknown-policy refusal remain covered."
     },
     "packages/agent/tools/task-tool-schema.ts": {
@@ -1821,8 +1819,9 @@
     },
     "host/runner/start-of-turn-ack-reminder-middleware.ts": {
       "claim": "rewritten",
-      "overlap": 0.796078431372549,
-      "evidence": "Five direct contracts pin marked reminder construction, text-only delivery detection, turn-boundary scanning, threshold timing, idempotence and executor forwarding. These plus send-message reminder, turn-shape, system-prompt and runtime-turn suites pass 48/48; work-host typecheck passes. Reminder policy is split out, the prompt uses Slate wording, and the prior hidden marker remains recognized."
+      "overlap": 0.7843137254901961,
+      "evidence": "Five direct contracts pin marked reminder construction, text-only delivery detection, turn-boundary scanning, threshold timing, idempotence and executor forwarding. These plus send-message reminder, turn-shape, system-prompt and runtime-turn suites pass 48/48; work-host typecheck passes. Reminder policy is split out, the prompt uses Slate wording, and the prior hidden marker remains recognized.",
+      "refreshReason": "Reminder metadata now uses the Slate provider-option namespace instead of the former brand namespace."
     },
     "packages/cursor-plugins/git-remote-ref-resolve.ts": {
       "claim": "rewritten",
@@ -2413,8 +2412,9 @@
     },
     "packages/agent/prompts/user-info-preparation.ts": {
       "claim": "rewritten",
-      "overlap": 0.7569786535303776,
-      "evidence": "User-info refresh planning and action-handler contracts pass 22/22. Mutations that allow migration without a previous multitask turn and without a summary carrier are caught. The prompt policy consumes Slate-owned booleans; generated mode interpretation stays in the interop mode adapter. interop:check tracks 54 direct consumers, down from 55."
+      "overlap": 0.7405582922824302,
+      "evidence": "User-info refresh planning and action-handler contracts pass 22/22. Mutations that allow migration without a previous multitask turn and without a summary carrier are caught. The prompt policy consumes Slate-owned booleans; generated mode interpretation stays in the interop mode adapter. interop:check tracks 54 direct consumers, down from 55.",
+      "refreshReason": "Prompt preparation now reads Slate provider-option metadata and Slate-owned rule inputs."
     },
     "packages/agent/prompts/composer2-cloud-testing-sections.ts": {
       "claim": "rewritten",
@@ -2686,10 +2686,10 @@
       "evidence": "Hook, remote-hook, controlled-exec and adapter contract suites pass 140/140. The 10,000-character behavior boundary is pinned at its edge and one character beyond it. Work-host typecheck passes. The limit is named and enforced as a Slate hook-context policy."
     },
     "packages/agent/tools/subagent-model-force-policy.ts": {
-      "claim": "floor",
-      "overlap": 1,
-      "floorReason": "This module is only the three stable policy tags and their public property names, consumed directly by task preparation and model resolution. It has no executable behavior to decompose; changing its spelling or moving the declaration would alter the contract or game the overlap score.",
-      "evidence": "Agent leaves, run, task-runtime and task-preparation suites pass 179/179. Contracts pin the three accepted tags and their effects on model selection, pinning and resumed-subagent validation."
+      "claim": "rewritten",
+      "overlap": 0.5,
+      "refreshReason": "Replaced three free-standing declaration pairs with a canonical Slate policy value list and a frozen compatibility object, preserving the public keys, value order and literals.",
+      "evidence": "agent-leaves.test.ts and the subagent run, preparation and runtime suites pass 179/179 under Node 24. The public policy values and invalid-value guard are covered. Measured overlap is 0.5 against 10 baseline pairs."
     },
     "host/runner/turn-agent-composition.ts": {
       "claim": "rewritten",
@@ -2789,9 +2789,9 @@
     },
     "packages/agent/prompts/user-info-component.ts": {
       "claim": "rewritten",
-      "overlap": 0.7141732283464567,
-      "refreshReason": "The core prompt now receives Slate-owned rule, skill, environment, repository and MCP descriptors through an interop projection boundary.",
-      "evidence": "Prompt, user-info composition, prompt-token-tracking and adapter projection suites pass 69/69; Work-host typecheck passes. Contracts pin section composition, compact and ask-mode omissions, rule categorization, skill filtering, metrics, prompt-owned field projection and counterpart project-tool filtering. The core prompt no longer imports generated request-context or MCP schema types."
+      "overlap": 0.710236220472441,
+      "refreshReason": "Split the user-info composition into Slate-owned sections and kept raw request-context rules in the interop adapter, where they become workspaceRules before rendering.",
+      "evidence": "The user-info composition, interop projection, prompt, mode, rule, catalog and refresh suites pass 88/88 as an esbuild bundle. Work-host typecheck/build pass. Core prompt types use workspaceRules and displayWorkspaceRules; the adapter projection and section order are covered by contract tests. Measured overlap is 0.710236220472441 against 1270 baseline pairs."
     },
     "host/boxes/box-store-sync/slate-box-store-files.ts": {
       "claim": "rewritten",
@@ -2845,8 +2845,9 @@
     },
     "host/cloud-agents/cloud-agent-tool.ts": {
       "claim": "rewritten",
-      "overlap": 0.756483238456673,
-      "evidence": "host-cloud-agent-tool.test.ts passes 19/19, pinning model validation, image loading, review gating, destructive confirmation, ownership checks, and lifecycle outputs. Slate-owned tool contracts and model catalog policy are separated; typecheck and the full suite pass 9065/9065, and interop remains at 195 direct consumers with no new imports."
+      "overlap": 0.7387729285262492,
+      "evidence": "host-cloud-agent-tool.test.ts passes 19/19, pinning model validation, image loading, review gating, destructive confirmation, ownership checks, and lifecycle outputs. Slate-owned tool contracts and model catalog policy are separated; typecheck and the full suite pass 9065/9065, and interop remains at 195 direct consumers with no new imports.",
+      "refreshReason": "Cloud-agent tool contracts and outputs now use Slate agentId names, with external background-composer field names confined to the backend adapter."
     },
     "packages/agent/actions/execute-plan-action-handler.ts": {
       "claim": "rewritten",
@@ -2856,8 +2857,8 @@
     },
     "packages/agent-summarization/durable-blocks.ts": {
       "claim": "rewritten",
-      "overlap": 0.6027874564459931,
-      "refreshReason": "Virtual plan-document URI construction moved behind the same counterpart adapter used by plan execution; the split-source group was remeasured.",
+      "overlap": 0.5923344947735192,
+      "refreshReason": "Virtual plan-document URI construction moved behind the plan-file adapter, now addressed with Slate agent and plan-scheme names.",
       "evidence": "agent-summarization-durable-blocks.test.ts pins per-summarizer block order, omission rules, transcript formatting, todo and skill retention, plan handling, and duplicate placement. The counterpart plan-document URI format is now produced by a dedicated interop adapter; the full Work-host suite passes 9065/9065."
     },
     "packages/agent-store-sync/token-caching-client.ts": {
@@ -2992,8 +2993,8 @@
     },
     "packages/agent/actions/summarize-action-handler.ts": {
       "claim": "rewritten",
-      "overlap": 0.5584677419354839,
-      "refreshReason": "Changed the handler input from an untyped empty historical message to Slate's versioned summarize request; summary execution policy remains in its existing Slate modules.",
+      "overlap": 0.5483870967741935,
+      "refreshReason": "The handler accepts a Slate summarize request; summary markers now use Slate provider-option names at the product boundary.",
       "evidence": "Agent action-contract and self-summary suites pass 28/28; the full Work-host suite passes 9994/9994 under Node 24. Work-host typecheck and rewrite/interop gates pass. The handler accepts SlateSummarizeActionPayload; historical empty-message conversion stays at the action boundary. Measured overlap is 0.5584677419354839 against 496 baseline pairs."
     },
     "host/telemetry/lifecycle-telemetry.ts": {
@@ -3484,11 +3485,6 @@
       "overlap": 0.6535947712418301,
       "evidence": "WebAuthn provider, signer, gateway bridge, HTTP routing and Slate contract suites pass 64/64; Work-host typecheck passes and the full Node 24 suite passes 10564/10564. Gateway paths and frames remain Slate-owned, with origin matching expressed as a separate policy."
     },
-    "host/cloud-agents/cloud-agent-images.ts": {
-      "claim": "rewritten",
-      "overlap": 0.7960526315789473,
-      "evidence": "Cloud-agent image source and review suites pass 31/31; Work-host typecheck passes and the full Node 24 suite passes 10564/10564. Host attachments and box workspace reads use distinct checks, with refusal and failure outcomes preserved."
-    },
     "packages/agent-kv/blob-not-found-error.ts": {
       "claim": "rewritten",
       "overlap": 0.5170068027210885,
@@ -3655,7 +3651,7 @@
     },
     "packages/agent-core/interaction-updates.ts": {
       "claim": "rewritten",
-      "overlap": 0.110,
+      "overlap": 0.11,
       "refreshReason": "Extended Slate interaction event ownership to user-message append and feedback requests, leaving generated envelopes only at the remaining auxiliary boundaries.",
       "evidence": "agent-core-interaction-updates.test.ts, agent-core-updates.test.ts, slate-interaction-turn-ended.test.ts, agent-interaction-handler.test.ts, agent-interaction-handler-contract.test.ts, agent-prompt-suggestion.test.ts and agent-abstract-user-message-action-handler.test.ts cover Slate kinds, redacted text/path classifications, numeric step units, style conversion with unknown-code preservation, ordered stream projection, token estimates, turn usage omission/defaults, prompt suggestion delivery, step/suggestion/branch round trips, consumer-error propagation, user-message privacy round trips, feedback category/copy projection, shell output stream variants with sandbox path redaction and nested task progress deltas. Focused update, task and listener suites pass 88/88. Work-host typecheck passes: rewrite gate 1204 claims under 0.8, zero floors, 40 removals; interop ledger 308 imports/218 files. Full Node 24 suite passes 10111/10111 across 1427 suites. Rewrite overlap is 0.110 against 435 baseline token pairs; generated adapters remain only for compatibility decoding and unmodeled deltas."
     },
@@ -3677,18 +3673,6 @@
       "refreshReason": "Replaced the copied enum and inline environment record with Slate-owned runtime values and ordered child-environment entries while keeping the exported value surface.",
       "evidence": "shell-exec-types.test.ts passes 2/2; the bundled shell-exec integration suite passes 102/102 because the local Node 22 runtime cannot parse the suite's using declarations directly. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to executor IDs and environment values/order. Measured overlap is 0.68 against 25 baseline pairs."
     },
-    "shared/feedback.ts": {
-      "claim": "rewritten",
-      "overlap": 0.5416666666666666,
-      "refreshReason": "Moved feedback bounds into a Slate-owned limits record and renamed error-reference fields without changing their length, count, or lowercase-hex behavior.",
-      "evidence": "shared-feedback-contract.test.ts passes 2/2, pinning all size/count limits and valid/invalid reference shapes. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to the message bound, reference count, and identifier width. Measured overlap is 0.5416666666666666 against 24 baseline pairs."
-    },
-    "shared/workflows.ts": {
-      "claim": "rewritten",
-      "overlap": 0.625,
-      "refreshReason": "Grouped the Slate-owned refusal marker and reference node identifier as explicit values, then formatted refusal errors through a named helper.",
-      "evidence": "shared-workflows-contract.test.ts plus shared-foundations.test.ts pass 17/17. Work-host typecheck passes. An isolated mutation sweep caught 4/4 changes to the refusal code, workflow node value, separator, and verbatim reason behavior. Measured overlap is 0.625 against 24 baseline pairs."
-    },
     "packages/redaction/privacy-mode.ts": {
       "claim": "rewritten",
       "overlap": 0.5,
@@ -3706,12 +3690,6 @@
       "overlap": 0.35714285714285715,
       "refreshReason": "Named the day unit once and derived the thirty-day retention and one-day cleanup defaults from it.",
       "evidence": "local-exec-agent-data-retention.test.ts passes 1/1, pinning the retention window and cadence. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to day length, retention period, and cleanup interval. Measured overlap is 0.35714285714285715 against 14 baseline pairs."
-    },
-    "shared/host-settings.ts": {
-      "claim": "rewritten",
-      "overlap": 0.42857142857142855,
-      "refreshReason": "Placed notification defaults in a named Slate policy and derived the shared configuration without changing its fields or values.",
-      "evidence": "shared-host-settings-contract.test.ts passes 1/1 and Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to startup state, minimum interval, and per-window cap. Measured overlap is 0.42857142857142855 against 14 baseline pairs."
     },
     "packages/constants/structured-log.ts": {
       "claim": "rewritten",
@@ -3761,29 +3739,11 @@
       "refreshReason": "Exported the Slate error marker through a named class expression while preserving Error ancestry and default name/message behavior.",
       "evidence": "host-local-exec-error.test.ts and host-foundations.test.ts pass 13/13. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to constructor identity, Error inheritance, and the exported constructor. Measured overlap is 0.75 against 4 baseline pairs."
     },
-    "shared/node/mcp/mcp-config-error.ts": {
-      "claim": "rewritten",
-      "overlap": 0.6666666666666666,
-      "refreshReason": "Built the exported Slate error type from a named configuration error class while keeping its name, message, and Error ancestry.",
-      "evidence": "shared-mcp-config-error.test.ts and shared-foundations.test.ts pass 16/16. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to error name, inheritance, and message preservation. Measured overlap is 0.6666666666666666 against 12 baseline pairs."
-    },
     "host/runner/slate-prompt-markers.ts": {
       "claim": "rewritten",
       "overlap": 0.5714285714285714,
       "refreshReason": "Built the persisted marker strings from one Slate prefix and named token parts instead of duplicating complete bracket strings.",
       "evidence": "host-prompt-markers-contract.test.ts and host-foundations.test.ts pass 13/13, pinning exact marker strings. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to the prefix, token, and separator. Measured overlap is 0.5714285714285714 against 7 baseline pairs."
-    },
-    "coordinator/gateway/gateway-errors.ts": {
-      "claim": "rewritten",
-      "overlap": 0.75,
-      "refreshReason": "Exported the gateway refusal marker through a named class expression while preserving constructor identity and inherited Error behavior.",
-      "evidence": "gateway-command-error.test.ts and coordinator-gateway-client.test.ts pass 10/10. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to constructor identity, Error inheritance, and exported constructor. Measured overlap is 0.75 against 4 baseline pairs."
-    },
-    "host/cloud-agents/cloud-agent-launch-error.ts": {
-      "claim": "rewritten",
-      "overlap": 0.75,
-      "refreshReason": "Exported the launch refusal marker through a named class expression while preserving constructor identity and inherited Error behavior.",
-      "evidence": "cloud-agent-launch-error.test.ts and host-cloud-agents-service.test.ts pass 16/16. Work-host typecheck passes. An isolated mutation sweep caught 3/3 changes to constructor identity, Error inheritance, and exported constructor. Measured overlap is 0.75 against 4 baseline pairs."
     },
     "packages/shell-exec/sandbox/hardcoded-policy.ts": {
       "claim": "rewritten",
@@ -4374,12 +4334,6 @@
       "refreshReason": "Specified a background subagent completion as one state recomputation with no tool invocation or user-visible reply.",
       "evidence": "agent-background-subagent-action-handler-contract.test.ts and agent-blocks.test.ts pass 43/43 in an esbuild bundle. Work-host typecheck/build pass. The contract covers context forwarding, one computation, state identity and the single-step hasToolCall false result. Measured overlap is 0.75 against 8 baseline pairs."
     },
-    "packages/agent/prompts/user-info-component.ts": {
-      "claim": "rewritten",
-      "overlap": 0.710236220472441,
-      "refreshReason": "Split the user-info composition into Slate-owned sections and kept raw request-context rules in the interop adapter, where they become workspaceRules before rendering.",
-      "evidence": "The user-info composition, interop projection, prompt, mode, rule, catalog and refresh suites pass 88/88 as an esbuild bundle. Work-host typecheck/build pass. Core prompt types use workspaceRules and displayWorkspaceRules; the adapter projection and section order are covered by contract tests. Measured overlap is 0.710236220472441 against 1270 baseline pairs."
-    },
     "packages/agent/prompts/user-info.ts": {
       "claim": "rewritten",
       "overlap": 0.3333333333333333,
@@ -4442,8 +4396,8 @@
     },
     "packages/agent/actions/user-message-action/interrupted-tool-reconstruction.ts": {
       "claim": "rewritten",
-      "overlap": 0.4639175257731959,
-      "refreshReason": "Interrupted-call recovery now reads Slate pending-message strings; generated redacted resolution decoding remains isolated in the interop adapter.",
+      "overlap": 0.45017182130584193,
+      "refreshReason": "Interrupted tool-call reconstruction now reads Slate provider-option metadata under the Slate namespace.",
       "evidence": "agent-interrupted-tool-reconstruction.test.ts and the full Work-host suite pass; recovery covers malformed messages, call matching, elapsed time, shell outcomes, fallback text and storage redaction from Slate strings. Work-host typecheck, rewrite and interop gates pass. Measured overlap is 0.4639175257731959 against 582 baseline pairs."
     },
     "packages/agent/tools/core/create-plan/backend-plan-utils.ts": {
@@ -4463,18 +4417,6 @@
       "overlap": 0.46440677966101696,
       "refreshReason": "Added a Slate-owned deferred ask-question tool value for lifecycle updates while retaining the versioned completion action, transcript write, and prompt-result behavior.",
       "evidence": "The full Node 24 Work-host suite passes 10100/10100 across 1427 suites. Package typecheck passes extension-id, rewrite (1204 claims below 0.8, zero floors, 40 removals), interop (zero direct proto consumers; 308 imports across 218 files), and TypeScript checks. Ask-question tests pin Slate tool arguments/results, privacy-boundary round trips, duplicate suppression, receipt behavior, formatted/structured outcomes, continuation, and active-turn routing. Measured overlap is 0.46440677966101696 against 590 baseline pairs."
-    },
-    "packages/agent/tools/subagent-model-force-policy.ts": {
-      "claim": "rewritten",
-      "overlap": 0.5,
-      "refreshReason": "Replaced three free-standing declaration pairs with a canonical Slate policy value list and a frozen compatibility object, preserving the public keys, value order and literals.",
-      "evidence": "agent-leaves.test.ts and the subagent run, preparation and runtime suites pass 179/179 under Node 24. The public policy values and invalid-value guard are covered. Measured overlap is 0.5 against 10 baseline pairs."
-    },
-    "host/boxes/box-store-sync/box-store-sync-error.ts": {
-      "claim": "rewritten",
-      "overlap": 0.3333333333333333,
-      "refreshReason": "Rewrote the Slate box-store failure in its own constructor vocabulary and added an ownership-safe type guard without changing native Error identity, cause support or subclass naming.",
-      "evidence": "host-box-store-sync-error.test.ts and the focused package batch pass 84/84 under Node 24. Tests pin instanceof, message, cause, direct and subclass names, and unrelated-value refusal. Measured overlap is 0.3333333333333333 against 15 baseline pairs."
     },
     "shared/message-reference.ts": {
       "claim": "rewritten",
@@ -4530,12 +4472,6 @@
       "refreshReason": "Moved the 35 Slate extension ids to a checked JSON source and deterministic generator; the old generated path is now a compatibility re-export and cannot drift from its generated value module.",
       "evidence": "extension-ids:check confirms the output is current. Host runtime-state, production registry and extension registry suites pass 80/80 under Node 24. Every id remains unique and every registry slot matches its declared extension. Measured overlap is 0.012195121951219513 against 82 baseline pairs."
     },
-    "host/transcript/mirror/transcript-mirror-router.ts": {
-      "claim": "rewritten",
-      "overlap": 0.7947494033412887,
-      "refreshReason": "Rewrote route selection and checkpoint lifecycle dispatch around one cached asynchronous decision, with explicit journal and legacy branches and retry-on-failure behavior.",
-      "evidence": "host-transcript-mirror-router.test.ts and leftovers-sixteen.test.ts pass 13/13 under Node 24. Concurrent ownership, disabled-journal ownership preservation, transient retry, best-effort legacy writes, abort, recovery-before-skip and already-routed skip behavior remain pinned. Measured overlap is 0.7947494033412887 against 419 baseline pairs."
-    },
     "host/notifications/trays/trays-service.ts": {
       "claim": "rewritten",
       "overlap": 0.5547445255474452,
@@ -4553,12 +4489,6 @@
       "overlap": 0.7781569965870307,
       "refreshReason": "Rewrote resource construction and both accessor registries around explicit Slate registration records while preserving every exported generic contract used by the 113 importing modules.",
       "evidence": "host-resource-provider.test.ts, agent-exec.test.ts, agent-exec-operations.test.ts and agent-exec-readonly-accessor.test.ts pass 68/68 under Node 24. Symbol identity, remote construction, controlled registration, registry ordering, local overrides and fallback remain covered. Measured overlap is 0.7781569965870307 against 293 baseline pairs."
-    },
-    "host/extensions/session/agent-session.ts": {
-      "claim": "rewritten",
-      "overlap": 0.7997502081598667,
-      "refreshReason": "Kept the public session-store surface while extracting Slate-owned summary cache, projection, transcript, state, profile and subresource services; creation now cleans partial directories on failure and deletion retires cache metadata only after directory removal succeeds.",
-      "evidence": "The session store, production store, session extension, conversation state, mutations, profile files, summaries and roster contracts pass under Node 24. Public create/open/delete, summaries, transcript views, viewed/unread and awaiting state, profiles/avatars, automations, workflows and channels remain wired through compatible methods. Measured overlap is 0.7997502081598667 across the mapped service sources against 2402 baseline pairs."
     }
   }
 }

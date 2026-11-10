@@ -34,8 +34,8 @@ test("Slate read results encode and decode through the external transcript envel
         fileSize: 7,
         readRange: { startLine: 1, endLine: 2 },
         includeLineNumbers: true,
-        relatedCursorRulePaths: ["/workspace/AGENTS.md"],
-        relatedCursorRules: [{ fullPath: "/workspace/AGENTS.md", content: "Use Slate rules." }],
+        relatedRulePaths: ["/workspace/AGENTS.md"],
+        relatedRules: [{ fullPath: "/workspace/AGENTS.md", content: "Use Slate rules." }],
       },
     },
   }

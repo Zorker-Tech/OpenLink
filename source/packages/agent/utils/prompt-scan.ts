@@ -26,7 +26,7 @@ export function isToolDiscoveryBlockTag(tagName: string): boolean {
 
 /** The summarizer marks the message that stands in for the conversation it replaced. */
 export function isSummaryCarrierMessage(message: PromptMessageLike): boolean {
-  return message.role === "user" && message.providerOptions?.cursor?.isSummary === true
+  return message.role === "user" && message.providerOptions?.slate?.isSummary === true
 }
 
 /** Of the ranges found, only the outermost: a block nested inside another is part of it. */

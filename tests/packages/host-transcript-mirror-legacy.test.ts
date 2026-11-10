@@ -82,7 +82,7 @@ describe("the lines a transcript holds", () => {
     // What the platform injected around a user's words is not part of the conversation, and neither is a system
     // message or the summary of one.
     assert.equal(formatSingleMessageJsonl({ role: "system", content: "rules" } as never), undefined);
-    assert.equal(formatSingleMessageJsonl({ role: "assistant", content: "s", providerOptions: { cursor: { isSummary: true } } } as never), undefined);
+    assert.equal(formatSingleMessageJsonl({ role: "assistant", content: "s", providerOptions: { slate: { isSummary: true } } } as never), undefined);
     assert.deepEqual(
       JSON.parse(formatSingleMessageJsonl({ role: "user", content: "<git_status>dirty</git_status>\nhello" } as never) ?? "null"),
       { role: "user", message: { content: [{ type: "text", text: "hello" }] } },
@@ -209,7 +209,7 @@ describe("writing a transcript through the mirror", () => {
       [hex(archived), messageBlob({ role: "assistant", content: "from the archive" })],
       [hex(asked), messageBlob({ role: "user", content: "what the user asked" })],
       [hex(system), messageBlob({ role: "system", content: "the rules" })],
-      [hex(summary), messageBlob({ role: "assistant", content: "a summary", providerOptions: { cursor: { isSummary: true } } })],
+      [hex(summary), messageBlob({ role: "assistant", content: "a summary", providerOptions: { slate: { isSummary: true } } })],
       [hex(unreadable), textBytes("not a message at all")],
       // A message whose text was stored as raw bytes is written as the placeholder rather than as bytes.
       [hex(binary), textBytes(JSON.stringify({ role: "user", content: [{ type: "text", text: { __type: "Uint8Array", hex: "aabb" } }] }))],

@@ -63,7 +63,7 @@ const BLOCK_GAP = "\n\n"
 export interface DurablePlan {
   readonly content: { unwrap(purpose: PrivacyCapability): string }
   readonly name?: string | undefined
-  readonly composerId?: string | undefined
+  readonly agentId?: string | undefined
 }
 
 export interface DurableBlockEnrichments {
@@ -95,7 +95,7 @@ function planContentText(plan: DurablePlan): string | undefined {
 function planFilePath(plan: DurablePlan): string {
   const planName = plan.name || "plan"
   const planFilename = planName.endsWith(".plan.md") ? planName : `${planName}.plan.md`
-  return planDocumentUri(plan.composerId, planFilename)
+  return planDocumentUri(plan.agentId, planFilename)
 }
 
 function transcriptSection(agentTranscriptsFolder: string, conversationId: string | undefined, useXml: boolean): string {

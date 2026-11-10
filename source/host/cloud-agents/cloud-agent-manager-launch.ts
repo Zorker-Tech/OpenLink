@@ -55,7 +55,7 @@ export async function launchCloudAgent(
   client: CloudAgentClient,
   getDashboardClient: () => DashboardClient,
   args: CloudAgentLaunchRequest,
-): Promise<{ readonly bcId: string; readonly url: string }> {
+): Promise<{ readonly agentId: string; readonly url: string }> {
   if (args.environment?.type === "machine" && args.startingRef?.trim()) {
     throw new SlateCloudAgentLaunchError(
       `A named private worker runs on its own checkout, so it can't start from '${args.startingRef}'. Omit starting_ref (the worker uses its current branch), or use a cloud or pool environment to start from a specific ref.`,
@@ -70,10 +70,10 @@ export async function launchCloudAgent(
     : undefined;
   const repository = buildRepoFromRemote(resolveLaunchRepoReference(args.repoUrl, saved), args.startingRef);
   const requestedModel = buildCloudAgentRequestedModel(args.modelId, args.modelParams);
-  const requestedId = `bc-${randomUUID()}`;
+  const requestedAgentId = `bc-${randomUUID()}`;
   const teamId = await resolvePrivateWorkerTeamId(args.environment, getDashboardClient);
   const request: WireRequest = {
-    bcId: requestedId,
+    bcId: requestedAgentId,
     snapshotNameOrId: repository.sanitizedRepoUrl,
     devcontainerStartingPoint: {
       url: repository.httpRepoUrl,
@@ -107,6 +107,6 @@ export async function launchCloudAgent(
   };
 
   const response = await client.startBackgroundComposerFromSnapshot(request);
-  const id = response.composer?.bcId || requestedId;
-  return { bcId: id, url: cloudAgentUrl(id) };
+  const id = response.composer?.bcId || requestedAgentId;
+  return { agentId: id, url: cloudAgentUrl(id) };
 }

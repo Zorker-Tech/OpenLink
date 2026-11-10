@@ -57,9 +57,9 @@ describe("SendMessage encoding behavior contract", () => {
   });
 
   it("references a Slate cloud agent using its Slate-owned message type and identity", () => {
-    assert.equal(textContent({ type: "slate-agent", bcId: "bc-1", title: " Build helper " }), "Referenced Slate cloud agent bc-1 (Build helper)");
-    assert.equal(textContent({ type: "slate-agent", bcId: "bc-2", title: "  " }), "Referenced Slate cloud agent bc-2");
-    assert.throws(() => encodeSendMessage({ type: "cursor-agent", bcId: "bc-old" }), /Unsupported send-message type/);
+    assert.equal(textContent({ type: "slate-agent", agentId: "bc-1", title: " Build helper " }), "Referenced Slate cloud agent bc-1 (Build helper)");
+    assert.equal(textContent({ type: "slate-agent", agentId: "bc-2", title: "  " }), "Referenced Slate cloud agent bc-2");
+    assert.throws(() => encodeSendMessage({ type: "cursor-agent", agentId: "bc-old" }), /Unsupported send-message type/);
   });
 
   it("renders connector and listener prompts with the destination information", () => {
