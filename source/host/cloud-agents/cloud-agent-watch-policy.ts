@@ -13,14 +13,19 @@ export const TEAM_ADMIN_POLICY_REQUEST_TIMEOUT_MS = 10_000
 export type CloudAgentRunStatus = "unspecified" | "creating" | "running" | "finished" | "error" | "expired" | number
 
 export interface DetailedCloudAgent {
-  readonly composer?: {
+  readonly agent?: {
+    readonly agentId?: string
     readonly status?: CloudAgentRunStatus
+    readonly name?: string
+    readonly isArchived?: boolean
+    readonly createdAtMs?: number
     readonly prUrl?: string
     readonly branchName?: string
     readonly commitCount?: number
     readonly filesChanged?: number
     readonly linesAdded?: number
     readonly linesRemoved?: number
+    readonly prStatus?: unknown
   }
   readonly prs?: readonly { readonly prUrl?: string; readonly branchName?: string; readonly pullNumber?: number; readonly prStatus?: unknown }[]
   readonly summary?: string
@@ -81,23 +86,23 @@ export function resolveSlateLimitError(detailed: DetailedCloudAgent | null | und
 }
 
 export function formatDiffStats(detailed?: DetailedCloudAgent): string | undefined {
-  const composer = detailed?.composer
-  if (composer === undefined) return undefined
+  const agent = detailed?.agent
+  if (agent === undefined) return undefined
   const summary: string[] = []
-  if ((composer.commitCount ?? 0) > 0) {
-    summary.push(`${composer.commitCount} commit${composer.commitCount === 1 ? "" : "s"}`)
+  if ((agent.commitCount ?? 0) > 0) {
+    summary.push(`${agent.commitCount} commit${agent.commitCount === 1 ? "" : "s"}`)
   }
-  if ((composer.filesChanged ?? 0) > 0) {
-    summary.push(`+${composer.linesAdded ?? 0}/-${composer.linesRemoved ?? 0} across ${composer.filesChanged} file${composer.filesChanged === 1 ? "" : "s"}`)
+  if ((agent.filesChanged ?? 0) > 0) {
+    summary.push(`+${agent.linesAdded ?? 0}/-${agent.linesRemoved ?? 0} across ${agent.filesChanged} file${agent.filesChanged === 1 ? "" : "s"}`)
   }
   return summary.length === 0 ? undefined : `Changes: ${summary.join(", ")}.`
 }
 
 export function buildWatchResult(agentId: string, status: CloudAgentRunStatus, detailed?: DetailedCloudAgent) {
   const normalized = normalizeCloudAgentRunStatus(status)
-  const composer = detailed?.composer
+  const agent = detailed?.agent
   const summary = detailed?.summary?.trim()
-  const prUrl = composer?.prUrl || detailed?.prs?.find(pr => pr.prUrl)?.prUrl || ""
+  const prUrl = agent?.prUrl || detailed?.prs?.find(pr => pr.prUrl)?.prUrl || ""
 
   if (normalized === "error" || normalized === "expired") {
     const lines = [`The Slate agent (${agentId}) ${normalized === "expired" ? "expired" : "errored"} before finishing.`]
@@ -108,7 +113,7 @@ export function buildWatchResult(agentId: string, status: CloudAgentRunStatus, d
   }
 
   const lines = ["The Slate agent finished."]
-  if (composer?.branchName) lines.push(`Branch: ${composer.branchName}`)
+  if (agent?.branchName) lines.push(`Branch: ${agent.branchName}`)
   lines.push(prUrl ? `Pull request: ${prUrl}` : "No pull request link is available yet (the agent may have made no changes, or the PR is still being created).")
   const stats = formatDiffStats(detailed)
   if (stats) lines.push(stats)

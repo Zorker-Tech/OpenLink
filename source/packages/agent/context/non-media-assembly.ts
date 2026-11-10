@@ -49,7 +49,7 @@ export interface AppendNonMediaSelectedContextContentArgs {
   readonly pullRequestPrompts: readonly GitPullRequestPromptInput[];
   readonly prReviewSelections: readonly PrReviewInput[];
   readonly extraContextsToInclude: readonly string[];
-  readonly isComposerMatterhorn: boolean;
+  readonly isLegacyAgentMatterhorn: boolean;
   readonly isRawTrainingSlug: boolean;
 }
 
@@ -69,7 +69,7 @@ export function appendNonMediaSelectedContextContent({
   prReviewSelections,
   extraContextsToInclude,
   simulatedMessagePrompts,
-  isComposerMatterhorn,
+  isLegacyAgentMatterhorn,
   isRawTrainingSlug,
 }: AppendNonMediaSelectedContextContentArgs): void {
   if (selectedContext.attachedCommands.length > 0) {
@@ -92,7 +92,7 @@ export function appendNonMediaSelectedContextContent({
   }
   const recentAgentsText = renderRecentAgentsContext({
     recentAgents,
-    isComposerMatterhorn,
+    isLegacyAgentMatterhorn,
     isRawTrainingSlug,
   });
   if (recentAgentsText !== undefined) {

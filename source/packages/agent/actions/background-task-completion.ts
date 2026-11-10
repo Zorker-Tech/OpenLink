@@ -49,7 +49,7 @@ const LEGACY_MODEL_SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY = `<user_query>
 export interface BackgroundCompletionFormatOptions {
   readonly timeZone?: string;
   readonly includeTimestamp: boolean;
-  readonly modelInfo?: { readonly isComposer1?: boolean; readonly isComposer15?: boolean; readonly isComposer2?: boolean; readonly isComposerMatterhorn?: boolean };
+  readonly modelInfo?: { readonly isLegacyAgentModel1?: boolean; readonly isLegacyAgentModel15?: boolean; readonly isLegacyAgentModel2?: boolean; readonly isLegacyAgentMatterhorn?: boolean };
   readonly enableAgentChatLinks: boolean;
   readonly hideAsyncSubagentTaskNotifications: boolean;
   readonly includeCloudSubagentViewLinks: boolean;
@@ -62,7 +62,7 @@ export function neutralizeBackgroundTaskDetailCloseTags(detail: string): string 
 }
 
 export function getShellNotificationAcknowledgementUserQuery(modelInfo: BackgroundCompletionFormatOptions["modelInfo"]): string {
-  if (modelInfo?.isComposer1 || modelInfo?.isComposer15 || modelInfo?.isComposer2 || modelInfo?.isComposerMatterhorn) return LEGACY_MODEL_SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY;
+  if (modelInfo?.isLegacyAgentModel1 || modelInfo?.isLegacyAgentModel15 || modelInfo?.isLegacyAgentModel2 || modelInfo?.isLegacyAgentMatterhorn) return LEGACY_MODEL_SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY;
   return SHELL_NOTIFICATION_ACKNOWLEDGEMENT_USER_QUERY;
 }
 

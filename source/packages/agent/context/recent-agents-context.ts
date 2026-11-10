@@ -11,7 +11,7 @@ export interface RecentAgentsTextContent {
 
 export interface RenderRecentAgentsContextArgs {
   readonly recentAgents: readonly RecentAgentPromptInput[]
-  readonly isComposerMatterhorn: boolean
+  readonly isLegacyAgentMatterhorn: boolean
   readonly isRawTrainingSlug: boolean
 }
 
@@ -22,15 +22,15 @@ function entryText(agent: RecentAgentPromptInput): string {
 }
 
 function shouldHideTranscriptLinks(args: RenderRecentAgentsContextArgs): boolean {
-  return args.isComposerMatterhorn && args.isRawTrainingSlug
+  return args.isLegacyAgentMatterhorn && args.isRawTrainingSlug
 }
 
 export function renderRecentAgentsContext({
   recentAgents,
-  isComposerMatterhorn,
+  isLegacyAgentMatterhorn,
   isRawTrainingSlug,
 }: RenderRecentAgentsContextArgs): RecentAgentsTextContent | undefined {
-  if (shouldHideTranscriptLinks({ recentAgents, isComposerMatterhorn, isRawTrainingSlug })) return undefined
+  if (shouldHideTranscriptLinks({ recentAgents, isLegacyAgentMatterhorn, isRawTrainingSlug })) return undefined
   if (recentAgents.length === 0) return undefined
 
   const entries = recentAgents.map(entryText).join("\n")

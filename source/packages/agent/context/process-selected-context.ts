@@ -102,7 +102,7 @@ interface ContextProcessingConfig {
   readonly agentType?: AgentType;
   readonly backgroundAgentSource?: unknown;
   readonly modelInfo?: TaskToolModelInfo & {
-    readonly isComposerMatterhorn?: boolean;
+    readonly isLegacyAgentMatterhorn?: boolean;
     readonly isRawTrainingSlug?: boolean;
   };
   readonly conversationId?: string;
@@ -419,7 +419,7 @@ export async function processSelectedContext(
     pullRequestPrompts,
     prReviewSelections: toPrReviewInputs(hydratedGitPrDiffSelections),
     extraContextsToInclude,
-    isComposerMatterhorn: config.modelInfo?.isComposerMatterhorn === true,
+    isLegacyAgentMatterhorn: config.modelInfo?.isLegacyAgentMatterhorn === true,
     isRawTrainingSlug: config.modelInfo?.isRawTrainingSlug === true,
   });
   userContent.push(...nonMediaContent);

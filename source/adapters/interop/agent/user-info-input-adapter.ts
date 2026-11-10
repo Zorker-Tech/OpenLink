@@ -23,6 +23,7 @@ import { shouldInjectGitWorkflowRules } from "../../../packages/agent/prompts/gi
 import { getGitWorkflowUserRules } from "../../../packages/agent/prompts/git-workflow-rules.ts"
 import { adaptGitWorkflowModelCapability } from "./git-workflow-model-capability-adapter.ts"
 import { getGeneratedUserRulesForModel } from "./user-rule-profile-adapter.ts"
+import { slateModelCapabilitiesFromInterop } from "./model-capabilities-adapter.ts"
 import { adaptInteropCloudTestingModelProfile } from "./testing-prompt-profile-adapter.ts"
 import type { UserInfoMode } from "../../../packages/agent/prompts/user-info-profile-contract.ts"
 import type {
@@ -40,11 +41,11 @@ import type {
 interface UserInfoInteropModelInfo {
   readonly modelName?: string | undefined
   readonly promptVersion?: string | undefined
-  readonly isComposerMatterhorn?: boolean | undefined
+  readonly isLegacyAgentMatterhorn?: boolean | undefined
   readonly isRawTrainingSlug?: boolean | undefined
   readonly isSlateProductPrompt?: boolean | undefined
-  readonly isComposer2?: boolean | undefined
-  readonly isComposer15?: boolean | undefined
+  readonly isLegacyAgentModel2?: boolean | undefined
+  readonly isLegacyAgentModel15?: boolean | undefined
   readonly isGpt56?: boolean | undefined
   readonly [key: string]: unknown
 }
@@ -233,9 +234,10 @@ export function decodeUserInfoMode(mode: AgentMode | undefined): UserInfoMode | 
 
 /** Model-family details are translated once, before the session prompt uses them. */
 function modelProfile(modelInfo: UserInfoInteropModelInfo | undefined) {
-  const usesPascalCaseTools = modelInfo?.isComposerMatterhorn === true && modelInfo.isRawTrainingSlug !== true
+  const capabilities = slateModelCapabilitiesFromInterop(modelInfo)
+  const usesPascalCaseTools = capabilities?.isLegacyAgentMatterhorn === true && capabilities.isRawTrainingSlug !== true
   return {
-    suppressMcpContext: modelInfo?.isComposerMatterhorn === true && modelInfo.isRawTrainingSlug === true,
+    suppressMcpContext: capabilities?.isLegacyAgentMatterhorn === true && capabilities.isRawTrainingSlug === true,
     gpt56SkillBudget: modelInfo?.isGpt56 === true,
     mcpToolNameStyle: usesPascalCaseTools ? "pascal" as const : "snake" as const,
   }

@@ -59,10 +59,10 @@ export class CloudAgentCompletionPoller {
       readonly isRateLimitError?: (error: unknown) => boolean
     },
     private readonly getClient: () => {
-      getBackgroundComposerInfo(
-        request: { bcId: string; includeDiff: false; doNotThrowIfSetupNotFinished: true },
+      get(
+        request: { agentId: string; includeDiff: false; doNotThrowIfSetupNotFinished: true },
         options: { timeoutMs: number },
-      ): Promise<{ composer?: DetailedCloudAgent }>
+      ): Promise<{ agent?: DetailedCloudAgent }>
     },
   ) {}
 
@@ -116,10 +116,10 @@ export class CloudAgentCompletionPoller {
 
           let detailed: DetailedCloudAgent | undefined
           try {
-            detailed = (await client.getBackgroundComposerInfo(
-              { bcId: agentId, includeDiff: false, doNotThrowIfSetupNotFinished: true },
+            detailed = (await client.get(
+              { agentId, includeDiff: false, doNotThrowIfSetupNotFinished: true },
               { timeoutMs: CLOUD_AGENT_POLL_RPC_TIMEOUT_MS },
-            )).composer
+            )).agent
           } catch (error) {
             if (this.options.isRateLimitError?.(error)) {
               pausedUntil = now + cloudAgentRateLimitPauseMs(error, this.options.randomFn)
@@ -128,7 +128,7 @@ export class CloudAgentCompletionPoller {
             return
           }
 
-          const status = normalizeCloudAgentRunStatus(detailed?.composer?.status ?? "unspecified")
+          const status = normalizeCloudAgentRunStatus(detailed?.agent?.status ?? "unspecified")
           const active = status === "running" || status === "creating"
           if (awaitingRestart) {
             if (active || now >= restartDeadline) awaitingRestart = false

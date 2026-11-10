@@ -102,7 +102,7 @@ test("a pinned model is used when it is usable, and reported as such", async () 
 
 test("a request-based session prefers the user's own pick of the family", async () => {
   const { args, logged } = forceArgs({
-    subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedComposer,
+    subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedAgent,
     userRequestedModelId: "composer-2.5-fast",
   })
   assert.equal(await resolveForcedSubagentModel(args as never), "composer-2.5-fast")
@@ -111,7 +111,7 @@ test("a request-based session prefers the user's own pick of the family", async 
 
 test("a pick outside the family falls back to the pinned model", async () => {
   const { args, logged } = forceArgs({
-    subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedComposer,
+    subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedAgent,
     userRequestedModelId: "gpt-5",
   })
   assert.equal(await resolveForcedSubagentModel(args as never), "composer-2.5")
@@ -119,7 +119,7 @@ test("a pick outside the family falls back to the pinned model", async () => {
 
   // A pick that is not in the catalogue falls back to the pinned model.
   const unknownPick = forceArgs({
-    subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedComposer,
+    subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedAgent,
     userRequestedModelId: "composer-2.5",
     isModelValid: () => false,
   })
@@ -131,7 +131,7 @@ test("a pick outside the family falls back to the pinned model", async () => {
     { isMaxModeCompatible: async () => false },
   ]) {
     const attempt = forceArgs({
-      subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedComposer,
+      subagentModelForcePolicy: SubagentModelForcePolicy.RequestBasedAgent,
       userRequestedModelId: "composer-2.5",
       ...unusable,
     })

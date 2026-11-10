@@ -91,8 +91,8 @@ test("Slate-mode callers reuse the policy without round-tripping through the wir
 test("the model adapter projects only Slate multitask policy into the reminder", () => {
   const reminder = renderInteropMultitaskModeEnterUserReminder({
     promptVersion: "latest",
-    isComposer1: true,
-    isComposer2: true,
+    isLegacyAgentModel1: true,
+    isLegacyAgentModel2: true,
     isGpt5: true,
   })
 

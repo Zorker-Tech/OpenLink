@@ -39,7 +39,7 @@ function append(selectedContext: SelectedContext, options: {
   extraContexts?: readonly string[]
   simulatedMsgReason?: number
   modelInfo?: { promptVersion: string }
-  isComposerMatterhorn?: boolean
+  isLegacyAgentMatterhorn?: boolean
   isRawTrainingSlug?: boolean
   environmentParamForSubagent?: boolean
   babysitV2Prompt?: boolean
@@ -65,7 +65,7 @@ function append(selectedContext: SelectedContext, options: {
     pullRequestPrompts: options.pullRequests ?? [],
     prReviewSelections: toPrReviewInputs(options.prDiffSelections ?? []),
     extraContextsToInclude: options.extraContexts ?? [],
-    isComposerMatterhorn: options.isComposerMatterhorn ?? false,
+    isLegacyAgentMatterhorn: options.isLegacyAgentMatterhorn ?? false,
     isRawTrainingSlug: options.isRawTrainingSlug ?? false,
   })
   return userContent
@@ -188,5 +188,5 @@ test("the recent-agents section is shaped by the session's model flags", () => {
   assert.match(parts[0]?.text ?? "", /transcript_path: \/repo\/\.slate\/transcripts\/agent-1\.txt/)
 
   // The two flags together are the one combination that drops the section entirely.
-  assert.deepEqual(append(context, { isComposerMatterhorn: true, isRawTrainingSlug: true }), [])
+  assert.deepEqual(append(context, { isLegacyAgentMatterhorn: true, isRawTrainingSlug: true }), [])
 })

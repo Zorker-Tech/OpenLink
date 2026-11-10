@@ -17,7 +17,7 @@ export type { ForcedModelAudit, ForcedSubagentModelInput, PinnedSubagentModelPor
 
 export async function resolveForcedSubagentModel(input: ForcedSubagentModelInput): Promise<string | undefined> {
   switch (input.subagentModelForcePolicy) {
-    case SubagentModelForcePolicy.RequestBasedComposer: {
+    case SubagentModelForcePolicy.RequestBasedAgent: {
       if (input.forceModelId === undefined) return undefined
       const requestedModel = input.userRequestedModelId
       const selectedAgentModel = requestedModel !== undefined

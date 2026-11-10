@@ -2,6 +2,7 @@
 
 import type { SlateUserRuleProfile, UserRuleToolNames } from "../../../packages/agent/prompts/user-rule-profile-contract.ts"
 import { buildGeneratedUserRules } from "../../../packages/agent/prompts/custom-user-rules.ts"
+import { slateModelCapabilitiesFromInterop } from "./model-capabilities-adapter.ts"
 
 type Fields = Record<string, unknown>
 
@@ -24,8 +25,9 @@ export function adaptInteropUserRuleProfile(
   toolNames: UserRuleToolNames = {},
   options: { readonly defaultCustomRulesWhenUnspecified?: boolean } = {},
 ): SlateUserRuleProfile {
-  const specializedModel = enabled(modelInfo, "isComposerMatterhorn")
-  const rawTrainingTag = enabled(modelInfo, "isRawTrainingSlug")
+  const capabilities = slateModelCapabilitiesFromInterop(modelInfo)
+  const specializedModel = capabilities?.isLegacyAgentMatterhorn === true
+  const rawTrainingTag = capabilities?.isRawTrainingSlug === true
   if (specializedModel && rawTrainingTag) {
     return {
       ruleSet: "suppressed",

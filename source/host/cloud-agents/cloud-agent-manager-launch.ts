@@ -73,7 +73,7 @@ export async function launchCloudAgent(
   const requestedAgentId = `bc-${randomUUID()}`;
   const teamId = await resolvePrivateWorkerTeamId(args.environment, getDashboardClient);
   const request: WireRequest = {
-    bcId: requestedAgentId,
+    agentId: requestedAgentId,
     snapshotNameOrId: repository.sanitizedRepoUrl,
     devcontainerStartingPoint: {
       url: repository.httpRepoUrl,
@@ -106,7 +106,7 @@ export async function launchCloudAgent(
     ...(args.title?.trim() ? { name: args.title.trim() } : {}),
   };
 
-  const response = await client.startBackgroundComposerFromSnapshot(request);
-  const id = response.composer?.bcId || requestedAgentId;
+  const response = await client.launch(request);
+  const id = response.agent?.agentId || requestedAgentId;
   return { agentId: id, url: cloudAgentUrl(id) };
 }

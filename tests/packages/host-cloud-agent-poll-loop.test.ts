@@ -36,8 +36,8 @@ async function settled(completion: Promise<CloudAgentCompletion>): Promise<Cloud
   return await Promise.race([completion, new Promise<"never settled">((resolve) => setTimeout(() => resolve("never settled"), 2_000).unref?.())]);
 }
 
-/** What one poll answers with: the response's composer is the detailed record, and the run's status sits inside it. */
-const detailedWith = (status: number, overrides: DetailedCloudAgent = {}) => ({ composer: { ...overrides, composer: { ...overrides.composer, status } } });
+/** What one poll answers with: the response's agent is the detailed record, and the run's status sits inside it. */
+const detailedWith = (status: number, overrides: DetailedCloudAgent = {}) => ({ agent: { ...overrides, agent: { ...overrides.agent, status } } });
 
 describe("how a run's own vocabulary is read", () => {
   it("answers with what the wire's numbers mean", () => {
@@ -72,20 +72,20 @@ describe("how a run's own vocabulary is read", () => {
 describe("what a caller is told when a watch ends", () => {
   it("tells a finished run apart from one that errored or expired, with what it did", () => {
     const finished = buildWatchResult("bc-1", 2, {
-      composer: { branchName: "feat/x", prUrl: "https://pr.test/1", commitCount: 2, filesChanged: 3, linesAdded: 10, linesRemoved: 4 },
+      agent: { branchName: "feat/x", prUrl: "https://pr.test/1", commitCount: 2, filesChanged: 3, linesAdded: 10, linesRemoved: 4 },
       summary: "  All done.  ",
     });
     assert.deepEqual(finished, {
       status: "completed",
       text: ["The Slate agent finished.", "Branch: feat/x", "Pull request: https://pr.test/1", "Changes: 2 commits, +10/-4 across 3 files.", "", "Summary from the Slate agent:", "All done."].join("\n"),
     });
-    // A run whose pull request came from the list rather than the composer still has one.
-    const listed = buildWatchResult("bc-1", 2, { composer: { commitCount: 1, filesChanged: 1, linesAdded: 1, linesRemoved: 0 }, prs: [{ prUrl: "https://pr.test/2" }] });
+    // A run whose pull request came from the list rather than the agent still has one.
+    const listed = buildWatchResult("bc-1", 2, { agent: { commitCount: 1, filesChanged: 1, linesAdded: 1, linesRemoved: 0 }, prs: [{ prUrl: "https://pr.test/2" }] });
     assert.match(listed.text, /Pull request: https:\/\/pr\.test\/2/);
     assert.match(listed.text, /Changes: 1 commit, \+1\/-0 across 1 file\./);
     // A run that changed nothing says so rather than pretending.
     assert.equal(buildWatchResult("bc-1", 2, {}).text, ["The Slate agent finished.", "No pull request link is available yet (the agent may have made no changes, or the PR is still being created)."].join("\n"));
-    assert.deepEqual([formatDiffStats(undefined), formatDiffStats({ composer: {} }), formatDiffStats({ composer: { commitCount: 0, filesChanged: 0 } })], [undefined, undefined, undefined]);
+    assert.deepEqual([formatDiffStats(undefined), formatDiffStats({ agent: {} }), formatDiffStats({ agent: { commitCount: 0, filesChanged: 0 } })], [undefined, undefined, undefined]);
   });
 
   it("says what the platform's own limit was, when that is why it stopped", () => {
@@ -167,7 +167,7 @@ describe("the two caches", () => {
 });
 
 describe("the watcher", () => {
-  function watchWorld(options: { maxWaitMs?: number; runRestartGraceMs?: number; answers?: (tick: number) => Promise<{ composer?: DetailedCloudAgent }> | { composer?: DetailedCloudAgent }; isRateLimitError?: (error: unknown) => boolean } = {}) {
+  function watchWorld(options: { maxWaitMs?: number; runRestartGraceMs?: number; answers?: (tick: number) => Promise<{ agent?: DetailedCloudAgent }> | { agent?: DetailedCloudAgent }; isRateLimitError?: (error: unknown) => boolean } = {}) {
     let now = 0;
     const ticks: (() => Promise<void>)[] = [];
     const disposed: number[] = [];
@@ -181,7 +181,7 @@ describe("the watcher", () => {
         randomFn: () => 0,
         ...(options.isRateLimitError === undefined ? {} : { isRateLimitError: options.isRateLimitError }),
       },
-      () => ({ getBackgroundComposerInfo: async () => (await (options.answers?.(tickCount++) ?? detailedWith(2))) as { composer?: DetailedCloudAgent } }),
+      () => ({ get: async () => (await (options.answers?.(tickCount++) ?? detailedWith(2))) as { agent?: DetailedCloudAgent } }),
     );
     return {
       poller,
@@ -201,7 +201,7 @@ describe("the watcher", () => {
       answers: (tick) => {
         seen.push(tick);
         // The first two answers are a status this platform does not know: the run is not over yet.
-        return detailedWith(tick < 2 ? 9 : 2, { composer: { status: tick < 2 ? 9 : 2, branchName: "feat/x" } });
+        return detailedWith(tick < 2 ? 9 : 2, { agent: { status: tick < 2 ? 9 : 2, branchName: "feat/x" } });
       },
     });
     const watching = world.poller.awaitCompletion("bc-1");
@@ -255,7 +255,7 @@ describe("the watcher", () => {
     const poller = new CloudAgentCompletionPoller(
       { completionPolling: { start: (run) => (ticks.push(async () => await run()), { dispose: () => {} }) }, clock: { monotonicNow: () => now }, randomFn: () => 0, isRateLimitError: (error: unknown) => (error as { limited?: boolean }).limited === true, maxWaitMs: 100_000 },
       () => ({
-        getBackgroundComposerInfo: async () => {
+        get: async () => {
           answers += 1;
           if (answers === 1) throw Object.assign(new Error("slow down"), { limited: true, retryAfterMs: 5_000 });
           return detailedWith(2);
