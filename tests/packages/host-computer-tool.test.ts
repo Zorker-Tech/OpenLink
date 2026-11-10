@@ -91,7 +91,7 @@ describe("the computer tool", () => {
     assert.equal(tool.describeOutcome({ kind: "success", actionCount: 0, durationMs: 0, screenshotPath: "" }, "computer"), "Computer action ran on the box desktop.");
     assert.equal(
       tool.describeOutcome({ kind: "success", actionCount: 1, durationMs: 1, screenshotPath: "p/x.webp", cursorPosition: { x: 3, y: 4 } }, "computer"),
-      "Computer action ran on the box desktop.\nScreenshot saved to p/x.webp.\nCursor is at (3, 4).",
+      "Computer action ran on the box desktop.\nScreenshot saved to p/x.webp.\nPointer is at (3, 4).",
     );
   });
 

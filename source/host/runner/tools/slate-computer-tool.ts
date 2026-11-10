@@ -300,7 +300,7 @@ function describeHeading(operation: "screenshot" | "computer"): string {
 function describeSuccess(result: Extract<SlateComputerUseResult, { readonly kind: "success" }>, heading: string): string[] {
   const lines = [heading];
   if (result.screenshotPath != null && result.screenshotPath.length > 0) lines.push(`Screenshot saved to ${result.screenshotPath}.`);
-  if (result.cursorPosition != null) lines.push(`Cursor is at (${result.cursorPosition.x}, ${result.cursorPosition.y}).`);
+  if (result.cursorPosition != null) lines.push(`Pointer is at (${result.cursorPosition.x}, ${result.cursorPosition.y}).`);
   return lines;
 }
 
