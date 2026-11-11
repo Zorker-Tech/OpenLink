@@ -1,3 +1,7 @@
+packages:
+  - packages/zorker-bot-demo
+  - demo/zorker-bot-vite
+
 allowBuilds:
   # Sharp is required by Next.js image processing during production builds.
   sharp: true

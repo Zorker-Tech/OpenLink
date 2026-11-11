@@ -3,10 +3,8 @@ import type {
   CreateChatSessionResult,
   DeleteChatSessionResult,
   PendingAccessWrite,
-  UpdateChatSessionAccessModeResult,
   UpdateChatSessionTitleResult,
 } from '@/lib/desktop-api/action-types'
-import type { AccessMode } from '@/lib/chat-sessions'
 
 import { callDesktopAction } from '../api'
 
@@ -15,7 +13,6 @@ export type {
   CreateChatSessionResult,
   DeleteChatSessionResult,
   PendingAccessWrite,
-  UpdateChatSessionAccessModeResult,
   UpdateChatSessionTitleResult,
 }
 
@@ -30,13 +27,6 @@ export async function updateChatSessionTitleAction(input: {
   title: string
 }): Promise<UpdateChatSessionTitleResult> {
   return callDesktopAction<UpdateChatSessionTitleResult>('chat.updateTitle', input)
-}
-
-export async function updateChatSessionAccessModeAction(input: {
-  sessionId: string
-  mode: AccessMode
-}): Promise<UpdateChatSessionAccessModeResult> {
-  return callDesktopAction<UpdateChatSessionAccessModeResult>('chat.updateAccessMode', input)
 }
 
 export async function listPendingAccessWritesAction(

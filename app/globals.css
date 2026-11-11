@@ -728,6 +728,89 @@
   .workspace-sidebar-slot, .workspace-chat-sidebar { transition: none; }
 }
 
+/* Bot workspace reuses the standalone demo chat primitives inside the app shell. */
+.bot-workspace .zbd-root {
+  --zbd-text-primary: var(--app-foreground);
+  --zbd-text-secondary: color-mix(in srgb, var(--app-foreground) 64%, transparent);
+  --zbd-text-tertiary: color-mix(in srgb, var(--app-foreground) 44%, transparent);
+  --zbd-bg-editor: var(--app-background);
+  --zbd-bg-elevated: var(--app-background);
+  --zbd-bg-card: var(--app-surface);
+  --zbd-bg-tertiary: var(--app-surface);
+  --zbd-bg-active: var(--app-active);
+  --zbd-bg-hover: var(--app-hover);
+  --zbd-border-default: var(--app-border);
+  --zbd-fill-emphasis: var(--app-submit-background);
+  --zbd-bubble-user: var(--app-submit-background);
+  --zbd-bubble-user-ink: var(--app-submit-foreground);
+  --zbd-bubble-agent: color-mix(in srgb, var(--app-foreground) 7%, transparent);
+  --zbd-current-accent: var(--app-brand);
+  --zbd-current-coat: var(--app-brand);
+  height: 100%;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--app-foreground);
+  font-family: inherit;
+}
+.bot-workspace .zbd-chat,
+.bot-workspace .zbd-app-chat {
+  background: transparent;
+}
+.bot-workspace .zbd-chat-header {
+  border-bottom-color: var(--app-border);
+  padding-inline: 18px;
+}
+@media (min-width: 768px) {
+  .bot-workspace .bot-chat-root[data-sidebar-collapsed] .zbd-app-chat-header {
+    padding-left: 56px;
+  }
+}
+.bot-workspace .zbd-app-transcript {
+  padding: 20px 28px 56px;
+}
+.bot-workspace .zbd-app-transcript-inner {
+  max-width: 820px;
+}
+.bot-workspace .zbd-app-empty {
+  margin-top: clamp(44px, 11vh, 120px);
+}
+.bot-workspace .zbd-app-composer-wrap {
+  max-width: 876px;
+  padding: 0 28px 20px;
+}
+.bot-workspace .zbd-composer {
+  border-color: var(--app-control-border);
+  border-radius: 24px;
+  background: var(--app-surface);
+}
+.bot-workspace .zbd-composer-send {
+  background: var(--app-submit-background);
+  color: var(--app-submit-foreground);
+}
+.bot-workspace .zbd-composer-send:hover {
+  opacity: 0.88;
+}
+.bot-workspace .zbd-app-avatar-new {
+  filter: grayscale(1);
+  opacity: 0.48;
+}
+.bot-workspace .zbd-app-computer-pane {
+  background: var(--app-background);
+}
+.bot-workspace .zbd-side-pane {
+  border-left-color: var(--app-border);
+}
+.bot-workspace .zbd-app-palette {
+  top: 52px;
+  left: max(16px, calc(50% - 340px));
+  width: min(680px, calc(100% - 32px));
+  background: var(--app-elevated);
+}
+.bot-workspace .zbd-app-palette-scrim {
+  background: rgb(0 0 0 / 22%);
+}
+
 @keyframes openlink-onboarding-enter {
   from {
     opacity: 0;

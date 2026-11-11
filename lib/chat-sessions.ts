@@ -19,7 +19,6 @@ const CHAT_SESSION_ALPHABET_SIZE = CHAT_SESSION_ALPHABET.length
 const RANDOM_BYTE_LIMIT = 256 - (256 % CHAT_SESSION_ALPHABET_SIZE)
 
 export type AccessMode = 'restricted' | 'ask' | 'open'
-export const ACCESS_MODES: readonly AccessMode[] = ['restricted', 'ask', 'open']
 export const DEFAULT_ACCESS_MODE: AccessMode = 'restricted'
 
 export const AGENT_KINDS: readonly AgentKind[] = ['codex', 'pi', 'omp']
@@ -216,29 +215,6 @@ export async function deleteChatSession(
     .eq('user_id', userId)
 
   if (error) throw error
-}
-
-export async function updateChatSessionAccessMode(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  sessionId: string,
-  mode: AccessMode,
-): Promise<AccessMode> {
-  if (!isChatSessionId(sessionId)) throw new Error('CHAT_SESSION_NOT_FOUND')
-  if (!ACCESS_MODES.includes(mode)) throw new Error('CHAT_SESSION_ACCESS_MODE_INVALID')
-
-  const { data, error } = await supabase
-    .schema('openlink')
-    .from('chat_sessions')
-    .update({ access_mode: mode, updated_at: new Date().toISOString() })
-    .eq('id', sessionId)
-    .eq('user_id', userId)
-    .select('access_mode')
-    .maybeSingle()
-
-  if (error) throw error
-  if (!data) throw new Error('CHAT_SESSION_NOT_FOUND')
-  return (data as { access_mode: AccessMode }).access_mode
 }
 
 export async function createChatSession(

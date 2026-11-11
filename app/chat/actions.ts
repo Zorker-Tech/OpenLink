@@ -1,6 +1,6 @@
 'use server'
 
-import { createChatSession, deleteChatSession, updateChatSessionAccessMode, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
+import { createChatSession, deleteChatSession, updateChatSessionTitle, type AccessMode } from '@/lib/chat-sessions'
 import type { AgentKind } from '@/lib/chat-session-types'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
@@ -91,29 +91,6 @@ export async function updateChatSessionTitleAction(input: {
     return {
       title: null,
       error: error instanceof Error ? error.message : 'CHAT_SESSION_UPDATE_FAILED',
-    }
-  }
-}
-
-export type UpdateChatSessionAccessModeResult =
-  | { mode: AccessMode; error: null }
-  | { mode: null; error: string }
-
-export async function updateChatSessionAccessModeAction(input: {
-  sessionId: string
-  mode: AccessMode
-}): Promise<UpdateChatSessionAccessModeResult> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { mode: null, error: 'AUTH_REQUIRED' }
-
-  try {
-    const mode = await updateChatSessionAccessMode(supabase, user.id, input.sessionId, input.mode)
-    return { mode, error: null }
-  } catch (error) {
-    return {
-      mode: null,
-      error: error instanceof Error ? error.message : 'CHAT_SESSION_ACCESS_MODE_UPDATE_FAILED',
     }
   }
 }

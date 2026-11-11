@@ -42,7 +42,6 @@ interface AppWorkspaceProps {
   projects: ProjectSummary[]
   runtimeMode: 'local' | 'cloud'
   workspaceSlug: string
-  composerSkills?: import('@/lib/user-skill-types').UserSkill[]
   customInstructions?: string
 }
 
@@ -400,7 +399,6 @@ export function AppWorkspace({
   projects,
   runtimeMode,
   workspaceSlug,
-  composerSkills = [],
   customInstructions = '',
 }: AppWorkspaceProps) {
   const t = useT()
@@ -567,7 +565,6 @@ export function AppWorkspace({
               pollRuntimeStatus={false}
               projects={currentProjects}
               runtimeMode={runtimeMode}
-              skills={composerSkills}
               workspaceSlug={workspaceSlug}
             />
           </PageTransition>

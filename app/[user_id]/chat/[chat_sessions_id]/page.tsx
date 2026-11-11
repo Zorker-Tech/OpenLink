@@ -96,7 +96,6 @@ export default async function ChatSessionPage({
         .map((candidate) => ({ id: candidate.id, name: candidate.name }))}
       sessionId={session.id}
       thinkingVisibility={preferences.thinkingVisibility}
-      initialAccessMode={session.access_mode}
       composerResources={{
         agent: session.agent ?? 'codex',
         skills,

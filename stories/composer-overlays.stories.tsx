@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { PromptInput, PromptInputBody } from '@/components/ai-elements/prompt-input'
 import { ChatConfirmationDock } from '@/components/chat-confirmation-dock'
 import { PromptAddMenu } from '@/components/prompt-add-menu'
-import type { AccessMode } from '@/lib/chat-sessions'
 import type { CodexComposerResources, RuntimeComposerResources } from '@/lib/composer-resources'
 
 const runtimeResources: RuntimeComposerResources = {
@@ -72,27 +71,24 @@ const codexResources: CodexComposerResources = {
 }
 
 function AddMenuFixture({ installFails = false }: { installFails?: boolean }) {
-  const [accessMode, setAccessMode] = useState<AccessMode>('restricted')
   const [result, setResult] = useState('none')
   return (
     <main className="flex min-h-screen items-end justify-center bg-[var(--app-background)] p-12 text-[var(--app-foreground)]">
       <div className="w-full max-w-xl">
-        <p className="mb-4 text-sm text-[var(--app-muted)]" role="status">Result: {result}. Access: {accessMode}.</p>
+        <p className="mb-4 text-sm text-[var(--app-muted)]" role="status">Result: {result}.</p>
         <PromptInput className="w-full" onSubmit={() => undefined}>
           <PromptInputBody>
             <PromptAddMenu
-              accessMode={accessMode}
               agent="codex"
               attachmentsEnabled
               codexResources={codexResources}
               customInstructions="Keep runtime claims evidence-backed."
-              onAccessModeChange={(mode) => { setAccessMode(mode); setResult(`access:${mode}`) }}
               onInsertText={(text) => setResult(`insert:${text.trim()}`)}
               onInstallPlugin={async (pluginId) => {
                 if (installFails) throw new Error('Worker 未确认插件可用')
                 setResult(`install:${pluginId}`)
               }}
-              runtimeResources={{ ...runtimeResources, accessMode }}
+              runtimeResources={runtimeResources}
               variant="session"
             />
           </PromptInputBody>
@@ -156,15 +152,7 @@ export const AddMenu: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '打开添加菜单' }))
     await page.findByRole('menu')
     await waitFor(() => expect(page.getByRole('menu')).toBeVisible())
-
-    page.getByRole('menuitem', { name: /权限/ }).focus()
-    await userEvent.keyboard('{ArrowRight}')
-    const askItem = await page.findByRole('menuitem', { name: '询问（写操作确认）' })
-    askItem.focus()
-    await userEvent.keyboard('{Enter}')
-    await expect(canvas.getByRole('status')).toHaveTextContent('Access: ask')
-    // Wait for the permission submenu's close transition before reopening
-    // the root picker; otherwise two accessible menus coexist transiently.
+    await userEvent.keyboard('{Escape}')
     await waitFor(() => expect(page.queryAllByRole('menu')).toHaveLength(0))
 
     const { dialog } = await openAvailablePlugin(canvasElement)
