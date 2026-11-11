@@ -44,12 +44,18 @@ test('Plan and Goal footer indicators execute their native inverse actions', () 
   assert.match(workspace, /disabled=\{controlPending \|\| status === "streaming"\}/)
 })
 
-test('permission changes are blocked during turns and report only verified runtime state', () => {
+test('permission controls are not exposed in the composer', () => {
   const menu = readFileSync(new URL('../../components/prompt-add-menu.tsx', import.meta.url), 'utf8')
-  assert.match(workspace, /accessModeChangeDisabled=\{controlPending \|\| status === 'streaming'\}/)
-  assert.match(workspace, /transitionAccessMode\(\{ currentMode: accessMode, nextMode: mode/)
-  assert.match(workspace, /权限切换未生效，已恢复原权限/)
-  assert.match(menu, /disabled=\{accessModeChangeDisabled \|\| permissions === mode\}/)
+  const home = readFileSync(new URL('../../components/workspace-prompt.tsx', import.meta.url), 'utf8')
+  const actions = readFileSync(new URL('../../app/chat/actions.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(home, /AccessModePicker/)
+  assert.doesNotMatch(home, /onAccessModeChange/)
+  assert.doesNotMatch(workspace, /onAccessModeChange/)
+  assert.doesNotMatch(workspace, /transitionAccessMode/)
+  assert.doesNotMatch(menu, /accessModeChangeDisabled/)
+  assert.doesNotMatch(menu, /onAccessModeChange/)
+  assert.doesNotMatch(menu, /Permission Profiles/)
+  assert.doesNotMatch(actions, /updateChatSessionAccessModeAction/)
 })
 
 test('the Agent owns the Live Browser session instead of binding a transient preview', () => {
@@ -64,15 +70,16 @@ test('the Agent owns the Live Browser session instead of binding a transient pre
   assert.match(workbench, /selectPreviewTarget/)
 })
 
-test('the prompt add menu is a runtime capability inventory, not a static menu', () => {
+test('the prompt add menu keeps internal runtime capabilities out of the user surface', () => {
   const menu = readFileSync(new URL('../../components/prompt-add-menu.tsx', import.meta.url), 'utf8')
   const workspace = readFileSync(new URL('../../components/chat-workspace.tsx', import.meta.url), 'utf8')
   const route = readFileSync(new URL('../../app/api/chat/[session_id]/runtime-resources/route.ts', import.meta.url), 'utf8')
-  assert.match(menu, /runtimeResources\?\.permissionProfiles/)
   assert.match(menu, /runtimeResources\?\.instructions/)
-  assert.match(menu, /server\.status === 'connected'/)
-  assert.match(menu, /server\.auth === 'required'/)
-  assert.match(menu, /runtimeResources\?\.skills/)
+  assert.doesNotMatch(menu, /runtimeResources\?\.permissionProfiles/)
+  assert.doesNotMatch(menu, /runtimeResources\?\.skills/)
+  assert.doesNotMatch(menu, /runtimeResources\?\.mcpServers/)
+  assert.doesNotMatch(menu, />MCPs</)
+  assert.doesNotMatch(menu, /t\('Skills'\)/)
   assert.match(route, /permissionProfiles/)
   assert.match(route, /instructions/)
   assert.match(route, /toolCount/)

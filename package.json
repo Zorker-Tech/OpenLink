@@ -67,11 +67,14 @@
     "storybook:build": "pnpm storybook:inventory && storybook build",
     "storybook:test": "pnpm storybook:inventory && vitest run --project=storybook",
     "build-storybook": "pnpm storybook:inventory && storybook build",
+    "demo:zorker-bot:vite": "npm --prefix packages/zorker-bot-demo run build && vite --config demo/zorker-bot-vite/vite.config.ts",
+    "demo:zorker-bot:vite:build": "npm --prefix packages/zorker-bot-demo run build && vite build --config demo/zorker-bot-vite/vite.config.ts",
     "dev:local:t2": "node scripts/openlink.mjs --mode development --profile local -t2",
     "start:t2": "node scripts/openlink.mjs --mode production -t2",
     "runtime:t2-vm-image": "OPENLINK_UBUNTU_PROJECT_VM_PROFILE=t2 node scripts/build-ubuntu-project-vm-base.mjs"
   },
   "dependencies": {
+    "@zorker/bot-demo": "workspace:*",
     "@ai-sdk/react": "^4.0.147",
     "@base-ui/react": "^1.9.0",
     "@hugeicons/core-free-icons": "^4.3.5",

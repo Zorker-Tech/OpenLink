@@ -7,7 +7,6 @@ import { ChatTimeline } from '@/components/chat-timeline'
 import type { OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { QueuedChatPrompt } from '@/lib/chat-prompt-queue'
-import type { AccessMode } from '@/lib/chat-sessions'
 import type { CodexComposerResources, RuntimeComposerResources } from '@/lib/composer-resources'
 
 const browserFetch: typeof fetch = globalThis.fetch.bind(globalThis)
@@ -123,13 +122,12 @@ function ComposerFixture() {
       <div className="w-full max-w-2xl">
         <p className="mb-4 text-sm text-[var(--app-muted)]" data-testid="composer-outcome">Outcome: {outcome}</p>
         <ChatComposer
-          accessMode="restricted"
+          cloudRuntime={false}
           codexResources={null}
           composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
           context={null}
           initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
           models={models}
-          onAccessModeChange={async () => true}
           onFork={(path) => setOutcome(`navigated:${path}`)}
           onInstallPlugin={async () => undefined}
           onInterrupt={() => undefined}
@@ -210,13 +208,12 @@ function QueueFixture() {
         </div>
         <ChatComposer
           key={composerKey}
-          accessMode="restricted"
+          cloudRuntime={false}
           codexResources={null}
           composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
           context={null}
           initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
           models={models}
-          onAccessModeChange={async () => true}
           onFork={() => undefined}
           onInstallPlugin={async () => undefined}
           onInterrupt={() => undefined}
@@ -280,13 +277,12 @@ function UploadFixture() {
         <p className="mb-2 text-sm text-[var(--app-muted)]" data-testid="upload-request">Upload request: {uploadRequest}</p>
         <p className="mb-4 text-sm text-[var(--app-muted)]" data-testid="upload-outcome">Outcome: {outcome}</p>
         <ChatComposer
-          accessMode="restricted"
+          cloudRuntime={false}
           codexResources={null}
           composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
           context={null}
           initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
           models={models}
-          onAccessModeChange={async () => true}
           onFork={() => undefined}
           onInstallPlugin={async () => undefined}
           onInterrupt={() => undefined}
@@ -300,57 +296,6 @@ function UploadFixture() {
           }}
           runtimeResources={runtimeResources}
           sessionId="storybook-upload-session"
-          status="idle"
-        />
-      </div>
-    </main>
-  )
-}
-
-function AccessModeFixture() {
-  const [accessMode, setAccessMode] = useState<AccessMode>('restricted')
-  const [resources, setResources] = useState<RuntimeComposerResources>({ ...runtimeResources, accessMode: 'restricted' })
-  const [attempt, setAttempt] = useState('none')
-  const originalFetch = useRef(browserFetch)
-  const mockFetch = useMemo<typeof fetch>(() => async (input, init) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-    const method = init?.method ?? (typeof input === 'string' || input instanceof URL ? 'GET' : input.method)
-    if (url.endsWith('/queue') && method === 'GET') return jsonResponse({ items: [] })
-    if (url.endsWith('/runtime-resources') && method === 'GET') return jsonResponse(runtimeResources)
-    if (url.endsWith('/control') && method === 'POST') return jsonResponse({ paused: false, result: { mode: 'default' } })
-    return jsonResponse({ error: `Unhandled story request: ${method} ${url}` }, { status: 500 })
-  }, [])
-
-  globalThis.fetch = mockFetch
-  useEffect(() => () => {
-    if (globalThis.fetch === mockFetch) globalThis.fetch = originalFetch.current
-  }, [mockFetch])
-
-  return (
-    <main className="flex min-h-screen items-end justify-center bg-[var(--app-background)] p-12 text-[var(--app-foreground)]">
-      <div className="w-full max-w-2xl">
-        <p className="mb-4 text-sm text-[var(--app-muted)]" data-testid="access-mode-outcome">Mode: {accessMode}; attempt: {attempt}</p>
-        <ChatComposer
-          accessMode={accessMode}
-          codexResources={null}
-          composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
-          context={null}
-          initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
-          models={models}
-          onAccessModeChange={async (mode) => {
-            setAttempt(mode)
-            if (mode !== 'ask') return false
-            setAccessMode(mode)
-            setResources((current) => ({ ...current, accessMode: mode }))
-            return true
-          }}
-          onFork={() => undefined}
-          onInstallPlugin={async () => undefined}
-          onInterrupt={() => undefined}
-          onRename={() => undefined}
-          onSubmit={async () => true}
-          runtimeResources={resources}
-          sessionId="storybook-access-mode-session"
           status="idle"
         />
       </div>
@@ -381,13 +326,12 @@ function PluginInstallFixture() {
       <div className="w-full max-w-2xl">
         <p className="mb-4 text-sm text-[var(--app-muted)]" data-testid="plugin-install-outcome">Install attempts: {attempts}</p>
         <ChatComposer
-          accessMode="restricted"
+          cloudRuntime={false}
           codexResources={resources}
           composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
           context={null}
           initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
           models={models}
-          onAccessModeChange={async () => true}
           onFork={() => undefined}
           onInstallPlugin={async () => {
             const attempt = attempts + 1
@@ -437,13 +381,12 @@ function ResourceDrawerFixture() {
         <p className="mb-2 text-sm text-[var(--app-muted)]" data-testid="resource-request">Resource request: {resourceRequest}</p>
         <p className="mb-4 text-sm text-[var(--app-muted)]" data-testid="resource-submit">Submit: {submitOutcome}</p>
         <ChatComposer
-          accessMode="restricted"
+          cloudRuntime={false}
           codexResources={{ skills: [], plugins: [] }}
           composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
           context={null}
           initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
           models={models}
-          onAccessModeChange={async () => true}
           onFork={() => undefined}
           onInstallPlugin={async () => undefined}
           onInterrupt={() => undefined}
@@ -501,13 +444,12 @@ function ForkFailureFixture() {
           <button onClick={() => setStatus('idle')} type="button">结束回复</button>
         </div>
         <ChatComposer
-          accessMode="restricted"
+          cloudRuntime={false}
           codexResources={null}
           composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
           context={null}
           initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
           models={models}
-          onAccessModeChange={async () => true}
           onFork={(path) => setNavigation(path)}
           onInstallPlugin={async () => undefined}
           onInterrupt={() => undefined}
@@ -594,13 +536,12 @@ function PlanGoalFixture() {
       <div className="w-full max-w-2xl">
         <p className="mb-4 text-sm text-[var(--app-muted)]" data-testid="plan-goal-outcome">Controls: {controls.join(',') || 'none'}; submits: {submits}</p>
         <ChatComposer
-          accessMode="restricted"
+          cloudRuntime={false}
           codexResources={null}
           composerResources={{ agent: 'codex', customInstructions: '', skills: [] }}
           context={null}
           initialModel={{ providerId: 'openai', modelId: 'gpt-5' }}
           models={models}
-          onAccessModeChange={async () => true}
           onFork={onFork}
           onInstallPlugin={async () => undefined}
           onInterrupt={() => undefined}
@@ -776,44 +717,6 @@ export const PrivateFileUpload: Story = {
   },
 }
 
-export const AccessModeCommitAndRollback: Story = {
-  render: () => <AccessModeFixture />,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const page = within(canvasElement.ownerDocument.body)
-    const textbox = canvas.getByRole('textbox', { name: '描述你想创建的内容' })
-    const outcome = canvas.getByTestId('access-mode-outcome')
-    await userEvent.type(textbox, 'draft survives permissions')
-
-    await userEvent.click(canvas.getByRole('button', { name: '打开添加菜单' }))
-    const permissions = await page.findByRole('menuitem', { name: /权限/ })
-    permissions.focus()
-    await userEvent.keyboard('{ArrowRight}')
-    const ask = await page.findByRole('menuitem', { name: '询问（写操作确认）' })
-    ask.focus()
-    await userEvent.keyboard('{Enter}')
-
-    await waitFor(() => expect(outcome).toHaveTextContent('Mode: ask; attempt: ask'))
-    await expect(canvas.queryByText('权限已在当前运行时生效')).not.toBeInTheDocument()
-    await expect(textbox).toHaveValue('draft survives permissions')
-
-    await userEvent.click(canvas.getByRole('button', { name: '打开添加菜单' }))
-    const updatedPermissions = await page.findByRole('menuitem', { name: /权限/ })
-    await expect(updatedPermissions).toHaveTextContent('询问')
-    updatedPermissions.focus()
-    await userEvent.keyboard('{ArrowRight}')
-    const open = await page.findByRole('menuitem', { name: '开放（完全访问）' })
-    open.focus()
-    await userEvent.keyboard('{Enter}')
-
-    await waitFor(() => expect(outcome).toHaveTextContent('Mode: ask; attempt: open'))
-    await expect(await canvas.findByRole('alert')).toHaveTextContent('权限切换未生效，已恢复原权限')
-    await expect(textbox).toHaveValue('draft survives permissions')
-    for (let index = 0; index < 2 && page.queryAllByRole('menu').length; index += 1) await userEvent.keyboard('{Escape}')
-    await waitFor(() => expect(canvasElement.ownerDocument.querySelector('[data-base-ui-focus-guard]')).toBeNull())
-  },
-}
-
 export const PluginInstallRetryAndWorkerActivation: Story = {
   render: () => <PluginInstallFixture />,
   play: async ({ canvasElement }) => {
@@ -848,11 +751,8 @@ export const NativeResourceEmptyAndErrorStates: Story = {
     const textbox = canvas.getByRole('textbox', { name: '描述你想创建的内容' })
 
     await userEvent.type(textbox, '/')
-    await userEvent.click(await canvas.findByRole('option', { name: /\/skills/ }))
-    await expect(await canvas.findByRole('option', { name: '没有可用 Skills' })).toHaveAttribute('aria-disabled', 'true')
-    await expect(canvas.getByTestId('resource-request')).toHaveTextContent('Resource request: skills')
-    await expect(textbox).toHaveValue('/skills ')
-    await expect(canvas.getByTestId('resource-submit')).toHaveTextContent('Submit: none')
+    await expect(await canvas.findByRole('option', { name: /\/apps/ })).toBeVisible()
+    await expect(canvas.queryByRole('option', { name: /\/skills/ })).not.toBeInTheDocument()
 
     await userEvent.clear(textbox)
     await userEvent.type(textbox, '/')

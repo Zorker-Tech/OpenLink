@@ -67,9 +67,6 @@ import type { CodexComposerResources, ComposerResources, RuntimeComposerResource
 import { deferInitialPromptSubmission, hasPersistedUserMessage, isRetryableInitialPromptFailure, retryableInitialPromptUserMessage } from '@/lib/chat-auto-start'
 import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
-import { updateChatSessionAccessModeAction } from '@/app/chat/actions'
-import type { AccessMode } from '@/lib/chat-sessions'
-import { transitionAccessMode } from '@/lib/access-mode-transition'
 import { codexPluginToken } from '@/lib/prompt-input-protocol'
 import { AccessWritesBanner } from '@/components/access-writes-banner'
 import { AnimatePresence, motion } from 'motion/react'
@@ -95,6 +92,7 @@ import type { PanelImperativeHandle } from 'react-resizable-panels'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const CONTROL_ACTIONS_ALLOWED_DURING_TURN = new Set(['interrupt', 'pause', 'steer'])
+const HIDDEN_USER_COMMANDS = new Set(['skills', 'mcp', 'permissions'])
 
 function resolveInitialComposerModel(
   models: ConfiguredModelOption[],
@@ -171,7 +169,6 @@ interface ChatWorkspaceProps {
   previewProjects: Array<{ id: string; name: string }>
   userId: string
   localRuntime: boolean
-  initialAccessMode?: AccessMode
   thinkingVisibility: 'summary' | 'hidden'
   composerResources: ComposerResources
 }
@@ -739,8 +736,6 @@ export function ChatComposer({
   status,
   sessionId,
   context,
-  accessMode,
-  onAccessModeChange,
   composerResources,
   runtimeResources,
   codexResources,
@@ -759,8 +754,6 @@ export function ChatComposer({
   status: 'idle' | 'streaming'
   sessionId: string
   context: ChatContextStats | null
-  accessMode: AccessMode
-  onAccessModeChange: (mode: AccessMode) => Promise<boolean>
   composerResources: ComposerResources
   runtimeResources: RuntimeComposerResources | null
   codexResources: CodexComposerResources | null
@@ -804,28 +797,6 @@ export function ChatComposer({
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const forceSteerRef = useRef(false)
   const queueDrainRef = useRef(false)
-  const runAccessModeChange = useCallback(async (mode: AccessMode) => {
-    if (mode === accessMode) return true
-    if (status === 'streaming') {
-      setControlError(t('请等待当前回复结束后再切换权限'))
-      return false
-    }
-    setControlPending(true)
-    setControlError(null)
-    try {
-      const changed = await onAccessModeChange(mode)
-      if (!changed) {
-        setControlError(t('权限切换未生效，已恢复原权限'))
-        return false
-      }
-      return true
-    } catch {
-      setControlError(t('权限切换未生效，已恢复原权限'))
-      return false
-    } finally {
-      setControlPending(false)
-    }
-  }, [accessMode, onAccessModeChange, status])
   const runPluginInstall = useCallback(async (pluginId: string) => {
     if (status === 'streaming') throw new Error(t('请等待当前回复结束后再安装插件'))
     setControlPending(true)
@@ -1112,7 +1083,7 @@ export function ChatComposer({
   }, [composerResources.agent, promptResourceRequest, selectedModel, sessionId, status])
 
   const promptSuggestions = useMemo<AgentPromptSuggestion[]>(() => {
-    const commands: AgentPromptSuggestion[] = liveCommands.map((command) => ({
+    const commands: AgentPromptSuggestion[] = liveCommands.filter((command) => !HIDDEN_USER_COMMANDS.has(command.name)).map((command) => ({
         id: `${composerResources.agent}-command:${command.source}:${command.name}`,
         kind: 'command' as const,
         group: composerResources.agent === 'codex'
@@ -1123,7 +1094,7 @@ export function ChatComposer({
         label: `/${command.name}`,
         description: command.description || `${composerResources.agent === 'codex' ? 'Codex' : composerResources.agent === 'omp' ? 'Oh My Pi' : 'Pi'} ${command.source}`,
         insertText: `/${command.name} `,
-        drilldown: composerResources.agent === 'codex' && ['model', 'skills', 'plugins', 'apps', 'mcp', 'permissions'].includes(command.name),
+        drilldown: composerResources.agent === 'codex' && ['model', 'plugins', 'apps'].includes(command.name),
         ...(composerResources.agent === 'codex' && command.name === 'rename' ? { action: 'rename', requiresEmptyComposer: true } : {}),
         ...(composerResources.agent === 'codex' && command.name === 'status' ? { action: 'status-panel' } : {}),
         ...(composerResources.agent === 'codex' && command.name === 'plan' ? { action: 'plan-toggle', disabled: !controlReady || controlPending || status === 'streaming' } : {}),
@@ -1160,7 +1131,6 @@ export function ChatComposer({
       disabled: item.type === 'mcp',
     }))
     if (promptResourceRequest?.command === 'model') return [...commands, ...availableModels.map((model) => ({ id: `configured-model:${model.id}`, kind: 'command' as const, command: 'model', label: model.name, description: model.providerName, group: 'Models', insertText: '', replaceCommand: true, action: `model:${model.id}` }))]
-    if (promptResourceRequest?.command === "permissions") return [...commands, ...(["restricted", "ask", "open"] as AccessMode[]).map((mode) => ({ id: "permissions:" + mode, kind: "command" as const, command: "permissions", label: mode, description: mode === "restricted" ? t("受限执行") : mode === "ask" ? t("请求批准") : t("完全访问"), group: "Permissions", insertText: "", replaceCommand: true, action: "permissions:" + mode, disabled: status === "streaming" || controlPending }))]
     return [
       ...commands,
       ...dynamic,
@@ -1205,7 +1175,6 @@ export function ChatComposer({
         <dt className="text-[var(--app-muted)]">{t('运行状态')}</dt><dd>{sessionPaused ? t('已暂停') : status === 'streaming' ? t('正在运行') : controlReady ? t('空闲') : t('正在连接')}</dd>
         <dt className="text-[var(--app-muted)]">{t('模式')}</dt><dd>{sessionMode === 'plan' ? t('计划') : t('默认')}</dd>
         <dt className="text-[var(--app-muted)]">{t("模型")}</dt><dd className="truncate" title={selectedModel ? `${selectedModel.providerName} · ${selectedModel.name}` : undefined}>{selectedModel ? `${selectedModel.providerName} · ${selectedModel.name}` : t('未配置')}</dd>
-        <dt className="text-[var(--app-muted)]">{t('访问权限')}</dt><dd>{accessMode}</dd>
         <dt className="text-[var(--app-muted)]">{t('上下文')}</dt><dd>{context?.usage.contextTokens == null ? t('尚无原生用量报告') : `${context.usage.contextTokens.toLocaleString()}${context.contextWindow == null ? ' tokens' : ` / ${context.contextWindow.toLocaleString()} tokens`}`}</dd>
         <dt className="text-[var(--app-muted)]">{t('速率限额')}</dt><dd>{t('当前 Provider 未提供')}</dd>
       </dl>
@@ -1274,9 +1243,8 @@ export function ChatComposer({
           setInput('')
           return
         }
-        if (!promptAttachments.length && /^\/(model|skills|plugins|apps|mcp|permissions)\s*$/i.test(text)) {
+        if (!promptAttachments.length && /^\/(model|plugins|apps)\s*$/i.test(text)) {
           setCommandQuery(text.trim().slice(1))
-          setControlError(t('请从原生指令候选或模型／权限菜单中选择具体项目'))
           return
         }
         const command = !promptAttachments.length ? /^\/(goal-clear|goal|plan|default|compact|pause|resume|interrupt|steer)(?:\s+([\s\S]*))?$/.exec(cleanText) : null
@@ -1311,14 +1279,11 @@ export function ChatComposer({
     >
       <div className={expanded ? 'flex min-h-[54px] max-h-[330px] w-full flex-col overflow-y-auto overscroll-contain pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : 'contents'}>
         <PromptAddMenu
-          accessMode={accessMode}
-          accessModeChangeDisabled={controlPending || status === 'streaming'}
           attachmentsEnabled
           agent={composerResources.agent}
           className={expanded ? 'ml-1' : ''}
           customInstructions={composerResources.customInstructions}
           codexResources={codexResources}
-          onAccessModeChange={(mode) => { void runAccessModeChange(mode) }}
           onAddInstruction={(name, text) => {
             setInstructionAttachments((current) => current.some((attachment) => attachment.text === text) ? current : [...current, { id: crypto.randomUUID(), type: 'instruction', name, text }])
             setControlError(null)
@@ -1328,7 +1293,6 @@ export function ChatComposer({
           pluginInstallationDisabled={controlPending || status === 'streaming'}
           onInsertText={(text) => setInput((current) => current ? `${current}\n\n${text}` : text)}
           runtimeResources={runtimeResources}
-          skills={composerResources.skills}
           variant="session"
         />
         <AgentPromptTextarea
@@ -1394,7 +1358,6 @@ export function ChatComposer({
           }}
           onAction={(action) => {
             if (action.startsWith('model:')) { setSelectedModelId(action.slice(6)); return }
-            if (action.startsWith('permissions:')) { void runAccessModeChange(action.slice(12) as AccessMode); return }
             if (action === 'goal-editor') { setGoalDraft(goalObjective ?? ''); setGoalEditorOpen(true); return }
             if (action === 'rename') { onRename(); return }
             if (action === 'status-panel') { setStatusPanelOpen(true); void runControl('status'); return }
@@ -1452,7 +1415,6 @@ export function ChatWorkspace({
   previewProjects,
   userId,
   localRuntime,
-  initialAccessMode = 'restricted',
   thinkingVisibility,
   composerResources,
 }: ChatWorkspaceProps) {
@@ -1472,7 +1434,6 @@ export function ChatWorkspace({
   const [openWorkspaceTabs, setOpenWorkspaceTabs] = useState<WorkspaceTabId[]>(['preview'])
   const [previewHasPendingChanges, setPreviewHasPendingChanges] = useState(false)
   const previewPendingChangesConfirmationRef = useRef<(() => boolean) | null>(null)
-  const [accessMode, setAccessMode] = useState<AccessMode>(initialAccessMode)
   // The browser canvas is the primary workspace. The device control is an
   // explicit opt-in for the constrained mobile viewport.
   const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'desktop' | 'code' | 'data'>('browser')
@@ -1831,47 +1792,6 @@ export function ChatWorkspace({
     setCodexResources(nextResources)
   }, [agentStreamStatus, sessionId, workspaceView])
 
-  const changeAccessMode = useCallback(async (mode: AccessMode) => {
-    if (mode === accessMode) return true
-    if (agentStreamStatus === 'streaming') return false
-    const previousMode = accessMode
-    // The selection is optimistic. Persistence and Worker policy replacement
-    // continue while sending stays gated; a failed transition restores the
-    // last confirmed permission instead of making the menu feel unresponsive.
-    setAccessMode(mode)
-    const persistMode = async (nextMode: AccessMode) => {
-      const result = await updateChatSessionAccessModeAction({ sessionId, mode: nextMode })
-      if (!result.mode) console.warn(`OpenLink access mode update failed: ${result.error ?? 'unknown error'}`)
-      return result.mode === nextMode
-    }
-    const leaseRuntime = async () => {
-      const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/lease`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-        cache: 'no-store',
-      })
-      return response.ok
-    }
-    const readRuntimeResources = async () => {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const response = await fetch(`/api/chat/${encodeURIComponent(sessionId)}/runtime-resources`, { cache: 'no-store' })
-        if (response.ok) return await response.json() as RuntimeComposerResources
-        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 300))
-      }
-      return null
-    }
-    const result = await transitionAccessMode({ currentMode: accessMode, nextMode: mode, persistMode, leaseRuntime, readRuntimeResources })
-    if (!result.ok) {
-      setAccessMode(previousMode)
-      if (!result.rollbackSucceeded) console.warn('OpenLink access mode rollback could not be confirmed')
-      return false
-    }
-    setAccessMode(result.mode)
-    if (result.resources) setRuntimeResources(result.resources)
-    return true
-  }, [accessMode, agentStreamStatus, sessionId, workspaceView])
-
   useEffect(() => {
     const controller = new AbortController()
     setGitVersionsLoading(true)
@@ -2176,10 +2096,8 @@ export function ChatWorkspace({
     const normalizedSourceRef = sourceRef?.toLowerCase()
     if (sourceRef && !/^[0-9a-f]{40}$/i.test(sourceRef)) throw new Error(t('无法确认所选 Git 版本，请刷新预览目标后重试。'))
     const sourceMatchesCurrentChat = sessionGitBindingState === 'ready' && normalizedSourceRef === sessionGitRef
-    const createSourceChat = targetProjectId !== projectId || sessionGitBindingState !== 'ready' || !sourceMatchesCurrentChat
-    if ((intent === 'design' || intent === 'annotation') && targetProjectId === projectId && accessMode === 'restricted' && !createSourceChat) {
-      throw new Error(t('当前聊天为只读模式。请切换访问权限到“询问”后再应用源码修改。'))
-    }
+    const needsWritableSession = intent === 'design' || intent === 'annotation'
+    const createSourceChat = needsWritableSession || targetProjectId !== projectId || sessionGitBindingState !== 'ready' || !sourceMatchesCurrentChat
     if (createSourceChat) {
       const created = await createChatSessionAction({
         workspaceSlug: activeWorkspace.slug,
@@ -2222,7 +2140,7 @@ export function ChatWorkspace({
     const payload = await response.json().catch(() => null) as { error?: string } | null
     if (!response.ok) throw new Error(payload?.error || t('消息加入队列失败'))
     return true
-  }, [accessMode, activeWorkspace.slug, agentStreamStatus, previewProjects, projectId, router, sessionGitBindingState, sessionGitRef, sessionId, submitAgentMessage, t])
+  }, [activeWorkspace.slug, agentStreamStatus, previewProjects, projectId, router, sessionGitBindingState, sessionGitRef, sessionId, submitAgentMessage, t])
 
   const retrySavedInitialPrompt = useCallback(async () => {
     const prompt = initialPrompt.trim()
@@ -2500,7 +2418,7 @@ export function ChatWorkspace({
                         <div className="px-2 pb-2">
                           <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                           <AccessWritesBanner sessionId={sessionId} />
-                          <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} activeFlow={activeChatFlow} />
+                          <ChatComposer cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} activeFlow={activeChatFlow} />
                         </div>
                       </section>
                     </ResizablePanel>
@@ -2509,7 +2427,7 @@ export function ChatWorkspace({
                       <section className="flex size-full min-w-0 flex-col overflow-hidden bg-[var(--app-background)]">
                         <ChatTopbar {...chatTopbarProps} side="workspace" />
                         <div className="min-h-0 min-w-0 flex-1">
-                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} canApplyDesign={previewProjectId !== projectId || accessMode !== 'restricted'} onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onPendingPreviewChangesChange={setPreviewHasPendingChanges} onRegisterPreviewPendingChangesConfirmation={registerPreviewPendingChangesConfirmation} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={activePreviewGitRef} sessionId={sessionId} view={workspaceView} />
+                          <WorkspaceSurfaces browserState={browserState} browserWorkbenchRef={browserWorkbenchRef} dataSurface={dataSurface} initialBrowserUrl={browserState.address || persistedUi.browserAddress} initialPreviewTargetId={workspacePreviewState.targetIds[previewProjectId] ?? null} initialPreviewPagePath={workspacePreviewState.pagePaths[workspacePreviewState.targetIds[previewProjectId] ?? '']} previewPagePaths={workspacePreviewState.pagePaths} previewViewportModes={workspacePreviewState.viewportModes} openTabs={openWorkspaceTabs} uiReady={uiReady && workspacePreviewReady} previewProjects={previewProjects} previewProjectId={previewProjectId} canApplyDesign onSelectPreviewProject={selectPreviewProject} onSelectPreviewViewport={selectPreviewViewport} gitVersionError={gitVersionError} gitVersions={gitVersions} gitVersionsLoading={gitVersionsLoading} onBrowserStateChange={setBrowserState} onSelectGitVersion={selectGitVersion} onSelectWorkspaceTab={selectWorkspaceTab} onSubmitPreviewRequest={submitPreviewRequest} onPendingPreviewChangesChange={setPreviewHasPendingChanges} onRegisterPreviewPendingChangesConfirmation={registerPreviewPendingChangesConfirmation} onToggleDeviceView={toggleWorkspaceViewport} panelProps={{ activeWorkspace, avatarUrl, chatSessions, email, nickname, organizations, personalWorkspace, projectId, userId }} projectName={projectName} selectedGitRef={activePreviewGitRef} sessionId={sessionId} view={workspaceView} />
                         </div>
                       </section>
                     </ResizablePanel>
@@ -2530,7 +2448,7 @@ export function ChatWorkspace({
                   <div className="flex w-full max-w-3xl shrink-0 flex-col px-2 pb-2">
                     <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
                     <AccessWritesBanner sessionId={sessionId} />
-                    <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} activeFlow={activeChatFlow} />
+                    <ChatComposer cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} activeFlow={activeChatFlow} />
                   </div>
                 </motion.section>
               )}
@@ -2542,7 +2460,7 @@ export function ChatWorkspace({
               <ChatTimeline events={agentEvents} initialPrompt={initialPrompt} onRetryInitialPrompt={retrySavedInitialPrompt} isStreaming={agentStreamStatus === 'streaming'} showThinkingContent={thinkingVisibility === 'summary'} onFlowStatusChange={setActiveChatFlow} onEditMessage={async (id, text, options) => { await submitAgentMessage(text, null, { editMessageId: id, onAccepted: options?.onAccepted }) }} />
               <div className="px-2 pb-2">
                 <ChatConfirmationDock onResolve={resolveConfirmation} requests={pendingConfirmations} />
-                <ChatComposer accessMode={accessMode} cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onAccessModeChange={changeAccessMode} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} activeFlow={activeChatFlow} />
+                <ChatComposer cloudRuntime={!localRuntime} codexResources={codexResources} composerResources={composerResources} context={contextStats} initialModel={autoStartModel} models={composerModels} onFork={navigateToFork} onInstallPlugin={installCodexPlugin} onInterrupt={interruptAgentMessage} onRename={() => setRenameRequestVersion((value) => value + 1)} onSubmit={submitAgentMessage} runtimeResources={runtimeResources} sessionId={sessionId} initialDraft={persistedUi.composerDraft} onDraftChange={updateComposerDraft} status={agentStreamStatus} activeFlow={activeChatFlow} />
               </div>
             </section>
           </div>

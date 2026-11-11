@@ -16,8 +16,9 @@ function clampSidebarWidth(width: number) {
 }
 
 /** Shared outer app rail used by workspace and settings page shells. */
-export function WorkspaceNavigationRail({ activePage, footer, onCloseMobile, onHistory, onLeave, onPeek, sidebarWidth, workspaceSlug }: {
+export function WorkspaceNavigationRail({ activePage, botUnreadCount = 0, footer, onCloseMobile, onHistory, onLeave, onPeek, sidebarWidth, workspaceSlug }: {
   activePage?: string
+  botUnreadCount?: number
   footer: ReactNode
   onCloseMobile: () => void
   onHistory: () => void
@@ -32,7 +33,10 @@ export function WorkspaceNavigationRail({ activePage, footer, onCloseMobile, onH
     <nav aria-label={t('工作区导航')} className="workspace-navigation-rail" style={{ '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <div className="flex flex-1 flex-col items-center gap-4">
         <Link aria-current={!activePage || activePage === t('首页') ? 'page' : undefined} aria-label={t('首页')} className={railClass} href={`/app/${workspaceSlug}`} onMouseEnter={onPeek} onMouseLeave={onLeave} onClick={onCloseMobile} title={t('首页')}><img alt="" className="app-nav-icon" src={`${iconPath}home.svg`} /></Link>
-        <button aria-label={t('Bot')} aria-disabled="true" className={railClass} title={t('Bot（即将推出）')} type="button"><img alt="" className="app-nav-icon" src={`${iconPath}bot.svg`} /></button>
+        <Link aria-current={activePage === t('Bot') ? 'page' : undefined} aria-label={botUnreadCount > 0 ? `${t('Bot')} · ${botUnreadCount}` : t('Bot')} className={`${railClass} relative`} href={`/app/${workspaceSlug}/bots`} onClick={onCloseMobile} title={t('Bot')}>
+          <img alt="" className="app-nav-icon" src={`${iconPath}bot.svg`} />
+          {botUnreadCount > 0 ? <span aria-hidden="true" className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff453a] px-1 text-[9px] font-semibold leading-none text-white ring-2 ring-[var(--app-background)]">{botUnreadCount > 9 ? '9+' : botUnreadCount}</span> : null}
+        </Link>
         <button aria-label={t('库')} aria-disabled="true" className={railClass} title={t('库（即将推出）')} type="button"><img alt="" className="app-nav-icon" src={`${iconPath}library.svg`} /></button>
         <Link aria-current={activePage === t('项目') ? 'page' : undefined} aria-label={t('项目')} className={railClass} href={`/app/${workspaceSlug}/projects`} onClick={onCloseMobile} title={t('项目')}><img alt="" className="app-nav-icon" src={`${iconPath}projects.svg`} /></Link>
         <button aria-label={t('搜索聊天')} className={railClass} onClick={onHistory} title={t('搜索聊天')} type="button"><img alt="" className="app-nav-icon" src={`${iconPath}history.svg`} /></button>
@@ -52,8 +56,9 @@ export function WorkspaceNavigationRail({ activePage, footer, onCloseMobile, onH
 }
 
 /** The app rail stays mounted while the conversation sidebar is pinned or previewed. */
-export function WorkspaceNavigation({ activePage, children, collapsed, footer, mobileOpen, onCloseMobile, onHistory, onToggle, workspaceSlug }: {
+export function WorkspaceNavigation({ activePage, botUnreadCount, children, collapsed, footer, mobileOpen, onCloseMobile, onHistory, onToggle, workspaceSlug }: {
   activePage?: string
+  botUnreadCount?: number
   children: ReactNode
   collapsed: boolean
   footer: ReactNode
@@ -174,7 +179,7 @@ export function WorkspaceNavigation({ activePage, children, collapsed, footer, m
 
   return (
     <>
-      <WorkspaceNavigationRail activePage={activePage} footer={footer} onCloseMobile={onCloseMobile} onHistory={onHistory} onLeave={leave} onPeek={peek} sidebarWidth={sidebarWidth} workspaceSlug={workspaceSlug} />
+      <WorkspaceNavigationRail activePage={activePage} botUnreadCount={botUnreadCount} footer={footer} onCloseMobile={onCloseMobile} onHistory={onHistory} onLeave={leave} onPeek={peek} sidebarWidth={sidebarWidth} workspaceSlug={workspaceSlug} />
       <div className="workspace-sidebar-slot" data-collapsed={collapsed} data-resizing={isResizing} style={{ '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
         {collapsed && <button aria-controls="workspace-chat-sidebar" aria-expanded={previewOpen} aria-label={t('展开侧边栏')} className="workspace-sidebar-trigger" onClick={() => { setPreviewOpen(false); onToggle() }} onMouseEnter={peek} onMouseLeave={leave} ref={trigger} title={t('展开侧边栏')} type="button"><img alt="" className="app-control-icon" src={`${iconPath}sidebar.svg`} /></button>}
         {mobileOpen && <button aria-label={t('关闭侧边栏')} className="fixed inset-0 z-30 bg-[var(--app-overlay)] md:hidden" onClick={onCloseMobile} type="button" />}

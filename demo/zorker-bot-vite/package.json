@@ -1,0 +1,22 @@
+{
+  "name": "zorker-bot-vite-demo",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@zorker/bot-demo": "workspace:*",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
+  },
+  "scripts": {
+    "build:package": "npm --prefix ../../packages/zorker-bot-demo run build",
+    "dev": "npm run build:package && vite",
+    "build": "npm run build:package && vite build",
+    "preview": "vite preview"
+  }
+}

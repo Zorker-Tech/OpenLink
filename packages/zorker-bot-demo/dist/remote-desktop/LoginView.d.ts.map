@@ -1,0 +1,1 @@
+{"version":3,"file":"LoginView.d.ts","sourceRoot":"","sources":["../../src/remote-desktop/LoginView.tsx"],"names":[],"mappings":"AAEA,MAAM,MAAM,cAAc,GAAG;IAC3B,UAAU,EAAE,MAAM,CAAA;IAClB,aAAa,EAAE,MAAM,CAAA;IACrB,KAAK,EAAE,OAAO,GAAG,UAAU,GAAG,IAAI,CAAA;CACnC,CAAA;AAED,wBAAgB,SAAS,CAAC,EAAE,UAAU,EAAE,aAAa,EAAE,KAAK,EAAE,EAAE,cAAc,+BA8B7E"}

@@ -5,7 +5,6 @@ import {
   createChatSessionAction,
   deleteChatSessionAction,
   listPendingAccessWritesAction,
-  updateChatSessionAccessModeAction,
   updateChatSessionTitleAction,
 } from '@/app/chat/actions'
 import {
@@ -94,15 +93,6 @@ const handlers: Record<string, (input: unknown) => Promise<DesktopActionResult>>
       updateChatSessionTitleAction({
         sessionId: String(record.sessionId ?? ''),
         title: String(record.title ?? ''),
-      }),
-    )
-  },
-  'chat.updateAccessMode': (input) => {
-    const record = asRecord(input)
-    return invoke(() =>
-      updateChatSessionAccessModeAction({
-        sessionId: String(record.sessionId ?? ''),
-        mode: record.mode as never,
       }),
     )
   },

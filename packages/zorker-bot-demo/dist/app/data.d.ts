@@ -1,0 +1,45 @@
+import type { Agent, AgentId, TranscriptEntry } from '../types';
+export type AppRoutine = {
+    id: string;
+    name: string;
+    triggerDescription: string;
+};
+export type AppSession = {
+    id: string;
+    name: string;
+    title: string;
+    description: string;
+    avatar: string;
+    ink: string;
+    group?: AgentId[];
+    isGroup?: boolean;
+    unread?: boolean;
+    unreadCount?: number;
+    lastActivityMs: number;
+    lastEntryText: string;
+    transcript: TranscriptEntry[];
+    routines: AppRoutine[];
+    screenKind: 'crm-portal' | 'desktop';
+    isDraft?: boolean;
+};
+declare const MINUTE = 60000;
+export declare const APP_NOW: number;
+export declare const SALES_ROUTINE: AppRoutine;
+export declare const APP_SESSIONS: AppSession[];
+export declare function createInitialSessions(): AppSession[];
+export declare function createNewAgentSession(sequence: number): AppSession;
+export declare function cloneSession(session: AppSession): AppSession;
+export declare function sessionToAgent(session: AppSession, name?: string): Agent;
+export declare function formatSidebarTime(timestampMs: number, now?: number): string;
+export declare function formatTranscriptTime(timestampMs: number, now?: number): string;
+export declare function entryPreview(entry: TranscriptEntry | undefined): string;
+export declare function sessionPreview(session: AppSession, extras: TranscriptEntry[]): string;
+export declare function sessionActivityMs(session: AppSession, extras: TranscriptEntry[]): number;
+export declare function isSessionMatch(session: AppSession, query: string, name?: string): boolean;
+export declare function titleFromMessage(message: string): string;
+export declare function replyForSession(session: AppSession, message: string): "It runs at **8:30am** on weekdays from now on. You can change the time or turn it off from my routines list." | "On it. I'll keep sourcing quietly and hold outreach for your ok." | "On it. I'll keep the inbox at zero and hold anything sensitive for your read." | "On it. I'll keep the rest of the day moving and come back if something needs your call." | "On it. I'll loop the crew in and come back with the next step." | "On it. I'll reconcile the receipts and flag anything that doesn't line up." | "On it. I'll take this from here and come back when there's something for you to look at." | "On it. I'll watch the account thread and hold external sends until you approve." | "Scheduled. I'll nudge you right on time. Anything else while I'm at it?";
+export declare function uniqueEntryId(prefix: string): string;
+export declare function timeSince(timestampMs: number): number;
+export declare function transcriptTimestamp(entry: TranscriptEntry | undefined): number | undefined;
+export { MINUTE };
+//# sourceMappingURL=data.d.ts.map

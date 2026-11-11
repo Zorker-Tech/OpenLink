@@ -8,7 +8,6 @@ export type {
   CreateChatSessionResult,
   DeleteChatSessionResult,
   PendingAccessWrite,
-  UpdateChatSessionAccessModeResult,
   UpdateChatSessionTitleResult,
 } from '@/app/chat/actions'
 export type { CreateProjectActionInput, CreateProjectActionResult } from '@/app/app/project-actions'

@@ -4,7 +4,6 @@ import { listOrganizations } from '@/lib/organizations'
 import { ensureDraftProject, listProjects } from '@/lib/projects'
 import { listChatSessions } from '@/lib/chat-sessions'
 import { getUserPreferences } from '@/lib/user-preferences.server'
-import { getUserSkill, listUserSkills } from '@/lib/user-skills.server'
 import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
@@ -38,7 +37,7 @@ export default async function WorkspacePage({
   ])
   if (!workspace || !personalWorkspace) redirect('/app')
 
-  const [projects, defaultProject, { data: profile }, configuredModels, chatSessions, skillSummaries, preferences] = await Promise.all([
+  const [projects, defaultProject, { data: profile }, configuredModels, chatSessions, preferences] = await Promise.all([
     listProjects(supabase, workspace.id),
     ensureDraftProject(supabase, user.id, workspace),
     supabase
@@ -49,11 +48,8 @@ export default async function WorkspacePage({
       .maybeSingle(),
     listConfiguredModels(supabase, user.id),
     listChatSessions(supabase, user.id, workspace.id),
-    listUserSkills(supabase, user.id),
     getUserPreferences(supabase, user.id),
   ])
-  const skills = (await Promise.all(skillSummaries.map((skill) => getUserSkill(supabase, user.id, skill.id))))
-    .filter((skill): skill is NonNullable<typeof skill> => Boolean(skill))
 
   const nickname = (profile as { nickname?: string } | null)?.nickname ?? workspace.name
 
@@ -78,7 +74,6 @@ export default async function WorkspacePage({
       projects={projects}
       runtimeMode={getRuntimeMode()}
       workspaceSlug={workspace.slug}
-      composerSkills={skills}
       customInstructions={preferences.customInstructions}
     />
   )

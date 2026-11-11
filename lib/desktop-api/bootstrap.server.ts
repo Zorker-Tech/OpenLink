@@ -454,7 +454,6 @@ async function loadChat(
       projectName: project.name,
       sessionId: chat.id,
       thinkingVisibility: preferences.thinkingVisibility,
-      initialAccessMode: chat.access_mode,
       composerResources: {
         agent: chat.agent ?? 'codex',
         skills,

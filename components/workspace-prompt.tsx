@@ -31,9 +31,7 @@ import { useT } from '@/lib/i18n/client'
 import { projectRuntimeDisplay } from '@/lib/project-runtime-display'
 import type { ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { AccessModePicker } from '@/components/access-mode-picker'
 import { AgentKindPicker } from '@/components/agent-kind-picker'
-import type { AccessMode } from '@/lib/chat-sessions'
 import type { AgentKind } from '@/lib/chat-session-types'
 import { useEffect, useState } from 'react'
 import { BookOpenText, Code2, Plus, Send } from 'lucide-react'
@@ -67,8 +65,6 @@ export interface WorkspacePromptProps {
    * app composer stays the canonical surface.
    */
   renderExtraTools?: ReactNode
-  /** Saved User Skills shown in the home composer capability menu. */
-  skills?: import('@/lib/user-skill-types').UserSkill[]
   /** User preference text offered as an explicit instruction attachment. */
   customInstructions?: string
   /** Invoked when the session is created without an authenticated user. */
@@ -97,7 +93,6 @@ export function WorkspacePrompt({
   onUnauthenticated,
   value,
   onValueChange,
-  skills = [],
   customInstructions = '',
 }: WorkspacePromptProps) {
   const router = useRouter()
@@ -130,7 +125,6 @@ export function WorkspacePrompt({
       : current)
   }, [projects])
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [accessMode, setAccessMode] = useState<AccessMode>('restricted')
   const [agentKind, setAgentKind] = useState<AgentKind>(runtimeMode === 'cloud' ? 'pi' : 'codex')
   const runtimeProject = selectedProject ?? defaultProject
   const runtimeDisplay = projectRuntimeDisplay(runtimeProject, t)
@@ -188,7 +182,6 @@ export function WorkspacePrompt({
           projectId: selectedProject?.id ?? null,
           providerId: selectedModel?.providerId,
           modelId: selectedModel?.modelId,
-          accessMode: accessMode,
           agent: agentKind,
           autoStart: files.length === 0,
         })
@@ -246,17 +239,13 @@ export function WorkspacePrompt({
       <PromptInputFooter className="h-10 px-3 pb-3">
         <PromptInputTools className="min-w-0 flex-1 gap-0.5 overflow-hidden">
           <PromptAddMenu
-            accessMode={accessMode}
             agent={agentKind}
             attachmentsEnabled
             customInstructions={customInstructions}
-            onAccessModeChange={setAccessMode}
             onAddInstruction={(name, text) => updateInput(input ? `${input}\n\n${text}` : text)}
             onInsertText={(text) => updateInput(input ? `${input}\n\n${text}` : text)}
-            skills={skills}
             variant="home"
           />
-          <AccessModePicker value={accessMode} onChange={setAccessMode} />
           <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
             <ModelSelectorTrigger
               render={
