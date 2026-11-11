@@ -1707,6 +1707,44 @@ export async function startPromptHttpServer(
     json(response, 202, { ok: true })
   }
 
+  async function handleAgentSessionDelete(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    sessionId: string,
+  ): Promise<void> {
+    const raw = await readJson(request) as Record<string, unknown>
+    const userId = safeIdentity(raw.userId, 'userId')
+    const workspaceId = safeIdentity(raw.workspaceId, 'workspaceId')
+    const baseKey = `${userId}:${workspaceId}:${sessionId}`
+    const matching = [...sessions.entries()].filter(([key]) => key.startsWith(`${baseKey}:`))
+    if (!matching.length) {
+      json(response, 404, { error: { code: 'INVALID_SESSION', message: 'Agent session is not ready', retryable: false } })
+      return
+    }
+    if (matching.some(([, entry]) => entry.busy)) {
+      json(response, 409, { error: { code: 'SESSION_BUSY', message: 'Agent session is busy', retryable: true } })
+      return
+    }
+    activePromptControllers.get(baseKey)?.abort()
+    const failures: unknown[] = []
+    for (const [key, entry] of matching) {
+      entry.recovering = true
+      desktopGateway.unregister(sessionId)
+      try {
+        await trackCleanup(entry.runtime.cleanup())
+        if (sessions.get(key) === entry) sessions.delete(key)
+        releaseDesktopState(sessionId)
+      } catch (error) {
+        entry.recovering = false
+        failures.push(error)
+      }
+    }
+    if (failures.length) {
+      throw new AgentHostError('SESSION_CLEANUP_FAILED', 'Agent session cleanup failed', { retryable: true })
+    }
+    json(response, 200, { ok: true, released: true })
+  }
+
   async function handleNetworkAccess(
     request: IncomingMessage,
     response: import('node:http').ServerResponse,
@@ -1937,6 +1975,13 @@ export async function startPromptHttpServer(
         const sessionId = decodeURIComponent(cancelMatch[1]!)
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
         await handleAgentCancel(request, response, sessionId)
+        return
+      }
+      const deleteMatch = /^\/v1\/agent\/sessions\/([^/]+)$/.exec(url.pathname)
+      if (request.method === 'DELETE' && deleteMatch) {
+        const sessionId = decodeURIComponent(deleteMatch[1]!)
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId)) throw new AgentHostError('INVALID_SESSION', 'sessionId is invalid')
+        await handleAgentSessionDelete(request, response, sessionId)
         return
       }
       const extensionUiResponseMatch = /^\/v1\/agent\/sessions\/([^/]+)\/extension-ui-response$/.exec(url.pathname)

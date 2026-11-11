@@ -2,7 +2,7 @@
 
 Slate Work is a Node.js SDK for the Work platform: persistent agents, transcripts, runs, automations,
 workflows, rooms, channels, execution boxes and a typed HTTP/SSE client. The package is ESM-only and
-requires Node.js 24.14 or later.
+requires Node.js 22.19 or later.
 
 ## Install
 
@@ -48,6 +48,39 @@ execution daemon. Entrypoint type declarations are included in the package.
 
 Work modules continue to land with their behavior tests; consult the exported route contracts and
 current host implementation when selecting capabilities for an application.
+
+## OpenLink Bot bridge
+
+OpenLink runs this host as a supervised, loopback-only service and treats it as the Bot domain
+authority for agent profiles, avatars and transcripts. The application database keeps a workspace
+scoped `openlink.bots` projection; each row maps one Bot to one Work-host agent and one hidden
+Code-mode chat session. The Code-mode Agent Host remains the execution authority: Pi runs in a
+per-session OpenSandbox inside the Ubuntu Project VM, and the same chat session owns the desktop.
+
+The bridge uses four additive gateway commands:
+
+- `createBackgroundAgent` creates a non-kickstarted agent with the Bot's profile and avatar inputs.
+- `appendAgentTranscriptEntries` mirrors durable Bot timeline entries into the agent store. It accepts
+  at most 500 entries per request and is idempotent by entry id (`INSERT OR IGNORE`).
+- `replaceAgentTranscriptEntries` atomically replaces the stored timeline in one SQLite transaction.
+  It accepts at most 10,000 entries per request and clears stale entries before inserting the snapshot.
+- `getAgentTranscript` / `setAgentAvatarBytes` / `getAgentAvatar` read and update the projection.
+
+`node ../../scripts/build-work-host.mjs` builds `dist/host.mjs`; `npm run smoke:openlink` boots an
+isolated host and verifies health, agent creation, transcript append/replace/read and avatar bytes.
+
+### Transcript recovery
+
+Work-host is the Bot transcript authority, while the durable Code-mode event log is the recovery
+source. The BFF reconciles both on every detail read:
+
+- A missing tail is appended in idempotent chunks of at most 500 entries.
+- A gap before the newest stored entry is an ordering violation and is repaired with one atomic
+  replacement.
+- A required replacement above 10,000 entries is never truncated. The BFF logs the explicit limit
+  error, keeps the complete durable transcript for rendering, and defers the mirror write.
+- Entries that exist only in Work-host are retained, so a partial event-log loss does not erase the
+  visible timeline.
 
 ## Build from the Slate workspace
 

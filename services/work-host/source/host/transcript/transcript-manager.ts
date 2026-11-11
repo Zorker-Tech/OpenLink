@@ -447,6 +447,48 @@ export class TranscriptManager {
   getAgentTranscriptPage(...args: any[]) {
     return callOn(this.sessions, "getAgentTranscriptPage", args);
   }
+  async appendAgentTranscriptEntries(agentId: string, entries: readonly any[]) {
+    if (typeof agentId !== "string" || agentId.length === 0 || !Array.isArray(entries) || entries.length === 0) {
+      return { appended: 0 };
+    }
+    if (this.sessions.activeSession?.id === agentId) {
+      const activeSession = this.sessions.activeSession;
+      if (!activeSession.db.appendTranscriptEntries(entries)) {
+        throw new Error(`Agent transcript append failed: ${agentId}`);
+      }
+      const currentEntries = activeSession.db.getTranscriptEntries();
+      this.sessions.setActiveTranscript(agentId, currentEntries);
+      this.roster.emit({
+        type: "snapshot",
+        activeAgentId: agentId,
+        entries: currentEntries,
+      });
+      return { appended: entries.length };
+    }
+    const appended = await this.sessionStore.appendAgentTranscriptEntries(agentId, entries);
+    await this.roster.emitAgentUpdate(agentId);
+    return { appended };
+  }
+
+  async replaceAgentTranscriptEntries(agentId: string, entries: readonly any[]) {
+    if (typeof agentId !== "string" || agentId.length === 0 || !Array.isArray(entries)) {
+      return { replaced: 0 };
+    }
+    if (this.sessions.activeSession?.id === agentId) {
+      const replaced = this.sessions.activeSession.db.replaceTranscriptEntries(entries);
+      if (!replaced) throw new Error(`Agent transcript replacement failed: ${agentId}`);
+      this.sessions.setActiveTranscript(agentId, entries);
+      this.roster.emit({
+        type: "snapshot",
+        activeAgentId: agentId,
+        entries,
+      });
+      return { replaced: entries.length };
+    }
+    const replaced = await this.sessionStore.replaceAgentTranscriptEntries(agentId, entries);
+    await this.roster.emitAgentUpdate(agentId);
+    return { replaced };
+  }
 
   liveRunningAgentIds(...args: any[]) {
     return callOn(this.runLifecycle, "liveRunningAgentIds", args);

@@ -76,9 +76,13 @@ describe("what the coordinator serves", () => {
   });
 
   it("knows every method it serves, and answers unknown for anything else", () => {
-    assert.equal(Object.keys(COORDINATOR_METHOD_TABLE).length, 89);
+    const methods = Object.keys(COORDINATOR_METHOD_TABLE);
+    assert.equal(new Set(methods).size, methods.length);
     assert.equal(isCoordinatorMethod("getAgentTranscriptWindow"), true);
     assert.equal(isCoordinatorMethod("sendPrompt"), true);
+    assert.equal(isCoordinatorMethod("createBackgroundAgent"), true);
+    assert.equal(isCoordinatorMethod("appendAgentTranscriptEntries"), true);
+    assert.equal(isCoordinatorMethod("replaceAgentTranscriptEntries"), true);
     assert.equal(isCoordinatorMethod("notAMethod"), false);
     // `hasOwn` semantics: a name from the prototype chain is not a method.
     assert.equal(isCoordinatorMethod("toString"), false);

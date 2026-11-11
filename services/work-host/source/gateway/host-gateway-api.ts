@@ -293,6 +293,80 @@ export function createHostGatewayApi(
       }
       return minted;
     },
+    createBackgroundAgent: async (args: any) => {
+      const templateId = sanitizeTemplateId(args.templateId);
+      const result = await call(transcript, "createBackgroundAgent")(
+        {
+          name: args.name,
+          description: args.description,
+          ...(args.title === undefined ? {} : { title: args.title }),
+          ...(args.avatarShape === undefined ? {} : { avatarShape: args.avatarShape }),
+          ...(args.avatarColor === undefined ? {} : { avatarColor: args.avatarColor }),
+        },
+        args.origin ?? "user",
+        {
+          isIntroductionSuppressed: args.isIntroductionSuppressed ?? true,
+          isKickstartRequested: false,
+          ...(isSlateAgentPurpose(args.purpose) ? { purpose: args.purpose } : {}),
+        },
+      );
+      noteActivity("user_action");
+      call(observability.analytics, "trackEvent")("slate.agent.created", {
+        agent_id: result?.agent?.id,
+        origin: args.origin ?? "user",
+        ...(templateId === undefined ? {} : { template_id: templateId }),
+      });
+      return result;
+    },
+    appendAgentTranscriptEntries: (args: any) => {
+      if (typeof args?.agentId !== "string" || !Array.isArray(args.entries)) {
+        throw new Error("appendAgentTranscriptEntries requires agentId and entries");
+      }
+      if (args.entries.length > 500) {
+        throw new Error("appendAgentTranscriptEntries accepts at most 500 entries per request");
+      }
+      const entries = args.entries;
+      for (const entry of entries) {
+        if (
+          entry == null
+          || typeof entry !== "object"
+          || typeof entry.id !== "string"
+          || entry.id.length === 0
+          || entry.id.length > 256
+          || typeof entry.kind !== "string"
+          || entry.kind.length === 0
+          || entry.kind.length > 80
+        ) {
+          throw new Error("appendAgentTranscriptEntries received an invalid entry");
+        }
+      }
+      noteActivity("user_action");
+      return call(transcript, "appendAgentTranscriptEntries")(args.agentId, entries);
+    },
+    replaceAgentTranscriptEntries: (args: any) => {
+      if (typeof args?.agentId !== "string" || !Array.isArray(args.entries)) {
+        throw new Error("replaceAgentTranscriptEntries requires agentId and entries");
+      }
+      if (args.entries.length > 10_000) {
+        throw new Error("replaceAgentTranscriptEntries accepts at most 10000 entries per request");
+      }
+      for (const entry of args.entries) {
+        if (
+          entry == null
+          || typeof entry !== "object"
+          || typeof entry.id !== "string"
+          || entry.id.length === 0
+          || entry.id.length > 256
+          || typeof entry.kind !== "string"
+          || entry.kind.length === 0
+          || entry.kind.length > 80
+        ) {
+          throw new Error("replaceAgentTranscriptEntries received an invalid entry");
+        }
+      }
+      noteActivity("user_action");
+      return call(transcript, "replaceAgentTranscriptEntries")(args.agentId, args.entries);
+    },
     kickstartAgent: async (args: any) => ({
       isIntroductionInFlight: await ports.kickstartIfPending(args.id)
     }),
