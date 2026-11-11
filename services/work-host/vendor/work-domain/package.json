@@ -1,0 +1,20 @@
+{
+  "name": "@slate/work-domain",
+  "version": "0.0.0-openlink",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    },
+    "./widgets": {
+      "types": "./widgets.d.ts",
+      "import": "./widgets.js"
+    },
+    "./usage": {
+      "types": "./usage.d.ts",
+      "import": "./usage.js"
+    }
+  }
+}

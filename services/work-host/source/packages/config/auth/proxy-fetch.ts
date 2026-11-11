@@ -26,7 +26,7 @@ const proxyAgent = createProxyAgent(configuredProxyUrl());
 /** The options a request is made with: the caller's, plus the proxy agent when there is one. */
 function requestOptions(options: RequestInit | undefined): Parameters<typeof undiciFetch>[1] {
   if (proxyAgent === undefined) return options as Parameters<typeof undiciFetch>[1];
-  return { ...options, dispatcher: proxyAgent };
+  return { ...options, dispatcher: proxyAgent } as unknown as Parameters<typeof undiciFetch>[1];
 }
 
 /** Fetch as undici does, but through the machine's proxy when it has one. */

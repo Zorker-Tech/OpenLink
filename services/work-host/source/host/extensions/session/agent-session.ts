@@ -154,6 +154,33 @@ export class SlateAgentSessionStore {
   }
   async withAgentDb<Result>(agentId: string, operation: (db: SlateAgentDb, dbPath: string) => Result | Promise<Result>): Promise<Result> { const dbPath = getAgentDbPath(this.rootDir, agentId), db = new SlateAgentDb(dbPath); try { return await operation(db, dbPath); } finally { db.close(); } }
 
+  async appendAgentTranscriptEntries(
+    agentId: string,
+    entries: readonly (Record<string, unknown> & { id: string; kind: string })[],
+  ): Promise<number> {
+    if (!this.agentExists(agentId)) throw new Error(`Agent missing: ${agentId}`);
+    if (entries.length === 0) return 0;
+    return await this.withAgentDb(agentId, (db) => {
+      if (!db.appendTranscriptEntries(entries)) {
+        throw new Error(`Agent transcript append failed: ${agentId}`);
+      }
+      return entries.length;
+    });
+  }
+
+  async replaceAgentTranscriptEntries(
+    agentId: string,
+    entries: readonly (Record<string, unknown> & { id: string; kind: string })[],
+  ): Promise<number> {
+    if (!this.agentExists(agentId)) throw new Error(`Agent missing: ${agentId}`);
+    return await this.withAgentDb(agentId, (db) => {
+      if (!db.replaceTranscriptEntries(entries)) {
+        throw new Error(`Agent transcript replacement failed: ${agentId}`);
+      }
+      return entries.length;
+    });
+  }
+
   private async createLocalSession(profile: Partial<SlateAgentProfile>, origin: "user" | "dev", purpose?: string): Promise<OpenAgentSession> {
     const id = this.uniqueAgentId();
     const agentDir = this.getAgentDir(id);
