@@ -7,9 +7,12 @@ import { effectiveChatSessionRunStatus, listLatestChatSessionRuns } from '@/lib/
 import { getT } from '@/lib/i18n/server'
 import type { Translator } from '@/lib/i18n/messages'
 import { ensureDraftProject, getProject } from '@/lib/projects'
+import { isChatSessionSurface, type ChatSessionSurface } from '@/lib/chat-session-surface'
 import type { AgentKind, ChatSessionSummary } from '@/lib/chat-session-types'
 import { getAccessibleWorkspace, getOwnedWorkspace, type OpenLinkWorkspace } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
+
+export type { ChatSessionSurface } from '@/lib/chat-session-surface'
 
 export const CHAT_SESSION_ID_LENGTH = 11
 export const CHAT_SESSION_ID_PATTERN = /^[A-Za-z0-9]{11}$/
@@ -41,11 +44,22 @@ export interface ChatSession {
   title: string
   initial_prompt: string
   access_mode: AccessMode
+  surface: ChatSessionSurface
   created_at: string
   updated_at: string
 }
 
+export interface CodeChatSession extends ChatSession {
+  surface: 'code'
+}
+
+export interface BotChatSession extends ChatSession {
+  surface: 'bot'
+}
+
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
+
+const CHAT_SESSION_SELECT = 'id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at, surface'
 
 export function isChatSessionId(value: string) {
   return CHAT_SESSION_ID_PATTERN.test(value)
@@ -92,6 +106,7 @@ export async function listChatSessions(
     .select('id, user_id, project_id, title, initial_prompt, agent, labels, updated_at')
     .eq('user_id', userId)
     .eq('workspace_id', workspaceId)
+    .eq('surface', 'code')
     .order('updated_at', { ascending: false })
     .limit(Math.min(Math.max(limit, 1), 100))
 
@@ -148,30 +163,83 @@ export async function listChatSessions(
   })
 }
 
-export async function getChatSession(
+/**
+ * Apply the execution-mode normalization once for every surface. Cloud
+ * sessions execute an explicitly selected Studio Computer agent; older rows
+ * may still contain Local's `codex` default, so normalize that legacy value to
+ * Pi while preserving the Cloud-only OMP selection.
+ */
+function normalizeChatSession(session: ChatSession): ChatSession {
+  return getRuntimeMode() === 'cloud'
+    ? { ...session, agent: normalizedAgent(session.agent, CLOUD_AGENT_KINDS, 'pi'), access_mode: 'restricted' }
+    : { ...session, agent: normalizedAgent(session.agent, LOCAL_AGENT_KINDS, 'codex') }
+}
+
+async function readChatSession(
   supabase: ServerSupabaseClient,
   userId: string,
   sessionId: string,
-) {
+  surface?: ChatSessionSurface,
+): Promise<ChatSession | null> {
   if (!isChatSessionId(sessionId)) return null
 
-  const { data, error } = await supabase
+  let query = supabase
     .schema('openlink')
     .from('chat_sessions')
-    .select('id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at')
+    .select(CHAT_SESSION_SELECT)
     .eq('id', sessionId)
     .eq('user_id', userId)
-    .maybeSingle()
+  if (surface) query = query.eq('surface', surface)
+  const { data, error } = await query.maybeSingle()
 
   if (error) throw error
   if (!data) return null
   const session = data as ChatSession
-  // Cloud sessions execute an explicitly selected Studio Computer agent.
-  // Older rows may still contain Local's `codex` default, so normalize that
-  // legacy value to Pi while preserving the Cloud-only OMP selection.
-  return getRuntimeMode() === 'cloud'
-    ? { ...session, agent: normalizedAgent(session.agent, CLOUD_AGENT_KINDS, 'pi'), access_mode: 'restricted' as const }
-    : { ...session, agent: normalizedAgent(session.agent, LOCAL_AGENT_KINDS, 'codex') }
+  // A malformed or legacy row must not become addressable through an unknown
+  // surface. The database constraint makes this unreachable in healthy data.
+  if (!isChatSessionSurface(session.surface)) return null
+  return normalizeChatSession(session)
+}
+
+/**
+ * Resolve any owned execution session. Shared runtime paths use this only when
+ * they explicitly accept both Code and Bot surfaces (for example the desktop
+ * gateway or the shared event stream). Product surfaces use the strict
+ * accessors below.
+ */
+export async function getChatSession(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<ChatSession | null> {
+  return await readChatSession(supabase, userId, sessionId)
+}
+
+/**
+ * Resolve a session for the Code surface. Bot execution sessions are stored in
+ * the same table for recovery and Agent Host routing, but they must never be
+ * addressable from Code-mode pages or actions.
+ */
+export async function getCodeChatSession(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<CodeChatSession | null> {
+  const session = await readChatSession(supabase, userId, sessionId, 'code')
+  return session as CodeChatSession | null
+}
+
+/**
+ * Resolve a Bot's hidden execution session. Callers must still verify that the
+ * `openlink.bots` row maps to this id before granting Bot-scoped access.
+ */
+export async function getBotChatSession(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<BotChatSession | null> {
+  const session = await readChatSession(supabase, userId, sessionId, 'bot')
+  return session as BotChatSession | null
 }
 
 export async function updateChatSessionTitle(
@@ -190,6 +258,7 @@ export async function updateChatSessionTitle(
     .update({ title: nextTitle, updated_at: new Date().toISOString() })
     .eq('id', sessionId)
     .eq('user_id', userId)
+    .eq('surface', 'code')
     .select('title')
     .maybeSingle()
 
@@ -213,6 +282,7 @@ export async function deleteChatSession(
     .delete()
     .eq('id', sessionId)
     .eq('user_id', userId)
+    .eq('surface', 'code')
 
   if (error) throw error
 }
@@ -286,8 +356,9 @@ export async function createChatSession(
         title,
         initial_prompt: initialPrompt,
         access_mode: options.accessMode ?? DEFAULT_ACCESS_MODE,
+        surface: 'code',
       })
-      .select('id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at')
+      .select(CHAT_SESSION_SELECT)
       .single()
 
     if (!error) return { session: data as ChatSession, workspace: workspace as OpenLinkWorkspace }
@@ -300,9 +371,10 @@ export async function createChatSession(
 export async function forkChatSession(
   supabase: ServerSupabaseClient,
   userId: string,
-  source: ChatSession,
-): Promise<ChatSession> {
+  source: CodeChatSession,
+): Promise<CodeChatSession> {
   if (source.user_id !== userId) throw new Error('CHAT_SESSION_NOT_FOUND')
+  if (source.surface !== 'code') throw new Error('CHAT_SESSION_NOT_FOUND')
   const { t } = await getT()
   const title = deriveChatSessionTitle(t('{title} 分支', { title: source.title }), t)
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -321,10 +393,11 @@ export async function forkChatSession(
         title,
         initial_prompt: '',
         access_mode: source.access_mode,
+        surface: 'code',
       })
-      .select('id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at')
+      .select(CHAT_SESSION_SELECT)
       .single()
-    if (!error) return data as ChatSession
+    if (!error) return data as CodeChatSession
     if (error.code !== '23505') throw error
   }
   throw new Error('CHAT_SESSION_ID_CONFLICT')

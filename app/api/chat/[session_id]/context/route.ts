@@ -4,7 +4,7 @@ import {
   loadSessionContextUsage,
   type SessionContextUsage,
 } from '@/lib/chat-session-persistence.server'
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -51,7 +51,7 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 })
 
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
 
   const usage = await loadSessionContextUsage(supabase, user.id, sessionId, session.agent ?? 'codex')

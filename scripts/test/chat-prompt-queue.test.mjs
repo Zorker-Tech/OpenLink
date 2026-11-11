@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import ts from 'typescript'
+import { transformSync } from 'esbuild'
 
 const routeSource = readFileSync(new URL('../../app/api/chat/[session_id]/queue/route.ts', import.meta.url), 'utf8')
-const routeCompiled = ts.transpileModule(routeSource, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText
+const routeCompiled = transformSync(routeSource, { loader: 'ts', format: 'cjs', target: 'es2022' }).code
 
 function harness(options = {}) {
   const calls = []
@@ -49,12 +47,12 @@ function harness(options = {}) {
       parsePromptAttachments: (value) => value === undefined ? [] : Array.isArray(value) ? value : null,
     },
     '@/lib/chat-session-uploads.server': { resolvePromptFileAttachments: async (_db, _session, _user, attachments) => attachments },
-    '@/lib/chat-sessions': { isChatSessionId: () => true, getChatSession: async () => ({ id: 'session' }) },
+    '@/lib/chat-sessions': { isChatSessionId: () => true, getCodeChatSession: async () => ({ id: 'session', surface: 'code' }) },
     '@/utils/supabase/server': { createClient: async () => db },
   }
-  const exports = {}
-  new Function('require', 'exports', routeCompiled)((id) => { assert.ok(id in modules, id); return modules[id] }, exports)
-  const invoke = (method, body, suffix = '') => exports[method](new Request(`http://app.test/api/chat/session/queue${suffix}`, {
+  const commonjsModule = { exports: {} }
+  new Function('require', 'module', 'exports', routeCompiled)((id) => { assert.ok(id in modules, id); return modules[id] }, commonjsModule, commonjsModule.exports)
+  const invoke = (method, body, suffix = '') => commonjsModule.exports[method](new Request(`http://app.test/api/chat/session/queue${suffix}`, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
   }), { params: Promise.resolve({ session_id: 'session' }) })

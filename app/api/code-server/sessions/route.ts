@@ -1,4 +1,4 @@
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { cloudComputerSdkRequest } from '@/lib/platform-cloud-host.server'
 import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
 
   // The browser can name any chat id, so derive both Project and Workspace
   // from the authenticated server-side session row instead of trusting it.
-  const chat = await getChatSession(supabase, user.id, chatSessionId)
+  const chat = await getCodeChatSession(supabase, user.id, chatSessionId)
   if (!chat) return Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404 })
 
   const frameAncestorOrigin = requestOrigin(request)

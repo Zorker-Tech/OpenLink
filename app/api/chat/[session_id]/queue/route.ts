@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { parsePromptAttachments } from '@/lib/agent-runtime/prompt-attachments'
 import type { ClaimedChatPrompt, PromptModelSelection, QueuedChatPrompt } from '@/lib/chat-prompt-queue'
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { resolvePromptFileAttachments } from '@/lib/chat-session-uploads.server'
 import { createClient } from '@/utils/supabase/server'
 
@@ -34,7 +34,7 @@ async function authenticatedSession(sessionId: string) {
   const db = await createClient()
   const { data: { user } } = await db.auth.getUser()
   if (!user) return { response: Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 }) } as const
-  const session = await getChatSession(db, user.id, sessionId)
+  const session = await getCodeChatSession(db, user.id, sessionId)
   if (!session) return { response: Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 }) } as const
   return { db, user, session } as const
 }

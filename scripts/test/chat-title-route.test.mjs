@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import ts from 'typescript'
+import { transformSync } from 'esbuild'
 
 const source = readFileSync(new URL('../../app/api/chat/[session_id]/title/route.ts', import.meta.url), 'utf8')
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText
+const compiled = transformSync(source, { loader: 'ts', format: 'cjs', target: 'es2022' }).code
 
-function fixture({ agent = 'codex', title = 'original prompt', authenticated = true, renameDuringGeneration = false } = {}) {
+function fixture({ agent = 'codex', title = 'original prompt', authenticated = true, sessionExists = true, renameDuringGeneration = false } = {}) {
   const row = { id: 'session', user_id: 'user', workspace_id: 'workspace', project_id: 'project',
     initial_prompt: 'original prompt', title, agent, updated_at: 'before' }
   let calls = 0
@@ -30,12 +28,16 @@ function fixture({ agent = 'codex', title = 'original prompt', authenticated = t
   }
   const modules = {
     '@/utils/supabase/server': { createClient: async () => db },
-    '@/lib/chat-sessions': { isChatSessionId: () => true, getChatSession: async () => ({ ...row }), deriveChatSessionTitle: (text) => text },
+    '@/lib/chat-sessions': {
+      isChatSessionId: () => true,
+      getCodeChatSession: async () => sessionExists ? { ...row, surface: 'code' } : null,
+      deriveChatSessionTitle: (text) => text,
+    },
     '@/lib/chat-session-persistence.server': { findFirstPersistedUserMessage: async () => ({ type: 'message.user', text: row.initial_prompt }) },
   }
-  const exports = {}
-  new Function('require', 'exports', 'fetch', 'process', compiled)(
-    (id) => modules[id], exports,
+  const commonjsModule = { exports: {} }
+  new Function('require', 'module', 'exports', 'fetch', 'process', compiled)(
+    (id) => modules[id], commonjsModule, commonjsModule.exports,
     async (url, options) => {
       calls++
       assert.equal(new URL(url).searchParams.has('query'), false, 'prompt must not leak through URL access logs')
@@ -48,7 +50,7 @@ function fixture({ agent = 'codex', title = 'original prompt', authenticated = t
     { env: { OPENLINK_AGENT_HOST_URL: 'http://host.test', OPENLINK_AGENT_API_TOKEN: 'test' } },
   )
   return { row, calls: () => calls,
-    send: async () => exports.POST(new Request('http://app.test/api/chat/session/title', { method: 'POST' }),
+    send: async () => commonjsModule.exports.POST(new Request('http://app.test/api/chat/session/title', { method: 'POST' }),
       { params: Promise.resolve({ session_id: 'session' }) }) }
 }
 
@@ -76,4 +78,11 @@ test('unauthenticated clients cannot generate or change titles', async () => {
   const f = fixture({ authenticated: false })
   assert.equal((await f.send()).status, 401)
   assert.equal(f.calls(), 0)
+})
+
+test('a hidden Bot execution session is not addressable as a Code chat', async () => {
+  const f = fixture({ sessionExists: false })
+  assert.equal((await f.send()).status, 404)
+  assert.equal(f.calls(), 0)
+  assert.equal(f.row.title, 'original prompt')
 })

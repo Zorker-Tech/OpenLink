@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
-import { deriveChatSessionTitle, getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { deriveChatSessionTitle, getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { findFirstPersistedUserMessage } from '@/lib/chat-session-persistence.server'
 
 export const runtime = 'nodejs'
@@ -11,7 +11,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ se
   const db = await createClient()
   const { data: { user } } = await db.auth.getUser()
   if (!user) return Response.json({ title: null }, { status: 401 })
-  const session = await getChatSession(db, user.id, id)
+  const session = await getCodeChatSession(db, user.id, id)
   if (!session) return Response.json({ title: null }, { status: 404 })
   if (session.agent !== 'codex' || session.title !== deriveChatSessionTitle(session.initial_prompt)) {
     return Response.json({ title: session.title })

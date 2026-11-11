@@ -221,6 +221,35 @@ export async function listPersistedChatEvents(
   return events
 }
 
+/** Read only the confirmation boundary events needed to restore an approval dock. */
+export async function listPersistedConfirmationEvents(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  sessionId: string,
+): Promise<OpenLinkAgentEvent[]> {
+  const pageSize = 1_000
+  const events: OpenLinkAgentEvent[] = []
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .schema('openlink')
+      .from('chat_session_events')
+      .select('payload')
+      .eq('session_id', sessionId)
+      .eq('user_id', userId)
+      .in('event_type', ['confirmation.requested', 'confirmation.resolved'])
+      .order('sequence', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+    if (error) throw error
+
+    const page = (data ?? [])
+      .map((row: { payload: unknown }) => row.payload)
+      .filter(isOpenLinkAgentEvent)
+    events.push(...page)
+    if ((data ?? []).length < pageSize) break
+  }
+  return events
+}
+
 export async function forkPersistedChatEvents(
   supabase: ServerSupabaseClient,
   userId: string,

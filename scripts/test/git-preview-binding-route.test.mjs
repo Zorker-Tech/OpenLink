@@ -13,8 +13,8 @@ function fixture({ user = 'user-id', chat = true, runtimeMode = 'local', hostReq
   const modules = {
     '@/lib/chat-sessions': {
       isChatSessionId: () => true,
-      getChatSession: async (_supabase, userId, sessionId) => chat
-        ? { id: sessionId, user_id: userId, project_id: 'project-id', workspace_id: 'workspace-id' }
+      getCodeChatSession: async (_supabase, userId, sessionId) => chat
+        ? { id: sessionId, user_id: userId, project_id: 'project-id', workspace_id: 'workspace-id', surface: 'code' }
         : null,
     },
     '@/lib/runtime-mode.server': { getRuntimeMode: () => runtimeMode },
@@ -78,4 +78,11 @@ test('cloud and unauthenticated chats cannot create a local Git worktree binding
   const unauthenticated = fixture({ user: null })
   assert.equal((await unauthenticated.post({ ref })).status, 401)
   assert.equal(unauthenticated.calls.length, 0)
+})
+
+test('a hidden Bot session cannot read or create Code Git bindings', async () => {
+  const bot = fixture({ chat: false })
+  assert.equal((await bot.get()).status, 404)
+  assert.equal((await bot.post({ ref })).status, 404)
+  assert.equal(bot.calls.length, 0)
 })

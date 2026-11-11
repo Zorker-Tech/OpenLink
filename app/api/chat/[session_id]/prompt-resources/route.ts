@@ -1,4 +1,4 @@
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
 import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
@@ -11,7 +11,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ sess
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 })
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
 
   if (getRuntimeMode() === 'cloud' || (session.agent ?? 'codex') !== 'codex') {
