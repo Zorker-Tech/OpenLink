@@ -1,4 +1,4 @@
-import { deleteChatSession, forkChatSession, getChatSession, isChatSessionId, type ChatSession } from '@/lib/chat-sessions'
+import { deleteChatSession, forkChatSession, getCodeChatSession, isChatSessionId, type CodeChatSession } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 import { forkPersistedChatEvents, parsePiSessionDelta, persistPiSessionDelta } from '@/lib/chat-session-persistence.server'
 import { cloudComputerHostRequest } from '@/lib/platform-cloud-host.server'
@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 })
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
   const body = await request.json().catch(() => null) as { action?: unknown; text?: unknown } | null
   if (!body || typeof body.action !== 'string' || !['status', 'interrupt', 'pause', 'resume', 'steer', 'follow-up', 'plan', 'default', 'goal', 'goal-clear', 'compact', 'fork'].includes(body.action)
@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
   const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
   const token = process.env.OPENLINK_AGENT_API_TOKEN
   if (!baseUrl || !token) return Response.json({ error: 'AGENT_HOST_NOT_CONFIGURED' }, { status: 503 })
-  let forkedSession: ChatSession | null = null
+  let forkedSession: CodeChatSession | null = null
   try {
     if (body.action === 'fork') {
       forkedSession = await forkChatSession(supabase, user.id, session)

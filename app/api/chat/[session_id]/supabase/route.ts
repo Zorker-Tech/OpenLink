@@ -1,4 +1,4 @@
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -14,7 +14,7 @@ async function getAuthenticatedChat(sessionId: string) {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { response: Response.json({ error: { code: 'AUTH_REQUIRED' } }, { status: 401 }) }
-    const chat = await getChatSession(supabase, user.id, sessionId)
+    const chat = await getCodeChatSession(supabase, user.id, sessionId)
     if (!chat) return { response: Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404 }) }
     return { user, chat }
 }
@@ -24,7 +24,7 @@ async function getAuthenticatedChat(sessionId: string) {
 // publishable/anon key and revision (never the service-role key or DB
 // password), so the browser receives exactly what the in-VM app and the Agent
 // worker receive: enough to call Auth/REST/Realtime/Storage, nothing more.
-// Per-user scoping is enforced here via getChatSession, which only resolves
+// Per-user scoping is enforced here via getCodeChatSession, which only resolves
 // chats the authenticated user owns.
 export async function GET(
     _request: Request,

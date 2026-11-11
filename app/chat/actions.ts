@@ -4,7 +4,7 @@ import { createChatSession, deleteChatSession, updateChatSessionTitle, type Acce
 import type { AgentKind } from '@/lib/chat-session-types'
 import { resolveAppEntry } from '@/lib/workspaces'
 import { createClient } from '@/utils/supabase/server'
-import { getChatSession } from '@/lib/chat-sessions'
+import { getCodeChatSession } from '@/lib/chat-sessions'
 import { reportChatFailure } from '@/lib/chat-diagnostics.server'
 
 export interface CreateChatSessionInput {
@@ -114,7 +114,7 @@ export async function listPendingAccessWritesAction(sessionId: string): Promise<
   if (!user) return { confirmations: [], error: 'AUTH_REQUIRED' }
   const host = agentHostConfig()
   if (!host) return { confirmations: [], error: 'AGENT_HOST_NOT_CONFIGURED' }
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) return { confirmations: [], error: 'SESSION_NOT_FOUND' }
   try {
     const response = await fetch(`${host.baseUrl}/v1/projects/${encodeURIComponent(session.project_id)}/supabase/mcp/confirmations`, {
@@ -136,7 +136,7 @@ export async function approveAccessWriteAction(sessionId: string, confirmationId
   if (!user) return { ok: false, error: 'AUTH_REQUIRED' }
   const host = agentHostConfig()
   if (!host) return { ok: false, error: 'AGENT_HOST_NOT_CONFIGURED' }
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) return { ok: false, error: 'SESSION_NOT_FOUND' }
   try {
     const response = await fetch(`${host.baseUrl}/v1/projects/${encodeURIComponent(session.project_id)}/supabase/mcp/confirmations/${encodeURIComponent(confirmationId)}/approve`, {

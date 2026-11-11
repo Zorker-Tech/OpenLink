@@ -1,4 +1,4 @@
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { findFirstPersistedUserMessage, loadPiSessionSnapshot } from '@/lib/chat-session-persistence.server'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
 import { cloudComputerSdkRequest } from '@/lib/platform-cloud-host.server'
@@ -31,7 +31,7 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 })
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) return Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
 
   let body: { model?: unknown; browserSessionId?: unknown } = {}

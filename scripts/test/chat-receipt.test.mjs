@@ -1,18 +1,48 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import ts from 'typescript'
+import { transformSync } from 'esbuild'
 
-// Execute the real route with deterministic DB/Host boundaries. In particular
-// the Host promise stays unresolved until after we read the durable receipt.
-const source = readFileSync(new URL('../../app/api/chat/[session_id]/events/route.ts', import.meta.url), 'utf8')
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText
+const routeSource = readFileSync(new URL('../../app/api/chat/[session_id]/events/route.ts', import.meta.url), 'utf8')
+const routeCode = transformSync(routeSource, { loader: 'ts', format: 'cjs', target: 'es2022' }).code
+const engineSource = readFileSync(new URL('../../lib/chat-session-events.server.ts', import.meta.url), 'utf8')
+const engineCode = transformSync(engineSource, { loader: 'ts', format: 'cjs', target: 'es2022' }).code
 
-function harness(hostFetch, history = []) {
+function routeHarness({ session }) {
+  let handled = 0
+  const modules = {
+    '@/lib/chat-session-events.server': {
+      handleChatSessionEvents: async (_request, input) => {
+        handled++
+        return Response.json({ ok: true, sessionId: input.sessionId, surface: input.session.surface })
+      },
+    },
+    '@/lib/chat-sessions': {
+      isChatSessionId: () => true,
+      getCodeChatSession: async () => session,
+    },
+    '@/utils/supabase/server': {
+      createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'user' } } }) } }),
+    },
+  }
+  const commonjsModule = { exports: {} }
+  new Function('require', 'module', 'exports', routeCode)((id) => modules[id], commonjsModule, commonjsModule.exports)
+  return {
+    handled: () => handled,
+    send: () => commonjsModule.exports.POST(new Request('http://app.test/api/chat/session/events', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'hello', requestKind: 'initial-prompt' }),
+    }), { params: Promise.resolve({ session_id: 'session' }) }),
+  }
+}
+
+// Execute the shared turn engine with deterministic DB/Host boundaries. In
+// particular the Host promise stays unresolved until after we read the
+// durable receipt, proving receipt does not depend on runtime provisioning.
+function engineHarness(hostFetch, history = [], options = {}) {
   const persisted = []
   const rpcCalls = []
+  const runUpdates = []
   const query = {
     update() { return this },
     eq() { return this },
@@ -22,7 +52,10 @@ function harness(hostFetch, history = []) {
     auth: { getUser: async () => ({ data: { user: { id: 'user' } } }) },
     schema() { return this },
     from() { return query },
-    rpc: async (name) => { rpcCalls.push(name); return { data: true, error: null } },
+    rpc: async (name) => {
+      rpcCalls.push(name)
+      return name === 'acquire_chat_session_lease' ? { data: options.leaseAcquired ?? true, error: null } : { data: true, error: null }
+    },
   }
   class Adapter {
     constructor(sessionId, clock, sequence) { Object.assign(this, { sessionId, clock, sequence }) }
@@ -49,11 +82,15 @@ function harness(hostFetch, history = []) {
       isTerminalErrorEvent: (event) => event.type === 'error' && event.recoverable !== true,
       missingTerminalEventMessage: () => 'missing terminal',
     },
-    'node:crypto': { randomBytes: () => Buffer.from('holder') },
+    'node:crypto': {
+      randomBytes: () => Buffer.from('holder'),
+      randomUUID: () => '00000000-0000-4000-8000-000000000001',
+    },
     '@/lib/ai-provider-configurations.server': {
       resolveAgentProviderRuntimeConfiguration: async () => ({ providerId: 'test', modelId: 'test' }),
     },
     '@/lib/chat-session-persistence.server': {
+      getInitialPromptRecoveryState: async () => options.recovery ?? { userMessage: null, retryable: false },
       listPersistedChatEvents: async () => history,
       findFirstPersistedUserMessage: async () => null,
       nextChatEventSequence: async () => 0,
@@ -62,32 +99,60 @@ function harness(hostFetch, history = []) {
       persistChatEvents: async (_db, _user, _session, events) => { persisted.push(...events) },
       persistPiSessionDelta: async () => {},
     },
-    '@/lib/chat-sessions': {
-      isChatSessionId: () => true,
-      getChatSession: async () => ({
-        id: 'session', workspace_id: 'workspace', project_id: 'project',
-        agent: 'pi', initial_prompt: 'hello', access_mode: 'restricted',
-      }),
+    '@/lib/chat-sessions': { isChatSessionId: () => true },
+    '@/lib/chat-session-runs.server': {
+      startChatSessionRun: async (_db, input) => { runUpdates.push(['start', input.runId]) },
+      heartbeatChatSessionRun: async () => {},
+      finishChatSessionRun: async (_db, input) => { runUpdates.push(['finish', input.status, input.errorCode ?? null]) },
+      getChatSessionRun: async () => null,
     },
+    '@/lib/platform-cloud-host.server': { cloudComputerSdkRequest: async () => { throw new Error('unexpected cloud call') } },
+    '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
     '@/utils/supabase/server': { createClient: async () => db },
   }
-  const exports = {}
-  new Function('require', 'exports', 'fetch', 'process', compiled)(
+  const commonjsModule = { exports: {} }
+  new Function('require', 'module', 'exports', 'fetch', 'process', engineCode)(
     (id) => { assert.ok(id in modules, id); return modules[id] },
-    exports,
+    commonjsModule,
+    commonjsModule.exports,
     hostFetch,
     { env: { OPENLINK_AGENT_HOST_URL: 'http://agent.test', OPENLINK_AGENT_API_TOKEN: 'test' } },
   )
-  const send = (signal, body = { message: 'hello', requestKind: 'initial-prompt' }) => exports.POST(new Request('http://app.test/api/chat/session/events', {
-    method: 'POST', body: JSON.stringify(body), signal,
-  }), { params: Promise.resolve({ session_id: 'session' }) })
-  return { send, persisted, rpcCalls }
+  const send = (signal, body = { message: 'hello', requestKind: 'initial-prompt' }) => commonjsModule.exports.handleChatSessionEvents(
+    new Request('http://app.test/api/chat/session/events', {
+      method: 'POST', body: JSON.stringify(body), signal,
+    }),
+    {
+      sessionId: 'session',
+      userId: 'user',
+      session: {
+        id: 'session', user_id: 'user', workspace_id: 'workspace', project_id: 'project',
+        agent: 'pi', initial_prompt: 'hello', access_mode: 'restricted', surface: 'code',
+      },
+    },
+  )
+  return { send, persisted, rpcCalls, runUpdates }
 }
+
+test('Code events route rejects a hidden Bot session before invoking the engine', async () => {
+  const h = routeHarness({ session: null })
+  const response = await h.send()
+  assert.equal(response.status, 404)
+  assert.equal(h.handled(), 0)
+})
+
+test('Code events route forwards the already-authorized Code session', async () => {
+  const h = routeHarness({ session: { id: 'session', user_id: 'user', surface: 'code' } })
+  const response = await h.send()
+  assert.equal(response.status, 200)
+  assert.equal(h.handled(), 1)
+  assert.deepEqual(await response.json(), { ok: true, sessionId: 'session', surface: 'code' })
+})
 
 test('edit receipt retains original message id only after native rewind is confirmed', async () => {
   const calls = []
   const original = { type: 'message.user', messageId: 'original', text: 'before' }
-  const app = harness(async (url, init) => {
+  const app = engineHarness(async (url, init) => {
     calls.push({ url, body: JSON.parse(init.body) })
     if (url.endsWith('/control')) return Response.json({ result: { rewound: true } })
     return new Response('{"type":"agent_settled"}\n')
@@ -106,7 +171,7 @@ test('edit receipt retains original message id only after native rewind is confi
 
 test('failed native rewind never persists a duplicate or sends an ordinary prompt', async () => {
   let calls = 0
-  const app = harness(async () => { calls++; return Response.json({ error: 'unsupported' }, { status: 400 }) }, [
+  const app = engineHarness(async () => { calls++; return Response.json({ error: 'unsupported' }, { status: 400 }) }, [
     { type: 'message.user', messageId: 'original', text: 'before' },
   ])
   const response = await app.send(undefined, { message: 'after', editMessageId: 'original' })
@@ -117,7 +182,7 @@ test('failed native rewind never persists a duplicate or sends an ordinary promp
 })
 
 test('unknown edit target fails before mutating the native runtime', async () => {
-  const app = harness(async () => { throw new Error('must not contact host') })
+  const app = engineHarness(async () => { throw new Error('must not contact host') })
   const response = await app.send(undefined, { message: 'after', editMessageId: 'missing' })
   assert.equal(response.status, 409)
   assert.equal(app.persisted.length, 0)
@@ -125,62 +190,61 @@ test('unknown edit target fails before mutating the native runtime', async () =>
 
 test('durable receipt is readable while cold Host startup remains pending', { timeout: 2000 }, async () => {
   const ready = Promise.withResolvers()
-  const h = harness(() => ready.promise)
+  const app = engineHarness(() => ready.promise)
   let reader
   try {
-    const response = await h.send()
+    const response = await app.send()
     assert.equal(response.status, 200)
     reader = response.body.getReader()
     const first = await reader.read()
     assert.equal(JSON.parse(new TextDecoder().decode(first.value)).type, 'message.user')
-    assert.equal(h.persisted[0].text, 'hello')
-    assert.equal(h.rpcCalls.includes('release_chat_session_lease'), false)
+    assert.equal(app.persisted[0].text, 'hello')
+    assert.equal(app.rpcCalls.includes('release_chat_session_lease'), false)
   } finally {
     ready.resolve(new Response('{"type":"agent_settled"}\n'))
     if (reader) while (!(await reader.read()).done) {}
   }
-  assert.deepEqual(h.persisted.map((event) => event.type), ['message.user', 'session.completed'])
+  assert.deepEqual(app.persisted.map((event) => event.type), ['message.user', 'session.completed'])
+  assert.deepEqual(app.runUpdates.at(-1), ['finish', 'completed', null])
   // Stream close can become visible just before finally releases the lease.
   await new Promise((resolve) => setImmediate(resolve))
-  assert.ok(h.rpcCalls.includes('release_chat_session_lease'))
+  assert.ok(app.rpcCalls.includes('release_chat_session_lease'))
 })
 
 test('Host startup failure is a durable terminal event after receipt, without leaked diagnostics', async () => {
-  const h = harness(async () => new Response('private provider diagnostic', { status: 503 }))
-  const response = await h.send()
+  const app = engineHarness(async () => new Response('private provider diagnostic', { status: 503 }))
+  const response = await app.send()
   const events = (await response.text()).trim().split('\n').map(JSON.parse)
   assert.deepEqual(events.map((event) => event.type), ['message.user', 'error'])
   assert.equal(events[1].recoverable, false)
   assert.equal(JSON.stringify(events).includes('private provider diagnostic'), false)
-  assert.deepEqual(h.persisted.map((event) => event.type), ['message.user', 'error'])
+  assert.deepEqual(app.persisted.map((event) => event.type), ['message.user', 'error'])
   await new Promise((resolve) => setImmediate(resolve))
-  assert.ok(h.rpcCalls.includes('release_chat_session_lease'))
+  assert.ok(app.rpcCalls.includes('release_chat_session_lease'))
 })
 
-test('cancel during provisioning aborts Host and preserves the accepted message', { timeout: 2000 }, async () => {
+test('a detached browser does not cancel the durable Host turn', { timeout: 2000 }, async () => {
   const abort = new AbortController()
+  const ready = Promise.withResolvers()
   let hostAborted = false
-  const h = harness(async (url, options) => {
-    if (url.endsWith('/cancel')) return new Response('{}')
-    return new Promise((_resolve, reject) => {
-      options.signal.addEventListener('abort', () => {
-        hostAborted = true
-        reject(new Error('aborted'))
-      }, { once: true })
-    })
+  const app = engineHarness(async (_url, options) => {
+    options.signal.addEventListener('abort', () => { hostAborted = true }, { once: true })
+    return ready.promise
   })
-  const response = await h.send(abort.signal)
+  const response = await app.send(abort.signal)
   const reader = response.body.getReader()
   assert.equal(JSON.parse(new TextDecoder().decode((await reader.read()).value)).type, 'message.user')
   abort.abort()
+  ready.resolve(new Response('{"type":"agent_settled"}\n'))
   while (!(await reader.read()).done) {}
-  assert.equal(hostAborted, true)
-  assert.deepEqual(h.persisted.map((event) => event.type), ['message.user', 'error'])
+  assert.equal(hostAborted, false)
+  assert.deepEqual(app.persisted.map((event) => event.type), ['message.user', 'session.completed'])
+  assert.deepEqual(app.runUpdates.at(-1), ['finish', 'completed', null])
 })
 
 test('safe Host failure code distinguishes a busy session from preparation timeout', async () => {
-  const h = harness(async () => Response.json({ error: { code: 'SESSION_BUSY', message: 'private diagnostic' } }, { status: 409 }))
-  const events = (await (await h.send()).text()).trim().split('\n').map(JSON.parse)
+  const app = engineHarness(async () => Response.json({ error: { code: 'SESSION_BUSY', message: 'private diagnostic' } }, { status: 409 }))
+  const events = (await (await app.send()).text()).trim().split('\n').map(JSON.parse)
   assert.match(events[1].message, /SESSION_BUSY/)
   assert.doesNotMatch(events[1].message, /timed out|private diagnostic/)
 })

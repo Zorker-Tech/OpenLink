@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { parsePromptAttachments } from '@/lib/agent-runtime/prompt-attachments'
 import type { AgentPromptFileAttachment } from '@/lib/agent-runtime/events'
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -24,7 +24,7 @@ async function authenticatedSession(sessionId: string) {
   const db = await createClient()
   const { data: { user } } = await db.auth.getUser()
   if (!user) return { response: Response.json({ error: 'AUTH_REQUIRED' }, { status: 401 }) } as const
-  const session = await getChatSession(db, user.id, sessionId)
+  const session = await getCodeChatSession(db, user.id, sessionId)
   if (!session) return { response: Response.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 }) } as const
   return { db, user } as const
 }

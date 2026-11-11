@@ -1,5 +1,5 @@
 import { getT } from '@/lib/i18n/server'
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { getProject, type ProjectSummary } from '@/lib/projects'
 import { createClient } from '@/utils/supabase/server'
 import { isPreviewTargetId } from '@/lib/browser-preview-target-id'
@@ -41,7 +41,7 @@ function safeTarget(value: unknown): BrowserPreviewTarget | null {
   }
 }
 
-type ChatSessionRecord = NonNullable<Awaited<ReturnType<typeof getChatSession>>>
+type CodeChatSessionRecord = NonNullable<Awaited<ReturnType<typeof getCodeChatSession>>>
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
 
 export interface BrowserPreviewScopeInput {
@@ -50,7 +50,7 @@ export interface BrowserPreviewScopeInput {
 }
 
 export type BrowserPreviewScopeResult =
-  | { ok: true; project: ProjectSummary; workspaceId: string; chat?: ChatSessionRecord; preferredSessionId?: string }
+  | { ok: true; project: ProjectSummary; workspaceId: string; chat?: CodeChatSessionRecord; preferredSessionId?: string }
   | { ok: false; status: number; error: { code: string; message: string; recoverable?: boolean } }
 
 const PROJECT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -64,14 +64,14 @@ export async function resolveBrowserPreviewScope(
   userId: string,
   input: BrowserPreviewScopeInput,
 ): Promise<BrowserPreviewScopeResult> {
-  let chat: ChatSessionRecord | null = null
+  let chat: CodeChatSessionRecord | null = null
   let projectId = input.projectId ?? ''
 
   if (input.chatSessionId !== undefined) {
     if (!isChatSessionId(input.chatSessionId)) {
       return { ok: false, status: 404, error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }
     }
-    chat = await getChatSession(supabase, userId, input.chatSessionId)
+    chat = await getCodeChatSession(supabase, userId, input.chatSessionId)
     if (!chat) return { ok: false, status: 404, error: { code: 'SESSION_NOT_FOUND', message: 'Chat session was not found' } }
     if (projectId && projectId !== chat.project_id) {
       return { ok: false, status: 404, error: { code: 'PROJECT_NOT_FOUND', message: 'Project was not found' } }

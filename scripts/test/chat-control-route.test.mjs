@@ -1,25 +1,40 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import ts from 'typescript'
-const code = ts.transpileModule(readFileSync(new URL('../../app/api/chat/[session_id]/control/route.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+import { transformSync } from 'esbuild'
+const code = transformSync(readFileSync(new URL('../../app/api/chat/[session_id]/control/route.ts', import.meta.url), 'utf8'), { loader: 'ts', format: 'cjs', target: 'es2022' }).code
 function harness({ user = 'owner', agent = 'codex', sessionExists = true, host = async () => Response.json({ result: { mode: 'plan' } }) } = {}) {
-  const exports = {}
+  const commonjsModule = { exports: {} }
   const calls = []
   const forkedEvents = []
   const deleted = []
   const modules = {
     '@/lib/chat-sessions': {
       isChatSessionId: () => true,
-      getChatSession: async () => sessionExists ? { id: 'session', user_id: 'owner', workspace_id: 'workspace', project_id: 'project', agent } : null,
+      getCodeChatSession: async () => sessionExists ? { id: 'session', user_id: 'owner', workspace_id: 'workspace', project_id: 'project', agent, surface: 'code' } : null,
       forkChatSession: async () => ({ id: 'AbCdEf12345' }),
       deleteChatSession: async (_db, _user, id) => { deleted.push(id) },
     },
     '@/utils/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: user ? { id: user } : null } }) } }) },
     '@/lib/chat-session-persistence.server': { parsePiSessionDelta: () => null, persistPiSessionDelta: async () => {}, forkPersistedChatEvents: async (_db, _user, source, target) => { forkedEvents.push([source, target]) } },
+    '@/lib/platform-cloud-host.server': { cloudComputerHostRequest: async () => { throw new Error('unexpected cloud call') } },
+    '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
+    '@/lib/chat-session-runs.server': { cancelRunningChatSessionRun: async () => {} },
+    '@/lib/platform-cloud-host.server': { cloudComputerHostRequest: async () => { throw new Error('unexpected cloud call') } },
+    '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
+    '@/lib/chat-session-runs.server': { cancelRunningChatSessionRun: async () => {} },
+    '@/lib/platform-cloud-host.server': { cloudComputerHostRequest: async () => { throw new Error('unexpected cloud call') } },
+    '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
+    '@/lib/chat-session-runs.server': { cancelRunningChatSessionRun: async () => {} },
+    '@/lib/platform-cloud-host.server': { cloudComputerHostRequest: async () => { throw new Error('unexpected cloud call') } },
+    '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
+    '@/lib/chat-session-runs.server': { cancelRunningChatSessionRun: async () => {} },
+    '@/lib/platform-cloud-host.server': { cloudComputerHostRequest: async () => { throw new Error('unexpected cloud call') } },
+    '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
+    '@/lib/chat-session-runs.server': { cancelRunningChatSessionRun: async () => {} },
   }
-  new Function('require', 'exports', 'fetch', 'process', code)(name => modules[name], exports, async (url, input) => { calls.push(JSON.parse(input.body)); return host() }, { env: { OPENLINK_AGENT_HOST_URL: 'http://host', OPENLINK_AGENT_API_TOKEN: 'private' } })
-  return { calls, deleted, forkedEvents, send: (body) => exports.POST(new Request('http://app/control', { method: 'POST', body: JSON.stringify(body) }), { params: Promise.resolve({ session_id: 'session' }) }) }
+  new Function('require', 'module', 'exports', 'fetch', 'process', code)(name => modules[name], commonjsModule, commonjsModule.exports, async (url, input) => { calls.push(JSON.parse(input.body)); return host() }, { env: { OPENLINK_AGENT_HOST_URL: 'http://host', OPENLINK_AGENT_API_TOKEN: 'private' } })
+  return { calls, deleted, forkedEvents, send: (body) => commonjsModule.exports.POST(new Request('http://app/control', { method: 'POST', body: JSON.stringify(body) }), { params: Promise.resolve({ session_id: 'session' }) }) }
 }
 test('session control authenticates and resolves ownership before Host mutation', async () => {
   for (const options of [{ user: null }, { sessionExists: false }]) {

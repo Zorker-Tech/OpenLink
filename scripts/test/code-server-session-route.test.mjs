@@ -16,7 +16,7 @@ function fixture({ user = 'user', chat = true, hostRequest } = {}) {
   const modules = {
     '@/lib/chat-sessions': {
       isChatSessionId: () => true,
-      getChatSession: async () => chat ? { id: 'chat-id', project_id: 'project', workspace_id: 'workspace' } : null,
+      getCodeChatSession: async () => chat ? { id: 'chat-id', project_id: 'project', workspace_id: 'workspace', surface: 'code' } : null,
     },
     '@/lib/platform-cloud-host.server': { cloudComputerSdkRequest: async () => { throw new Error('unexpected cloud call') } },
     '@/lib/runtime-mode.server': { getRuntimeMode: () => 'local' },
@@ -96,6 +96,13 @@ test('cross-site session creation is rejected', async () => {
   const response = await crossSite.post('http://localhost:3000', { origin: 'https://attacker.example', 'sec-fetch-site': 'cross-site' })
   assert.equal(response.status, 403)
   assert.equal(crossSite.calls.length, 0)
+})
+
+test('a hidden Bot session cannot open a Code-mode Code Server', async () => {
+  const f = fixture({ chat: false })
+  const response = await f.post('http://localhost:3000')
+  assert.equal(response.status, 404)
+  assert.equal(f.calls.length, 0)
 })
 
 test('server-side bootstrap exchange authorizes a clean iframe URL and rejects replay', async () => {

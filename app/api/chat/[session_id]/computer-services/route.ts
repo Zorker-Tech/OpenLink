@@ -1,4 +1,4 @@
-import { getChatSession, isChatSessionId } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { cloudComputerSdkRequest } from '@/lib/platform-cloud-host.server'
 import { getRuntimeMode } from '@/lib/runtime-mode.server'
 import { createClient } from '@/utils/supabase/server'
@@ -44,7 +44,7 @@ async function authorizedChat(sessionId: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { response: Response.json({ error: { code: 'AUTH_REQUIRED' } }, { status: 401, headers: noStore }) }
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) return { response: Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404, headers: noStore }) }
   return { session }
 }

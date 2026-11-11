@@ -9,7 +9,7 @@ import {
 import { getAiProviderModels } from '@/lib/ai-provider-models.server'
 import { shouldAutoStartInitialPrompt } from '@/lib/chat-auto-start'
 import { observeChatStage } from '@/lib/chat-diagnostics.server'
-import { getChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
 import { listPersistedChatEvents } from '@/lib/chat-session-persistence.server'
 import { getChatSessionRun } from '@/lib/chat-session-runs.server'
 import { loadComposerContext } from '@/lib/composer-context'
@@ -385,7 +385,7 @@ async function loadChat(
   const next = `/${userId}/chat/${sessionId}`
   if (user.id !== userId || !isChatSessionId(sessionId)) return notFound('Chat session was not found')
 
-  const chat = await observeChatStage('session.load', getChatSession(supabase, user.id, sessionId))
+  const chat = await observeChatStage('session.load', getCodeChatSession(supabase, user.id, sessionId))
   if (!chat) return notFound('Chat session was not found')
 
   const [
@@ -474,7 +474,7 @@ async function loadChatData(
   sessionId: string,
 ): Promise<DesktopBootstrapResult> {
   if (user.id !== userId || !isChatSessionId(sessionId)) return notFound('Chat session was not found')
-  const chat = await getChatSession(supabase, user.id, sessionId)
+  const chat = await getCodeChatSession(supabase, user.id, sessionId)
   if (!chat) return notFound('Chat session was not found')
   const [workspace, personalWorkspace, organizations, profile, chatSessions, project] =
     await Promise.all([
