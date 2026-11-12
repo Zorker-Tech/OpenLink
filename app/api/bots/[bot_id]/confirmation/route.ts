@@ -40,6 +40,14 @@ export async function POST(
   if (!user) return errorResponse('AUTH_REQUIRED', 401)
   const found = await getBot(supabase, user.id, botId)
   if (!found) return errorResponse('BOT_NOT_FOUND', 404)
+
+  let body: { id: string; approved?: boolean; value?: string }
+  try {
+    body = parseBody(await request.json())
+  } catch {
+    return errorResponse('INVALID_BODY', 400)
+  }
+
   let bot: NonNullable<Awaited<ReturnType<typeof getBot>>>
   try {
     bot = await ensureBotRuntimeProjection(supabase, user.id, found)
@@ -48,13 +56,6 @@ export async function POST(
     return errorResponse('BOT_PROJECTION_RECOVERY_FAILED', 503, true)
   }
   if (!bot.runtimeKey) return errorResponse('BOT_RUNTIME_NOT_READY', 409, true)
-
-  let body: { id: string; approved?: boolean; value?: string }
-  try {
-    body = parseBody(await request.json())
-  } catch {
-    return errorResponse('INVALID_BODY', 400)
-  }
 
   try {
     await respondBotConfirmation(bot, body)
