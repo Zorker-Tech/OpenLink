@@ -165,6 +165,8 @@ export function BotWorkspace({
   const [error, setError] = useState<string | null>(null)
 
   const activeBot = bots.find((bot) => bot.id === activeId) ?? null
+  const activeBotId = activeBot?.id ?? null
+  const activeBotKind = activeBot?.kind ?? null
   const activeDetail = activeBot ? details[activeBot.id] ?? null : null
   const activeTranscript = activeDetail?.transcript ?? []
   const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
@@ -294,10 +296,10 @@ export function BotWorkspace({
   }, [])
 
   useEffect(() => {
-    if (!workHostReady || !activeBot || activeBot.kind === 'group') return
-    if (skipWarmOnceRef.current.delete(activeBot.id)) return
-    void warmBot(activeBot.id)
-  }, [activeBot, warmBot, workHostReady])
+    if (!workHostReady || !activeBotId || activeBotKind === 'group') return
+    if (skipWarmOnceRef.current.delete(activeBotId)) return
+    void warmBot(activeBotId)
+  }, [activeBotId, activeBotKind, warmBot, workHostReady])
 
   useEffect(() => {
     setBots((previous) => {
@@ -325,6 +327,7 @@ export function BotWorkspace({
     setDraft('')
     setComputerOpen(false)
     setLightboxOpen(false)
+    setProfileOpen(false)
     setRoutineEditor(null)
     setPaletteOpen(false)
     setPaletteView('search')
