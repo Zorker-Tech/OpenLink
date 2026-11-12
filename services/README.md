@@ -48,10 +48,17 @@ project component, not vendored third-party source. Its source history is
 preserved from the internal `work-host` repository and remains independently
 buildable from the root Next.js application.
 
-The package is ESM-only, requires Node.js 24.14 or later, and exposes the typed
+The package is ESM-only, requires Node.js 22.19 or later, and exposes the typed
 Work client plus `host`, `gateway`, and `box-exec` entrypoints. The root
-lifecycle will integrate it as a separate process boundary; the Next.js
-application must not import its privileged runtime source directly.
+lifecycle starts it as a supervised loopback process; the Next.js application
+must not import its privileged runtime source directly.
+
+Work Host owns Bot agent profiles, avatars and transcripts. Each
+`openlink.bots` row maps one Work-host agent to one hidden `surface = 'bot'`
+chat session. Bot execution and the Bot computer remain Code-mode resources:
+the same Ubuntu Project VM, per-session OpenSandbox, Pi worker and session
+desktop. The BFF bridge and recovery contract are documented in
+[ADR-0035](../docs/architecture/ADR-0035-bot-work-host-integration.md).
 
 Civilization stays as a separate upstream service at `services/civilization`.
 Agent Host starts its Stage74 Orion memory service through the small
