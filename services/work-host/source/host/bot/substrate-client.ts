@@ -113,7 +113,7 @@ async function request(
   path: string,
   init: { method: "POST" | "DELETE"; body: unknown; timeoutMs: number },
   attempts = 2,
-): Promise<BotSubstratePayload> {
+): Promise<unknown> {
   const config = requiredConfig();
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -156,14 +156,21 @@ async function request(
       if (attempt + 1 < attempts && response.status >= 500) continue;
       throw lastError;
     }
-    return payloadOf(payload);
+    return payload;
   }
   throw lastError;
 }
 
+async function boxRequest(
+  path: string,
+  init: { method: "POST" | "DELETE"; body: unknown; timeoutMs: number },
+): Promise<BotSubstratePayload> {
+  return payloadOf(await request(path, init));
+}
+
 export async function ensureBotSubstrate(input: BotSubstrateEnsureInput): Promise<BotSubstratePayload> {
   const boxKey = botBoxKey(input.botId);
-  return await request(`/v1/substrate/bots/${encodeURIComponent(boxKey)}/ensure`, {
+  return await boxRequest(`/v1/substrate/bots/${encodeURIComponent(boxKey)}/ensure`, {
     method: "POST",
     body: {
       userId: input.userId,
@@ -180,7 +187,7 @@ export async function ensureBotSubstrate(input: BotSubstrateEnsureInput): Promis
 
 export async function getBotSubstrateDesktop(input: BotSubstrateEnsureInput): Promise<BotSubstratePayload> {
   const boxKey = botBoxKey(input.botId);
-  return await request(`/v1/substrate/bots/${encodeURIComponent(boxKey)}/desktop`, {
+  return await boxRequest(`/v1/substrate/bots/${encodeURIComponent(boxKey)}/desktop`, {
     method: "POST",
     body: {
       userId: input.userId,

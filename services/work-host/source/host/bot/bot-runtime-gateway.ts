@@ -1,16 +1,15 @@
 /**
  * The Bot runtime commands the application BFF calls.
  *
- * The gateway is the only place where a Bot's application identity is joined
- * to its execution substrate. It stores the binding, keeps worker credentials
- * on the host, and exposes only the desktop URL to callers.
+ * The gateway is a thin command adapter over the Bot box port. It validates
+ * the wire arguments, keeps worker credentials on the host, and returns only
+ * the desktop capability the surface needs.
  */
 import type { BotRuntimeBinding } from "./bot-runtime-store.ts";
 import { BotRuntimeStore } from "./bot-runtime-store.ts";
+import { createSubstrateBotBoxProvider, type BotBoxProvider } from "./bot-box-provider.ts";
 import {
   BotSubstrateError,
-  ensureBotSubstrate,
-  releaseBotSubstrate,
   respondBotWorkerExtensionUi,
   type BotSubstrateRuntimeConfiguration,
 } from "./substrate-client.ts";
@@ -49,94 +48,60 @@ function runtimeConfigurationOf(value: unknown): BotSubstrateRuntimeConfiguratio
   };
 }
 
-function bindingFrom(
-  agentId: string,
-  botId: string,
-  projectId: string,
-  userId: string,
-  workspaceId: string,
-  payload: { boxKey: string; sandboxId: string | null; workerUrl: string | null; workerHeaders: Readonly<Record<string, string>>; desktopUrl: string; vncUrl: string },
-): BotRuntimeBinding {
-  if (payload.workerUrl === null) {
-    throw new BotSubstrateError("Bot substrate did not return a worker endpoint", 502, "BOT_WORKER_UNAVAILABLE", true);
-  }
+function bindingPayload(binding: BotRuntimeBinding): Record<string, unknown> {
   return {
-    version: 1,
-    agentId,
-    botId,
-    boxKey: payload.boxKey,
-    projectId,
-    userId,
-    workspaceId,
-    workerUrl: payload.workerUrl,
-    workerHeaders: payload.workerHeaders,
-    desktopUrl: payload.desktopUrl,
-    vncUrl: payload.vncUrl,
-    sandboxId: payload.sandboxId,
-    updatedAt: new Date().toISOString(),
+    ok: true,
+    state: "running",
+    boxKey: binding.boxKey,
+    sandboxId: binding.sandboxId,
+    desktopUrl: binding.desktopUrl,
+    vncUrl: binding.vncUrl,
   };
 }
 
 export function createBotRuntimeGateway(store: BotRuntimeStore): BotRuntimeGateway {
+  return createBotRuntimeGatewayWithProvider(createSubstrateBotBoxProvider(store));
+}
+
+export function createBotRuntimeGatewayWithProvider(provider: BotBoxProvider): BotRuntimeGateway {
   return {
     async ensure(args: unknown) {
       const body = recordOf(args, "Bot runtime ensure");
-      const agentId = textOf(body, "agentId");
-      const botId = textOf(body, "botId");
-      const projectId = textOf(body, "projectId");
-      const userId = textOf(body, "userId");
-      const workspaceId = textOf(body, "workspaceId");
-      const payload = await ensureBotSubstrate({
-        botId,
-        projectId,
-        userId,
-        workspaceId,
+      const endpoint = await provider.ensure({
+        agentId: textOf(body, "agentId"),
+        botId: textOf(body, "botId"),
+        projectId: textOf(body, "projectId"),
+        userId: textOf(body, "userId"),
+        workspaceId: textOf(body, "workspaceId"),
         runtimeConfiguration: runtimeConfigurationOf(body.runtimeConfiguration),
         ...(body.nativeSession === undefined ? {} : { nativeSession: body.nativeSession as { header: Record<string, unknown>; entries: ReadonlyArray<Record<string, unknown>> } }),
         agent: "pi",
         accessMode: "restricted",
       });
-      const binding = bindingFrom(agentId, botId, projectId, userId, workspaceId, payload);
-      store.write(binding);
       return {
         ok: true,
-        boxKey: binding.boxKey,
-        sandboxId: binding.sandboxId,
-        desktopUrl: binding.desktopUrl,
-        vncUrl: binding.vncUrl,
+        boxKey: endpoint.boxKey,
+        sandboxId: endpoint.sandboxId,
+        desktopUrl: endpoint.desktopUrl,
+        vncUrl: endpoint.vncUrl,
       };
     },
 
     async status(args: unknown) {
       const body = recordOf(args, "Bot runtime status");
-      const agentId = textOf(body, "agentId");
-      const binding = store.read(agentId);
-      if (binding === null) return { ok: true, state: "absent" };
-      return {
-        ok: true,
-        state: "running",
-        boxKey: binding.boxKey,
-        sandboxId: binding.sandboxId,
-        desktopUrl: binding.desktopUrl,
-        vncUrl: binding.vncUrl,
-      };
+      const status = await provider.status(textOf(body, "agentId"));
+      return status.binding === null ? { ok: true, state: "absent" } : bindingPayload(status.binding);
     },
 
     async release(args: unknown) {
       const body = recordOf(args, "Bot runtime release");
-      const agentId = textOf(body, "agentId");
-      const binding = store.read(agentId);
-      if (binding !== null) {
-        await releaseBotSubstrate({ botId: binding.botId, userId: binding.userId, workspaceId: binding.workspaceId });
-        store.remove(agentId);
-      }
-      return { ok: true, released: binding !== null };
+      return { ok: true, released: await provider.release(textOf(body, "agentId")) };
     },
 
     async respondExtensionUi(args: unknown) {
       const body = recordOf(args, "Bot extension response");
       const agentId = textOf(body, "agentId");
-      const binding = store.read(agentId);
+      const binding = provider.readBinding(agentId);
       if (binding === null) throw new BotSubstrateError("Bot runtime is not provisioned", 409, "BOT_RUNTIME_NOT_READY", true);
       const id = textOf(body, "id");
       const confirmed = body.confirmed;
@@ -155,7 +120,7 @@ export function createBotRuntimeGateway(store: BotRuntimeStore): BotRuntimeGatew
     },
 
     readBinding(agentId: string) {
-      return store.read(agentId);
+      return provider.readBinding(agentId);
     },
   };
 }
