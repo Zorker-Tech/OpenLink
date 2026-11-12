@@ -121,9 +121,12 @@ export class BotRuntimeStore {
 
   write(binding: BotRuntimeBinding): void {
     const path = this.pathFor(binding.agentId);
-    mkdirSync(dirname(path), { recursive: true });
+    // The binding carries a sandbox-scoped worker capability. Keep the file
+    // private to the Work-host user even when the surrounding data root has a
+    // wider mode.
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
-    writeFileSync(temporary, `${JSON.stringify(binding, null, 2)}\n`, "utf8");
+    writeFileSync(temporary, `${JSON.stringify(binding, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
     renameSync(temporary, path);
   }
 
