@@ -63,6 +63,7 @@ test('sealed installer performs signed archive install and protected configurati
     'browser/manifest.json', 'browser/chromium/chrome', 'project-vm/manifest.json',
     'project-supabase/manifest.json', 'project-supabase/runtime.lock.json', 'project-supabase/runtime.spec.json', 'project-supabase/image-manifest.json', 'project-supabase/release-trust.json',
     'services/agent-host/dist/src/desktop-main.js',
+    'services/work-host/dist/host.mjs',
     `project-vm/openlink-project-vm-base-${targetArchitecture}.${diskFormat}`, 'openlinkctl.mjs', 'bin/openlinkctl',
     'systemd/openlink.service',
     'systemd/openlink-container-broker.service',

@@ -8,12 +8,21 @@ import { isolationClass, resolveDeploymentProfile, resolveProjectRuntime } from 
 
 const sleep = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds))
 
+const WORK_HOST_RESTART_POLICY = Object.freeze({
+  maxRestarts: 5,
+  baseDelayMs: 1_000,
+  maxDelayMs: 30_000,
+  healthTimeoutMs: 60_000,
+  stableWindowMs: 10 * 60_000,
+})
+
 const PROCESS_AMBIENT_KEYS = ['LANG', 'LC_ALL', 'PATH', 'SSL_CERT_DIR', 'SSL_CERT_FILE', 'TEMP', 'TMP', 'TMPDIR', 'TZ']
 const PROCESS_IDENTITIES = {
   'browser-host': 'openlink-browser',
   'knowledge-service': 'openlink-knowledge',
   'agent-host': 'openlink-agent',
   'desktop-agent-host': 'openlink-desktop',
+  'work-host': 'openlink-work-host',
   web: 'openlink-web',
   edge: 'openlink-edge',
 }
@@ -62,12 +71,17 @@ const DESKTOP_AGENT_ENVIRONMENT_KEYS = [
   'OPENLINK_AGENT_DENIED_DOMAINS', 'OPENLINK_BROWSER_GATEWAY_ALLOWED_ORIGINS', 'OPENLINK_BROWSER_GATEWAY_UPSTREAM_ORIGIN',
   'OPENLINK_BROWSER_ALLOWED_ORIGINS',
 ]
+const WORK_HOST_ENVIRONMENT_KEYS = [
+  'NODE_ENV', 'SLATE_DATA_ROOT', 'SLATE_HOST_PORT', 'SLATE_GATEWAY_TOKEN', 'SLATE_GATEWAY_REQUIRE_AUTH',
+  'SLATE_USE_EXISTING_BOX_EXEC_DAEMON', 'SLATE_DISABLE_SEND_ACCEPT_RETURN',
+]
 const WEB_ENVIRONMENT_KEYS = [
   'NODE_ENV', 'OPENLINK_RELEASE_ID', 'OPENLINK_RUNTIME_MODE', 'NEXT_PUBLIC_OPENLINK_RUNTIME_MODE',
   'OPENLINK_DEPLOYMENT_PROFILE', 'OPENLINK_DEPLOYMENT_PROFILE_REVISION', 'OPENLINK_PROJECT_RUNTIME',
   'OPENLINK_PROJECT_ISOLATION', 'OPENLINK_KNOWLEDGE_ENABLED', 'OPENLINK_ZERO_ENABLED', 'PORT', 'HOSTNAME',
   'OPENLINK_APP_URL', 'OPENLINK_AGENT_API_TOKEN', 'OPENLINK_AGENT_HOST_URL', 'OPENLINK_KNOWLEDGE_INTERNAL_TOKEN',
   'OPENLINK_KNOWLEDGE_SERVICE_URL', 'OPENLINK_PROVIDER_SECRET_KEY', 'OPENLINK_STUDIO_ORIGIN',
+  'OPENLINK_WORK_HOST_URL', 'OPENLINK_WORK_HOST_API_TOKEN',
   'OPENLINK_LOCAL_ZOKERBASE_URL', 'OPENLINK_LOCAL_ZOKERBASE_PUBLISHABLE_KEY', 'OPENLINK_LOCAL_SUPABASE_URL',
   'OPENLINK_LOCAL_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
   'OPENLINK_BROWSER_ALLOWED_DOMAINS', 'OPENLINK_BROWSER_DENIED_DOMAINS', 'OPENLINK_BROWSER_ALLOW_LOOPBACK',
@@ -117,6 +131,7 @@ export function validateProductionEnvironment(environment = {}) {
     'OPENLINK_BROWSER_TOKEN_SECRET',
     'OPENLINK_AGENT_API_TOKEN',
     'OPENLINK_DESKTOP_AGENT_API_TOKEN',
+    'OPENLINK_WORK_HOST_API_TOKEN',
     'OPENLINK_PROVIDER_SECRET_KEY',
     'OPEN_SANDBOX_API_KEY',
     'OPENLINK_ZOKERBASE_ENV_FILE',
@@ -150,8 +165,17 @@ async function imageEntries(releaseRoot, kind) {
   })
 }
 
-function processSpec(name, node, entrypoint, cwd, environment, healthUrl, home) {
-  return { name, identity: PROCESS_IDENTITIES[name], command: node, args: [entrypoint], cwd, environment: { ...environment, HOME: home }, healthUrl }
+function processSpec(name, node, entrypoint, cwd, environment, healthUrl, home, healthHeaders) {
+  return {
+    name,
+    identity: PROCESS_IDENTITIES[name],
+    command: node,
+    args: [entrypoint],
+    cwd,
+    environment: { ...environment, HOME: home },
+    healthUrl,
+    ...(healthHeaders === undefined ? {} : { healthHeaders }),
+  }
 }
 
 export function isolatedProcessInvocation(spec, options = {}) {
@@ -179,6 +203,7 @@ export async function createRuntimePlan(options = {}) {
   const browserPort = positivePort(supplied.OPENLINK_BROWSER_PORT, 43120)
   const agentPort = positivePort(supplied.OPENLINK_AGENT_PORT, 43121)
   const desktopPort = positivePort(supplied.OPENLINK_DESKTOP_AGENT_PORT, 43123)
+  const workHostPort = positivePort(supplied.OPENLINK_WORK_HOST_PORT, 43127)
   const knowledgePort = positivePort(supplied.OPENLINK_KNOWLEDGE_PORT, 43124)
   const zeroPort = positivePort(supplied.OPENLINK_ZERO_PORT, 19530)
   const zeroHealthPort = positivePort(supplied.OPENLINK_ZERO_HEALTH_PORT, 9091)
@@ -222,6 +247,14 @@ export async function createRuntimePlan(options = {}) {
     OPENLINK_DESKTOP_AGENT_HOST: '127.0.0.1',
     OPENLINK_DESKTOP_AGENT_PORT: desktopPort,
     OPENLINK_DESKTOP_AGENT_HOST_URL: `http://127.0.0.1:${desktopPort}`,
+    OPENLINK_WORK_HOST_PORT: workHostPort,
+    OPENLINK_WORK_HOST_URL: `http://127.0.0.1:${workHostPort}`,
+    SLATE_DATA_ROOT: join(stateRoot, 'work-host'),
+    SLATE_HOST_PORT: workHostPort,
+    SLATE_GATEWAY_TOKEN: supplied.OPENLINK_WORK_HOST_API_TOKEN,
+    SLATE_GATEWAY_REQUIRE_AUTH: '1',
+    SLATE_USE_EXISTING_BOX_EXEC_DAEMON: '1',
+    SLATE_DISABLE_SEND_ACCEPT_RETURN: '1',
     OPENLINK_KNOWLEDGE_HOST: '127.0.0.1',
     OPENLINK_KNOWLEDGE_PORT: knowledgePort,
     OPENLINK_KNOWLEDGE_SERVICE_URL: `http://127.0.0.1:${knowledgePort}`,
@@ -276,6 +309,7 @@ export async function createRuntimePlan(options = {}) {
     ...(profile.components.knowledge ? [processSpec('knowledge-service', node, join(releaseRoot, 'services/knowledge-service/dist/src/main.js'), join(releaseRoot, 'services/knowledge-service'), selectEnvironment(environment, KNOWLEDGE_ENVIRONMENT_KEYS), `http://127.0.0.1:${knowledgePort}/healthz`, join(stateRoot, 'knowledge'))] : []),
     processSpec('agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${agentPort}/healthz`, join(stateRoot, 'agents')),
     processSpec('desktop-agent-host', node, join(releaseRoot, 'services/agent-host/dist/src/desktop-main.js'), join(releaseRoot, 'services/agent-host'), selectEnvironment(environment, DESKTOP_AGENT_ENVIRONMENT_KEYS), `http://127.0.0.1:${desktopPort}/healthz`, join(stateRoot, 'desktop-agents')),
+    processSpec('work-host', node, join(releaseRoot, 'services/work-host/dist/host.mjs'), join(releaseRoot, 'services/work-host'), selectEnvironment(environment, WORK_HOST_ENVIRONMENT_KEYS), `http://127.0.0.1:${workHostPort}/health`, join(stateRoot, 'work-host'), { Authorization: `Bearer ${supplied.OPENLINK_WORK_HOST_API_TOKEN}` }),
     processSpec('web', node, join(releaseRoot, 'app/web/server.js'), join(releaseRoot, 'app/web'), selectEnvironment(environment, WEB_ENVIRONMENT_KEYS), `http://127.0.0.1:${webPort}/api/healthz`, join(stateRoot, 'web')),
     {
       name: 'edge', command: join(releaseRoot, 'edge/bin/caddy'),
@@ -292,7 +326,7 @@ export async function createRuntimePlan(options = {}) {
     },
   ]
   const zeroImages = profile.components.zero ? await imageEntries(releaseRoot, 'zero') : []
-  const stateDirectories = ['workspaces', 'agents', 'desktop-agents', 'browser', 'project-vms', 'podman/config', 'podman/data', 'edge/config', 'edge/data', 'zokerbase', ...(profile.components.knowledge ? ['knowledge'] : []), ...(profile.components.zero ? ['zero'] : [])]
+  const stateDirectories = ['workspaces', 'agents', 'desktop-agents', 'work-host', 'browser', 'project-vms', 'podman/config', 'podman/data', 'edge/config', 'edge/data', 'zokerbase', ...(profile.components.knowledge ? ['knowledge'] : []), ...(profile.components.zero ? ['zero'] : [])]
   return {
     releaseRoot,
     stateRoot,
@@ -320,9 +354,13 @@ async function defaultCommand(command, args, options = {}) {
   })
 }
 
-async function defaultProbe(url) {
+async function defaultProbe(url, headers) {
   try {
-    const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(3_000) })
+    const response = await fetch(url, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(3_000),
+      ...(headers === undefined ? {} : { headers }),
+    })
     return response.status >= 200 && response.status < 300
   } catch { return false }
 }
@@ -363,6 +401,7 @@ export class ProductionSupervisor {
     this.runCommand = dependencies.runCommand ?? defaultCommand
     this.spawnProcess = dependencies.spawnProcess ?? ((command, args, options) => spawn(command, args, { cwd: options.cwd, env: options.env, stdio: options.stdio ?? 'inherit' }))
     this.probe = dependencies.probe ?? defaultProbe
+    this.workHostRestartPolicy = { ...WORK_HOST_RESTART_POLICY, ...(dependencies.workHostRestartPolicy ?? {}) }
     this.notifyReady = dependencies.notifyReady ?? (async () => {
       if (!process.env.NOTIFY_SOCKET) return
       await defaultCommand('systemd-notify', ['--ready', '--status=OpenLink production runtime is healthy'])
@@ -375,11 +414,148 @@ export class ProductionSupervisor {
   async waitForHealth(spec, timeoutMs = 180_000) {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
-      if (spec.child.exitCode !== null) throw new Error(`${spec.name} exited before becoming healthy (${spec.child.exitCode})`)
-      if (await this.probe(spec.healthUrl)) return
+      if (spec.child.exitCode !== null || spec.child.signalCode !== null) {
+        throw new Error(`${spec.name} exited before becoming healthy (${spec.child.exitCode ?? spec.child.signalCode})`)
+      }
+      if (await this.probe(spec.healthUrl, spec.healthHeaders)) return
       await sleep(250)
     }
     throw new Error(`${spec.name} did not become healthy within ${timeoutMs / 1000} seconds`)
+  }
+
+  spawnManagedProcess(item) {
+    const invocation = isolatedProcessInvocation(item)
+    const child = this.spawnProcess(invocation.command, invocation.args, {
+      cwd: item.cwd,
+      env: childEnvironment(item.environment),
+      stdio: item.stdio,
+      openlinkName: item.name,
+      productionIdentity: item.identity,
+    })
+    const running = {
+      ...item,
+      child,
+      restartAttempts: 0,
+      restartTimer: null,
+      restarting: false,
+      initializing: true,
+      lastHealthyAt: 0,
+    }
+    this.children.push(running)
+    return running
+  }
+
+  async terminateProcess(child, timeoutMs = 10_000) {
+    if (!child || child.exitCode !== null || child.signalCode !== null) return
+    child.kill('SIGTERM')
+    const exited = await waitForExit(child, timeoutMs)
+    if (!exited && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+  }
+
+  attachRestartableProcessListeners(running) {
+    const child = running.child
+    child.once('error', (error) => {
+      if (running.child !== child || this.stopping || running.initializing) return
+      this.handleRestartableProcessFailure(running, new Error(`${running.name} failed: ${error.message}`))
+    })
+    child.once('exit', (code, signal) => {
+      if (running.child !== child || this.stopping || running.initializing) return
+      this.handleRestartableProcessFailure(
+        running,
+        new Error(`${running.name} exited unexpectedly (${code ?? signal ?? 'unknown'})`),
+      )
+    })
+  }
+
+  handleRestartableProcessFailure(running, error) {
+    if (this.stopping || running.restartTimer !== null || running.restarting) return
+    const policy = this.workHostRestartPolicy
+    if (running.lastHealthyAt > 0 && Date.now() - running.lastHealthyAt >= policy.stableWindowMs) {
+      running.restartAttempts = 0
+    }
+    if (running.restartAttempts >= policy.maxRestarts) {
+      this.rejectFailure(new Error(
+        `${running.name} failed ${running.restartAttempts + 1} times without a stable recovery; last error: ${error.message}`,
+      ))
+      return
+    }
+    running.restartAttempts += 1
+    const delayMs = Math.min(policy.maxDelayMs, policy.baseDelayMs * 2 ** (running.restartAttempts - 1))
+    console.warn(
+      `[openlink-runtime] ${running.name} failed; restart ${running.restartAttempts}/${policy.maxRestarts} in ${delayMs}ms`,
+      error,
+    )
+    running.restartTimer = setTimeout(() => {
+      running.restartTimer = null
+      void this.restartProcess(running)
+    }, delayMs)
+  }
+
+  async restartProcess(running) {
+    if (this.stopping) return
+    running.restarting = true
+    let child
+    try {
+      await this.terminateProcess(running.child)
+      if (this.stopping) {
+        running.restarting = false
+        return
+      }
+      const invocation = isolatedProcessInvocation(running)
+      child = this.spawnProcess(invocation.command, invocation.args, {
+        cwd: running.cwd,
+        env: childEnvironment(running.environment),
+        stdio: running.stdio,
+        openlinkName: running.name,
+        productionIdentity: running.identity,
+      })
+      if (this.stopping) {
+        running.restarting = false
+        await this.terminateProcess(child)
+        return
+      }
+      running.child = child
+      this.attachRestartableProcessListeners(running)
+      await this.waitForHealth({ ...running, child }, this.workHostRestartPolicy.healthTimeoutMs)
+      running.lastHealthyAt = Date.now()
+      running.restarting = false
+      console.info(`[openlink-runtime] ${running.name} restarted after failure (attempt ${running.restartAttempts})`)
+    } catch (error) {
+      running.restarting = false
+      await this.terminateProcess(child ?? running.child)
+      if (!this.stopping) {
+        this.handleRestartableProcessFailure(
+          running,
+          error instanceof Error ? error : new Error(String(error)),
+        )
+      }
+    }
+  }
+
+  async startRestartableProcess(item) {
+    const policy = this.workHostRestartPolicy
+    let lastError = new Error(`${item.name} did not start`)
+    for (let attempt = 0; attempt <= policy.maxRestarts; attempt += 1) {
+      if (this.stopping) throw new Error('Production runtime stopped during startup')
+      const running = this.spawnManagedProcess(item)
+      try {
+        await this.waitForHealth(running, attempt === 0 ? 180_000 : policy.healthTimeoutMs)
+        running.initializing = false
+        running.restartAttempts = attempt
+        running.lastHealthyAt = Date.now()
+        this.attachRestartableProcessListeners(running)
+        return
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        running.initializing = false
+        await this.terminateProcess(running.child)
+        if (attempt >= policy.maxRestarts) break
+        const delayMs = Math.min(policy.maxDelayMs, policy.baseDelayMs * 2 ** attempt)
+        console.warn(`[openlink-runtime] ${item.name} failed to start; retrying in ${delayMs}ms`, lastError)
+        await sleep(delayMs)
+      }
+    }
+    throw new Error(`${item.name} failed to become healthy after ${policy.maxRestarts + 1} attempts: ${lastError.message}`)
   }
 
   async start() {
@@ -389,12 +565,19 @@ export class ProductionSupervisor {
     if (this.plan.containerBrokerSocket) await requestContainerBroker(this.plan.containerBrokerSocket, 'start')
     else await startContainerRuntime(this.plan, this.runCommand)
     for (const item of this.plan.processes) {
-      const invocation = isolatedProcessInvocation(item)
-      const child = this.spawnProcess(invocation.command, invocation.args, { cwd: item.cwd, env: childEnvironment(item.environment), stdio: item.stdio, openlinkName: item.name, productionIdentity: item.identity })
-      const running = { ...item, child }
-      this.children.push(running)
-      child.once('error', (error) => { if (!this.stopping) this.rejectFailure(new Error(`${item.name} failed: ${error.message}`)) })
-      child.once('exit', (code, signal) => { if (!this.stopping) this.rejectFailure(new Error(`${item.name} exited unexpectedly (${code ?? signal ?? 'unknown'})`)) })
+      if (item.name === 'work-host') {
+        await this.startRestartableProcess(item)
+        continue
+      }
+      const running = this.spawnManagedProcess(item)
+      running.initializing = false
+      running.lastHealthyAt = Date.now()
+      running.child.once('error', (error) => {
+        if (!this.stopping) this.rejectFailure(new Error(`${item.name} failed: ${error.message}`))
+      })
+      running.child.once('exit', (code, signal) => {
+        if (!this.stopping) this.rejectFailure(new Error(`${item.name} exited unexpectedly (${code ?? signal ?? 'unknown'})`))
+      })
       await this.waitForHealth(running)
     }
     await this.notifyReady()
@@ -406,6 +589,10 @@ export class ProductionSupervisor {
     if (this.stopping) return
     this.stopping = true
     for (const item of [...this.children].reverse()) {
+      if (item.restartTimer !== null) {
+        clearTimeout(item.restartTimer)
+        item.restartTimer = null
+      }
       if (item.child.exitCode !== null || item.child.signalCode !== null) continue
       item.child.kill(signal)
       const exited = await waitForExit(item.child, item.name === 'agent-host' ? 120_000 : 30_000)

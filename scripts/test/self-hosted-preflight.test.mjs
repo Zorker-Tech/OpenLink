@@ -32,6 +32,7 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     'services/browser-host/dist/src/main.js',
     'services/knowledge-service/dist/src/main.js',
     'services/agent-host/dist/src/desktop-main.js',
+    'services/work-host/dist/host.mjs',
     'images/runtime/manifest.json',
     'images/zokerbase/manifest.json',
     'images/zero/manifest.json',
@@ -80,6 +81,17 @@ test('fixture preflight enforces immutable runtime inputs without requiring buil
     minimumFreeBytes: 1,
     minimumMemoryBytes: 1,
   }), /missing.*app\/web\/server\.js/i)
+  await writeFile(join(releaseRoot, 'app/web/server.js'), 'fixture\n', { mode: 0o644 })
+  await (await import('node:fs/promises')).rm(join(releaseRoot, 'services/work-host/dist/host.mjs'))
+  await assert.rejects(runPreflight({
+    releaseRoot,
+    stateRoot,
+    platform: process.platform,
+    architecture: process.arch,
+    hostChecks: false,
+    minimumFreeBytes: 1,
+    minimumMemoryBytes: 1,
+  }), /missing.*services\/work-host\/dist\/host\.mjs/i)
 })
 
 test('customer runtime source contains no build or dependency-install execution', async () => {

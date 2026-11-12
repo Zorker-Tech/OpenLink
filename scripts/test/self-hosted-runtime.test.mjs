@@ -45,6 +45,7 @@ test('production plan uses only sealed artifacts and loopback host services', as
     OPENLINK_BROWSER_TOKEN_SECRET: 'browser-token-secret',
     OPENLINK_AGENT_API_TOKEN: 'agent-api-secret',
     OPENLINK_DESKTOP_AGENT_API_TOKEN: 'desktop-api-secret',
+    OPENLINK_WORK_HOST_API_TOKEN: 'work-host-api-secret',
     OPEN_SANDBOX_API_KEY: 'sandbox-api-secret',
     OPENLINK_PROVIDER_SECRET_KEY: 'provider-secret',
     OPENLINK_SUPABASE_SERVICE_ROLE_KEY: 'database-service-secret',
@@ -61,15 +62,18 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.equal(plan.profile, 'standard')
   assert.equal(plan.projectRuntime, 'vm')
   assert.equal(plan.isolationClass, 'vm')
-  assert.deepEqual(plan.processes.map((process) => process.name), ['browser-host', 'knowledge-service', 'agent-host', 'desktop-agent-host', 'web', 'edge'])
-  assert.deepEqual(plan.processes.map((process) => process.identity), ['openlink-browser', 'openlink-knowledge', 'openlink-agent', 'openlink-desktop', 'openlink-web', 'openlink-edge'])
+  assert.deepEqual(plan.processes.map((process) => process.name), ['browser-host', 'knowledge-service', 'agent-host', 'desktop-agent-host', 'work-host', 'web', 'edge'])
+  assert.deepEqual(plan.processes.map((process) => process.identity), ['openlink-browser', 'openlink-knowledge', 'openlink-agent', 'openlink-desktop', 'openlink-work-host', 'openlink-web', 'openlink-edge'])
   assert.equal(plan.processes.at(-1).args.includes('--adapter'), true)
   assert.equal(plan.processes[0].environment.OPENLINK_CHROME_EXECUTABLE, join(item.releaseRoot, 'browser/chromium/chrome'))
   assert.equal(plan.processes.find((process) => process.name === 'web').healthUrl.endsWith('/api/healthz'), true)
   assert.equal(plan.processes[0].environment.OPENLINK_RELEASE_ID, 'release')
-  assert.equal(plan.processes.filter((process) => process.name !== 'edge').every((process) => process.environment.OPENLINK_RUNTIME_MODE === 'local'), true)
+  assert.equal(plan.processes.filter((process) => !['edge', 'work-host'].includes(process.name)).every((process) => process.environment.OPENLINK_RUNTIME_MODE === 'local'), true)
   assert.equal(plan.processes.find((process) => process.name === 'agent-host').environment.OPENLINK_AGENT_HOST, '127.0.0.1')
   assert.equal(plan.processes.find((process) => process.name === 'web').environment.OPENLINK_AGENT_HOST_URL, 'http://127.0.0.1:43121')
+  assert.equal(plan.processes.find((process) => process.name === 'work-host').environment.SLATE_HOST_PORT, '43127')
+  assert.equal(plan.processes.find((process) => process.name === 'web').environment.OPENLINK_WORK_HOST_URL, 'http://127.0.0.1:43127')
+  assert.deepEqual(plan.processes.find((process) => process.name === 'work-host').healthHeaders, { Authorization: 'Bearer work-host-api-secret' })
   assert.equal(Object.keys(plan.processes.at(-1).environment).some((key) => /TOKEN|SECRET|PASSWORD|KEY/.test(key)), false)
   assert.equal(plan.compose.every((item) => item.args.includes('--pull') && item.args.includes('never')), true)
   const processes = Object.fromEntries(plan.processes.map((process) => [process.name, process.environment]))
@@ -83,7 +87,11 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.equal(processes['knowledge-service'].OPEN_SANDBOX_API_KEY, undefined)
   assert.equal(processes['desktop-agent-host'].OPENLINK_DESKTOP_AGENT_API_TOKEN, 'desktop-api-secret')
   assert.equal(processes['desktop-agent-host'].OPENLINK_BROWSER_API_TOKEN, undefined)
+  assert.equal(processes['work-host'].SLATE_GATEWAY_TOKEN, 'work-host-api-secret')
+  assert.equal(processes['work-host'].OPENLINK_WORK_HOST_API_TOKEN, undefined)
+  assert.equal(processes['work-host'].OPENLINK_AGENT_API_TOKEN, undefined)
   assert.equal(processes.web.OPENLINK_AGENT_API_TOKEN, 'agent-api-secret')
+  assert.equal(processes.web.OPENLINK_WORK_HOST_API_TOKEN, 'work-host-api-secret')
   assert.equal(processes.web.OPENLINK_BROWSER_TOKEN_SECRET, undefined)
   assert.equal(processes.web.POSTGRES_PASSWORD, undefined)
   assert.equal(plan.compose[0].environment.POSTGRES_PASSWORD, 'database-only-secret')
@@ -190,7 +198,8 @@ test('supervisor starts dependencies in order and shuts down application before 
   await supervisor.start()
   assert.equal(events.at(-1), 'ready')
   assert.equal(events.some((event) => event.startsWith('command:load --input')), true)
-  assert.equal(events.indexOf('spawn:web') > events.indexOf('spawn:agent-host'), true)
+  assert.equal(events.indexOf('spawn:work-host') > events.indexOf('spawn:agent-host'), true)
+  assert.equal(events.indexOf('spawn:web') > events.indexOf('spawn:work-host'), true)
   await supervisor.stop('SIGTERM')
   const firstComposeStop = events.findIndex((event) => event.startsWith('command:compose') && event.includes(' stop'))
   const lastProcessKill = events.map((event, index) => [event, index]).filter(([event]) => event.startsWith('kill:')).at(-1)[1]
