@@ -1,5 +1,5 @@
 import { ProjectSupabasePanel } from '@/components/project-supabase-panel'
-import { getChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
 import { getProject } from '@/lib/projects'
 import { listOrganizations } from '@/lib/organizations'
 import { getAccessibleWorkspaceById, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
@@ -20,7 +20,7 @@ export default async function ProjectDataPage({
   if (!user) redirect(`/login?next=${encodeURIComponent(`/${userId}/chat/${sessionId}/data`)}`)
   if (user.id !== userId || !isChatSessionId(sessionId)) notFound()
 
-  const session = await getChatSession(supabase, user.id, sessionId)
+  const session = await getCodeChatSession(supabase, user.id, sessionId)
   if (!session) notFound()
   const [workspace, personalWorkspace, organizations, profile, chatSessions, project] = await Promise.all([
     getAccessibleWorkspaceById(supabase, session.workspace_id),
