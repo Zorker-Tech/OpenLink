@@ -52,6 +52,20 @@ export async function POST(
   const found = await getBot(supabase, user.id, botId)
   if (!found) return errorResponse('BOT_NOT_FOUND', 404)
 
+  // Validate the turn before touching the runtime: an invalid request must
+  // not warm or provision a Bot sandbox.
+  let body: { message?: unknown; clientNonce?: unknown }
+  try {
+    body = await request.json() as { message?: unknown; clientNonce?: unknown }
+  } catch {
+    return errorResponse('INVALID_BODY', 400)
+  }
+  const message = typeof body.message === 'string' ? body.message.trim().slice(0, 10_000) : ''
+  if (!message) return errorResponse('MESSAGE_REQUIRED', 400)
+  const clientNonce = typeof body.clientNonce === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.clientNonce)
+    ? body.clientNonce
+    : undefined
+
   let bot: NonNullable<Awaited<ReturnType<typeof getBot>>>
   try {
     bot = await ensureBotRuntimeProjection(supabase, user.id, found)
@@ -93,18 +107,6 @@ export async function POST(
       return errorResponse('BOT_GROUP_MEMBERS_UNAVAILABLE', 503, true)
     }
   }
-
-  let body: { message?: unknown; clientNonce?: unknown }
-  try {
-    body = await request.json() as { message?: unknown; clientNonce?: unknown }
-  } catch {
-    return errorResponse('INVALID_BODY', 400)
-  }
-  const message = typeof body.message === 'string' ? body.message.trim().slice(0, 10_000) : ''
-  if (!message) return errorResponse('MESSAGE_REQUIRED', 400)
-  const clientNonce = typeof body.clientNonce === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.clientNonce)
-    ? body.clientNonce
-    : undefined
 
   let upstream: Response
   try {
