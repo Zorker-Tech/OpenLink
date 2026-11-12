@@ -771,6 +771,7 @@ export function BotWorkspace({
                 <div className="zbd-chat-header-wrap">
                   <AppChatHeader
                     assetBase={ASSET_BASE}
+                    computerAvailable={activeBot.kind !== 'group'}
                     computerOpen={computerOpen}
                     displayName={activeBot.name}
                     introRunning={false}
