@@ -654,11 +654,9 @@ export function BotWorkspace({
   }, [])
 
   const handleProfileDeleted = useCallback((botId: string) => {
-    setBots((previous) => {
-      const next = previous.filter((bot) => bot.id !== botId)
-      setActiveId((current) => current === botId ? (next[0]?.id ?? '') : current)
-      return next
-    })
+    const remaining = bots.filter((bot) => bot.id !== botId)
+    setBots(remaining)
+    setActiveId((current) => current === botId ? (remaining[0]?.id ?? '') : current)
     setDetails((previous) => {
       const next = { ...previous }
       delete next[botId]
@@ -666,7 +664,7 @@ export function BotWorkspace({
     })
     setProfileOpen(false)
     window.history.replaceState(null, '', `/app/${encodeURIComponent(workspaceSlug)}/bots`)
-  }, [workspaceSlug])
+  }, [bots, workspaceSlug])
 
   const handleCreated = useCallback((bot: BotSummary) => {
     const runtimeReady = bot.runtimeStatus === 'ready'
