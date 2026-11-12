@@ -1304,6 +1304,71 @@ export async function updateBot(
   return summary(data as BotRow)
 }
 
+/**
+ * A deleted Bot cannot remain a group member. Remove it from every group row
+ * and from the Work-host group identity; a group that loses its last member is
+ * deleted because it can no longer answer.
+ */
+async function removeBotFromGroups(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+): Promise<void> {
+  let groups: Array<{ id: string; work_agent_id: string; member_ids: string[] | null }>
+  try {
+    const { data, error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .select('id, work_agent_id, member_ids')
+      .eq('user_id', userId)
+      .eq('workspace_id', bot.workspaceId)
+      .eq('kind', 'group')
+      .contains('member_ids', [bot.id])
+    if (error) throw error
+    groups = (data ?? []) as typeof groups
+  } catch (error) {
+    console.error(`[openlink-bots] group membership cleanup read failed for ${bot.id}`, error)
+    return
+  }
+  for (const group of groups) {
+    const remainingIds = (group.member_ids ?? []).filter((id) => id !== bot.id)
+    if (!remainingIds.length) {
+      try {
+        await deleteBotAgent(group.work_agent_id)
+      } catch (error) {
+        if (!isMissingWorkHostAgentError(error)) {
+          console.error(`[openlink-bots] empty group agent cleanup deferred for ${group.id}`, error)
+        }
+      }
+      const { error } = await supabase
+        .schema('openlink')
+        .from('bots')
+        .delete()
+        .eq('id', group.id)
+        .eq('user_id', userId)
+        .eq('kind', 'group')
+      if (error) console.error(`[openlink-bots] empty group cleanup failed for ${group.id}`, error)
+      continue
+    }
+    try {
+      const members = await readGroupMemberBots(supabase, userId, bot.workspaceId, remainingIds)
+      await setBotGroupMembers(group.work_agent_id, members.map((member) => member.workAgentId))
+    } catch (error) {
+      if (!isMissingWorkHostAgentError(error)) {
+        console.error(`[openlink-bots] group membership cleanup deferred for ${group.id}`, error)
+      }
+    }
+    const { error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .update({ member_ids: remainingIds, updated_at: new Date().toISOString() })
+      .eq('id', group.id)
+      .eq('user_id', userId)
+      .eq('kind', 'group')
+    if (error) console.error(`[openlink-bots] group membership cleanup failed for ${group.id}`, error)
+  }
+}
+
 export async function deleteBot(
   supabase: ServerSupabaseClient,
   userId: string,
@@ -1327,6 +1392,7 @@ export async function deleteBot(
     if (error) throw error
     return
   }
+  await removeBotFromGroups(supabase, userId, bot)
   await releaseBotRuntime(bot)
   try {
     await deleteBotAgent(bot.workAgentId)
