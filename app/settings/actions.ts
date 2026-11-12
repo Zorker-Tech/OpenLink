@@ -70,7 +70,7 @@ const embeddingProviderSchema = z.object({
   isDefault: z.boolean(),
   baseUrl: providerSchema.shape.baseUrl,
   protocol: z.enum(['openai', 'ollama', 'tei']),
-  defaultModelId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/),
+  defaultModelId: z.string().regex(/^[A-Za-z0-9@][A-Za-z0-9._:/@-]{0,255}$/),
   vectorDimension: z.number().int().min(2).max(32_768),
   apiKey: z.string().trim().max(8192).optional(),
   clearApiKey: z.boolean().optional(),
