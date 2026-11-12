@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { BotStreamUpdate, BotTranscriptEntry } from '@/lib/bot-transcript'
 import { botUpdatesFromWorkHostFrame } from '@/lib/bot-work-host-stream'
 import { ensureBotRuntimeProjection, getBot } from '@/lib/bots'
-import { BotRuntimeError, getBotComputer, streamBotPrompt, warmBotRuntime } from '@/lib/bot-runtime.server'
+import { BotRuntimeError, streamBotPrompt, warmBotRuntime } from '@/lib/bot-runtime.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -67,11 +67,11 @@ export async function POST(
   // to block the rest of the group.
   if (bot.kind === 'bot') {
     // A turn must not be durably accepted without a live Bot binding. The
-    // status read is cheap; a missing binding is repaired by one idempotent
-    // ensure before the prompt is sent.
+    // ensure is idempotent and also refreshes a binding left stale by a
+    // substrate or Work-host restart, so it runs before every prompt rather
+    // than only when the projection looks cold.
     try {
-      const computer = await getBotComputer(bot)
-      if (!computer) await warmBotRuntime(supabase, user.id, bot)
+      await warmBotRuntime(supabase, user.id, bot)
     } catch (error) {
       if (error instanceof BotRuntimeError) return errorResponse(error.code, error.status, error.retryable)
       console.error('[openlink-bots] Bot runtime ensure before prompt failed', error)
