@@ -12,6 +12,7 @@ import {
   transcriptFromAgentEvents,
   type BotTranscriptEntry,
 } from '@/lib/bot-transcript'
+import { isBotAvatarColor, isBotAvatarShape } from '@/lib/bot-avatar'
 import { assertGroupMemberCandidate, isGroupBot, normalizeGroupMemberIds } from '@/lib/bot-groups'
 import { releaseBotRuntime } from '@/lib/bot-runtime.server'
 import type { BotDetail, BotGroupMemberSummary, BotRoutine, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
@@ -778,9 +779,11 @@ function normalizeDescription(value: unknown): string {
   return description
 }
 
-function normalizeAvatar(value: unknown, fallback: string): string {
+function normalizeAvatar(value: unknown, fallback: string, kind: 'shape' | 'color'): string {
   const candidate = typeof value === 'string' ? value.trim() : ''
-  if (!SAFE_AVATAR_ID.test(candidate)) {
+  const valid = SAFE_AVATAR_ID.test(candidate)
+    && (kind === 'shape' ? isBotAvatarShape(candidate) : isBotAvatarColor(candidate))
+  if (!valid) {
     if (fallback) return fallback
     throw new BotInputError('BOT_AVATAR_INVALID')
   }
@@ -1054,8 +1057,8 @@ export async function createBot(
   if (!workspace) throw new BotInputError('BOT_WORKSPACE_NOT_FOUND')
   const name = normalizeName(input.name)
   const description = normalizeDescription(input.description)
-  const avatarShape = normalizeAvatar(input.avatarShape, 'blob')
-  const avatarColor = normalizeAvatar(input.avatarColor, 'orange')
+  const avatarShape = normalizeAvatar(input.avatarShape, 'blob', 'shape')
+  const avatarColor = normalizeAvatar(input.avatarColor, 'orange', 'color')
   const avatarPngBase64 = normalizePng(input.avatarPngBase64)
   const requestedModel = normalizeModel(input.model)
   const selectedModel = await resolveConfiguredModelSelection(supabase, userId, requestedModel)
@@ -1121,8 +1124,8 @@ export async function createBotGroup(
   if (!workspace) throw new BotInputError('BOT_WORKSPACE_NOT_FOUND')
   const name = normalizeName(input.name)
   const description = normalizeDescription(input.description)
-  const avatarShape = normalizeAvatar(input.avatarShape, 'blob')
-  const avatarColor = normalizeAvatar(input.avatarColor, 'orange')
+  const avatarShape = normalizeAvatar(input.avatarShape, 'blob', 'shape')
+  const avatarColor = normalizeAvatar(input.avatarColor, 'orange', 'color')
   const avatarPngBase64 = normalizePng(input.avatarPngBase64)
   const memberIds = normalizeGroupMemberIds(input.memberIds)
   if (!memberIds.length) throw new BotInputError('BOT_GROUP_MEMBER_REQUIRED')
@@ -1202,8 +1205,8 @@ export async function updateBot(
 ): Promise<BotSummary> {
   const name = input.name === undefined ? bot.name : normalizeName(input.name)
   const description = input.description === undefined ? bot.description : normalizeDescription(input.description)
-  const avatarShape = input.avatarShape === undefined ? bot.avatarShape : normalizeAvatar(input.avatarShape, bot.avatarShape)
-  const avatarColor = input.avatarColor === undefined ? bot.avatarColor : normalizeAvatar(input.avatarColor, bot.avatarColor)
+  const avatarShape = input.avatarShape === undefined ? bot.avatarShape : normalizeAvatar(input.avatarShape, bot.avatarShape, 'shape')
+  const avatarColor = input.avatarColor === undefined ? bot.avatarColor : normalizeAvatar(input.avatarColor, bot.avatarColor, 'color')
   const avatarPngBase64 = normalizePng(input.avatarPngBase64)
   if (isGroupBot(bot)) {
     const memberIds = input.memberIds === undefined
