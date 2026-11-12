@@ -22,6 +22,7 @@ const LINUX_IDENTITIES = {
   knowledge: { name: 'openlink-knowledge', groups: [] },
   agent: { name: 'openlink-agent', groups: ['kvm', 'openlink-workspace'] },
   desktop: { name: 'openlink-desktop', groups: ['openlink-workspace'] },
+  workHost: { name: 'openlink-work-host', groups: [] },
   web: { name: 'openlink-web', groups: [] },
   edge: { name: 'openlink-edge', groups: [] },
 }
@@ -165,6 +166,7 @@ export async function installNativeService(options = {}) {
     [identities.knowledge, ['knowledge']],
     [identities.agent, ['agents', 'project-vms', 'podman', 'podman/config', 'podman/data']],
     [identities.desktop, ['desktop-agents']],
+    [identities.workHost, ['work-host']],
     [identities.web, ['web']],
     [identities.edge, ['edge', 'edge/config', 'edge/data']],
   ]

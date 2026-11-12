@@ -14,6 +14,7 @@ import { assertUbuntuProjectVmArtifactManifest, UBUNTU_PROJECT_VM_ARCHITECTURE }
 import { hardenUserOnlySecret } from './lib/windows-security.mjs'
 import { assertWindowsHyperVHostReady } from './lib/windows-hyperv.mjs'
 import { assertCivilizationSource } from './lib/civilization-source.mjs'
+import { scopeWorkHostEnvironment } from './lib/work-host-environment.mjs'
 
 const root = new URL('../', import.meta.url)
 const browserHostDirectory = new URL('../services/browser-host/', import.meta.url)
@@ -23,6 +24,7 @@ const agentRpcWorkerDirectory = new URL('../services/agent-rpc-worker/', import.
 const sandboxRuntimeDirectory = new URL('../services/sandbox-runtime/', import.meta.url)
 const browserProtocolDirectory = new URL('../packages/browser-protocol/', import.meta.url)
 const knowledgeServiceDirectory = new URL('../services/knowledge-service/', import.meta.url)
+const workHostDirectory = new URL('../services/work-host/', import.meta.url)
 const rootPath = resolve(fileURLToPath(root))
 const configuredWebRoot = process.env.OPENLINK_WEB_ROOT?.trim()
 const webRootPath = resolve(configuredWebRoot || rootPath)
@@ -89,6 +91,8 @@ const hostUrl = process.env.OPENLINK_BROWSER_HOST_URL || 'http://127.0.0.1:43120
 const agentHostUrl = process.env.OPENLINK_AGENT_HOST_URL || 'http://127.0.0.1:43121'
 const desktopAgentHostUrl = process.env.OPENLINK_DESKTOP_AGENT_HOST_URL || 'http://127.0.0.1:43123'
 const knowledgeServiceUrl = process.env.OPENLINK_KNOWLEDGE_SERVICE_URL || 'http://127.0.0.1:43124'
+const workHostUrl = process.env.OPENLINK_WORK_HOST_URL || 'http://127.0.0.1:43127'
+const workHostDataRoot = fileURLToPath(new URL('../.openlink-runtime/work-host/', import.meta.url))
 
 function localPublicAgentGatewayUrl() {
   // The Agent Host may bind to 127.0.0.1 while the browser reaches OpenLink
@@ -542,12 +546,12 @@ async function ensureNpmDependencies(name, directory, extraInputs = []) {
   await writeFile(markerPath, `${JSON.stringify({ fingerprint: dependencyFingerprint, node: process.version, updatedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 })
 }
 
-async function waitForHealth(url, child, name, path = '/healthz', expectedService) {
+async function waitForHealth(url, child, name, path = '/healthz', expectedService, headers = undefined) {
   const deadline = Date.now() + 120_000
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`${name} exited with code ${child.exitCode}`)
     try {
-      const response = await fetch(`${url}${path}`)
+      const response = await fetch(`${url}${path}`, headers ? { headers } : undefined)
       if (response.ok) {
         if (!expectedService) return
         const payload = await response.json().catch(() => null)
@@ -579,6 +583,12 @@ async function ensureHostServicesReady() {
   await waitForExit(browserBuild, 'Browser Host build')
   const agentBuild = run(packageManagerCommand('npm'), ['run', 'build'], { cwd: agentHostDirectory })
   await waitForExit(agentBuild, 'Agent Host build')
+}
+
+async function ensureWorkHostReady() {
+  await ensureNpmDependencies('work-host', workHostDirectory)
+  const build = run(process.execPath, ['scripts/build-work-host.mjs'], { cwd: root })
+  await waitForExit(build, 'Work Host build')
 }
 
 if (Number(process.versions.node.split('.')[0]) < 22) {
@@ -674,6 +684,7 @@ const agentApiToken = await persistentRuntimeSecret('agent-api-token', process.e
 const desktopAgentApiToken = await persistentRuntimeSecret('desktop-agent-api-token', process.env.OPENLINK_DESKTOP_AGENT_API_TOKEN)
 const openSandboxApiToken = await persistentRuntimeSecret('opensandbox-api-token', process.env.OPEN_SANDBOX_API_KEY)
 const knowledgeApiToken = await persistentRuntimeSecret('knowledge-api-token', process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN)
+const workHostApiToken = await persistentRuntimeSecret('work-host-api-token', process.env.OPENLINK_WORK_HOST_API_TOKEN)
 const projectRuntimeProvisionerId = await persistentRuntimeSecret('project-runtime-provisioner-id', process.env.OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID, 'hex')
 const localZokerbase = runtimeMode === 'local' ? await ensureZokerbase() : null
 let localZero = null
@@ -689,6 +700,7 @@ const chromeExecutable = await executable([
 // starts as well as artifact builds; otherwise a missing ignored `dist/`
 // directory aborts the supervisor before Next.js can start.
 await ensureHostServicesReady()
+if (runtimeMode === 'local') await ensureWorkHostReady()
 
 if (process.env.OPENLINK_BUILD_ARTIFACTS === '1') {
   if (runtimeMode === 'local') {
@@ -962,14 +974,82 @@ const shared = {
   OPENSANDBOX_SERVER_API_KEY: openSandboxApiToken,
 }
 
-const browserHost = run(process.execPath, ['dist/src/main.js'], { cwd: browserHostDirectory, env: shared })
+const {
+  shared: serviceEnvironment,
+  workHost: workHostEnvironment,
+  web: webEnvironment,
+} = scopeWorkHostEnvironment(shared, {
+  runtime: {
+    SLATE_DATA_ROOT: workHostDataRoot,
+    SLATE_HOST_PORT: new URL(workHostUrl).port || '43127',
+    SLATE_GATEWAY_TOKEN: workHostApiToken,
+    SLATE_GATEWAY_REQUIRE_AUTH: '1',
+    SLATE_USE_EXISTING_BOX_EXEC_DAEMON: '1',
+    SLATE_DISABLE_SEND_ACCEPT_RETURN: '1',
+  },
+  bff: {
+    OPENLINK_WORK_HOST_URL: workHostUrl,
+    OPENLINK_WORK_HOST_API_TOKEN: workHostApiToken,
+  },
+})
+
+const browserHost = run(process.execPath, ['dist/src/main.js'], { cwd: browserHostDirectory, env: serviceEnvironment })
 await waitForHealth(hostUrl, browserHost, 'Browser Host')
 const knowledgeService = knowledgeServiceEnabled
-  ? run(process.execPath, ['dist/src/main.js'], { cwd: knowledgeServiceDirectory, env: shared })
+  ? run(process.execPath, ['dist/src/main.js'], { cwd: knowledgeServiceDirectory, env: serviceEnvironment })
   : null
 if (knowledgeService) await waitForHealth(knowledgeServiceUrl, knowledgeService, 'Knowledge Service')
-const agentHost = run(process.execPath, ['dist/src/main.js'], { cwd: agentHostDirectory, env: shared })
+const agentHost = run(process.execPath, ['dist/src/main.js'], { cwd: agentHostDirectory, env: serviceEnvironment })
 await waitForHealth(agentHostUrl, agentHost, 'Agent Host')
+let shuttingDown = false
+let workHost = null
+let workHostRestartTimer = null
+let workHostRestartAttempts = 0
+
+function scheduleWorkHostRestart(exitCode) {
+  if (shuttingDown) return
+  workHostRestartAttempts += 1
+  if (workHostRestartAttempts > 5) {
+    console.error('[openlink] Work Host repeatedly failed to stay alive; shutting down')
+    void shutdown('SIGTERM').finally(() => process.exit(exitCode ?? 1))
+    return
+  }
+  const delay = Math.min(30_000, 1_000 * 2 ** (workHostRestartAttempts - 1))
+  console.error(`[openlink] Work Host exited with code ${exitCode ?? 1}; restarting in ${delay}ms (attempt ${workHostRestartAttempts}/5)`)
+  workHostRestartTimer = setTimeout(() => {
+    workHostRestartTimer = null
+    if (shuttingDown) return
+    void startWorkHost().catch((error) => {
+      console.error(`[openlink] Work Host restart failed: ${error instanceof Error ? error.message : String(error)}`)
+      if (workHost && workHost.exitCode === null && workHost.signalCode === null) workHost.kill('SIGKILL')
+    })
+  }, delay)
+  workHostRestartTimer.unref?.()
+}
+
+function launchWorkHost() {
+  const child = run(process.execPath, ['dist/host.mjs'], { cwd: workHostDirectory, env: workHostEnvironment })
+  child.once('exit', (code) => {
+    if (shuttingDown) return
+    if (workHost !== child) return
+    workHost = null
+    scheduleWorkHostRestart(code)
+  })
+  return child
+}
+
+async function startWorkHost() {
+  workHost = launchWorkHost()
+  await waitForHealth(workHostUrl, workHost, 'Work Host', '/health', undefined, {
+    Authorization: `Bearer ${workHostApiToken}`,
+  })
+  const healthyTimer = setTimeout(() => {
+    workHostRestartAttempts = 0
+  }, 60_000)
+  healthyTimer.unref?.()
+}
+
+await startWorkHost()
 const desktopGatewayProxyUrl = 'http://127.0.0.1:43125'
 let desktopGatewayProxy = null
 try {
@@ -979,21 +1059,20 @@ try {
   desktopGatewayProxy = run(process.execPath, ['scripts/desktop-gateway-proxy.mjs'], {
     cwd: root,
     env: {
-      ...shared,
+      ...serviceEnvironment,
       OPENLINK_DESKTOP_GATEWAY_PROXY_HOST: process.env.OPENLINK_DESKTOP_GATEWAY_PROXY_HOST || '0.0.0.0',
     },
   })
   await waitForHealth(desktopGatewayProxyUrl, desktopGatewayProxy, 'Desktop Gateway Proxy')
 }
-const desktopAgentHost = run(process.execPath, ['dist/src/desktop-main.js'], { cwd: agentHostDirectory, env: shared })
+const desktopAgentHost = run(process.execPath, ['dist/src/desktop-main.js'], { cwd: agentHostDirectory, env: serviceEnvironment })
 await waitForHealth(desktopAgentHostUrl, desktopAgentHost, 'Desktop Agent Host')
-const next = run('npm', ['run', mode === 'production' ? 'start:web' : 'dev:web'], { cwd: webRootPath, env: shared })
+const next = run('npm', ['run', mode === 'production' ? 'start:web' : 'dev:web'], { cwd: webRootPath, env: webEnvironment })
 // Studio is served on a second port of the same `localhost` host so its
 // SameSite cookie flows into the embedding iframe (same host => same site,
 // ports are not part of the site). See scripts/studio-origin-proxy.mjs.
-const studioOrigin = run(process.execPath, ['scripts/studio-origin-proxy.mjs'], { cwd: root, env: { ...shared, OPENLINK_WEB_PORT: webPort } })
+const studioOrigin = run(process.execPath, ['scripts/studio-origin-proxy.mjs'], { cwd: root, env: { ...serviceEnvironment, OPENLINK_WEB_PORT: webPort } })
 
-let shuttingDown = false
 async function stop(child, signal, timeoutMs = 10_000) {
   if (child.exitCode !== null || child.signalCode !== null) return
   child.kill(signal)
@@ -1016,6 +1095,11 @@ async function shutdown(signal) {
   await stop(desktopAgentHost, signal, 30_000).catch(() => undefined)
   if (desktopGatewayProxy) await stop(desktopGatewayProxy, signal, 5_000).catch(() => undefined)
   await stop(agentHost, signal, 120_000).catch(() => undefined)
+  if (workHostRestartTimer) {
+    clearTimeout(workHostRestartTimer)
+    workHostRestartTimer = null
+  }
+  if (workHost) await stop(workHost, signal, 30_000).catch(() => undefined)
   if (knowledgeService) await stop(knowledgeService, signal, 30_000).catch(() => undefined)
   await stop(browserHost, signal, 30_000).catch(() => undefined)
   if (runtimeMode === 'local') await stopZero().catch(() => undefined)

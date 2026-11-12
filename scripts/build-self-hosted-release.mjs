@@ -38,6 +38,7 @@ function requiredPayloadPaths(target) {
     'services/browser-host/dist/src/main.js',
     'services/knowledge-service/dist/src/main.js',
     'services/agent-host/dist/src/desktop-main.js',
+    'services/work-host/dist/host.mjs',
     'orchestration/backend/docker/docker-compose.yml',
     'orchestration/services/zero/docker-compose.standalone.yml',
     'orchestration/docker-compose.production.yml',
@@ -181,7 +182,7 @@ export async function stageNativeSelfHostedPayload(options = {}) {
     await copyRequired(join(sourceRoot, 'public'), join(outputRoot, 'app/web/public'))
   }
 
-  for (const service of ['agent-host', 'browser-host', 'knowledge-service']) {
+  for (const service of ['agent-host', 'browser-host', 'knowledge-service', 'work-host']) {
     const source = join(sourceRoot, 'services', service)
     const destination = join(outputRoot, 'services', service)
     await copyRequired(join(source, 'dist'), join(destination, 'dist'))

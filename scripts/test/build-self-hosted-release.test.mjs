@@ -25,6 +25,7 @@ const requiredFiles = [
   'services/browser-host/dist/src/main.js',
   'services/knowledge-service/dist/src/main.js',
   'services/agent-host/dist/src/desktop-main.js',
+  'services/work-host/dist/host.mjs',
   'orchestration/backend/docker/docker-compose.yml',
   'orchestration/services/zero/docker-compose.standalone.yml',
   'orchestration/docker-compose.production.yml',
