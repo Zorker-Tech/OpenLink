@@ -553,7 +553,6 @@ async function syncBotPreview(
       .update({
         last_entry_text: preview.slice(0, 2000),
         last_activity_at: activityAt,
-        updated_at: new Date().toISOString(),
       })
       .eq('id', bot.id)
       .eq('user_id', userId)
