@@ -6,13 +6,16 @@ import {
   BotTranscriptReplaceLimitError,
   WORK_HOST_TRANSCRIPT_REPLACE_LIMIT,
   chunkWorkHostEntries,
+  fromDurableGroupEntry,
   normalizeWorkHostTranscript,
   planBotTranscriptRecovery,
   previewFromEntries,
+  toDurableGroupEntry,
   toWorkHostEntry,
   transcriptFromAgentEvents,
   type BotTranscriptEntry,
 } from '@/lib/bot-transcript'
+import { assertGroupMemberCandidate, isGroupBot, normalizeGroupMemberIds } from '@/lib/bot-groups'
 import { releaseBotRuntime } from '@/lib/bot-runtime.server'
 import {
   decideBotProjectionRecovery,
@@ -30,6 +33,7 @@ import {
   appendBotAgentTranscriptEntries,
   createBotAgent,
   createBotAgentAutomation,
+  createBotGroup as createWorkHostGroup,
   deleteBotAgent,
   deleteBotAgentAutomation,
   getBotAgentAutomations,
@@ -40,6 +44,7 @@ import {
   runBotAgentAutomationNow,
   setBotAgentAvatar,
   setBotAgentAutomationEnabled,
+  setBotGroupMembers,
   updateBotAgent,
   updateBotAgentAutomation,
   type WorkHostAvatar,
@@ -251,6 +256,10 @@ export async function ensureBotRuntimeProjection(
   return await withBotProjectionLock(bot.id, async () => {
     const latest = await getBot(supabase, userId, bot.id)
     if (!latest) throw new BotInputError('BOT_NOT_FOUND')
+    // A group is a Work-host identity and routing projection only. Its members
+    // own the isolated execution sessions, so a group must never acquire a
+    // Project or a hidden runtime session of its own.
+    if (isGroupBot(latest)) return latest
 
     const observation = await readBotProjection(supabase, userId, latest)
     // A transient Project read failure is not evidence that the Project was
@@ -606,11 +615,109 @@ function summary(row: BotRow, members: BotGroupMemberSummary[] = []): BotSummary
   }
 }
 
+async function readDurableGroupTranscript(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  group: BotSummary,
+): Promise<BotTranscriptEntry[]> {
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('bot_group_entries')
+    .select('payload')
+    .eq('bot_id', group.id)
+    .eq('user_id', userId)
+    .eq('workspace_id', group.workspaceId)
+    .order('sequence', { ascending: true })
+  if (error) throw error
+  return ((data ?? []) as Array<{ payload: unknown }>).flatMap((row) => {
+    const entry = fromDurableGroupEntry(row.payload)
+    return entry ? [entry] : []
+  })
+}
+
+async function writeDurableGroupEntries(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  group: BotSummary,
+  entries: readonly BotTranscriptEntry[],
+): Promise<void> {
+  if (!entries.length) return
+  const rows = entries.map((entry) => ({
+    bot_id: group.id,
+    user_id: userId,
+    workspace_id: group.workspaceId,
+    ...toDurableGroupEntry(entry),
+  }))
+  const { error } = await supabase
+    .schema('openlink')
+    .from('bot_group_entries')
+    .upsert(rows, { onConflict: 'bot_id,entry_id', ignoreDuplicates: true })
+  if (error) throw error
+}
+
+async function readGroupMemberBots(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  workspaceId: string,
+  memberIds: readonly string[],
+): Promise<BotSummary[]> {
+  const ids = normalizeGroupMemberIds(memberIds)
+  if (!ids.length) throw new BotInputError('BOT_GROUP_MEMBER_INVALID')
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('bots')
+    .select(BOT_SELECT)
+    .eq('user_id', userId)
+    .eq('workspace_id', workspaceId)
+    .eq('kind', 'bot')
+    .in('id', ids)
+  if (error) throw error
+  const byId = new Map(((data ?? []) as BotRow[]).map((row) => [row.id, summary(row)]))
+  const members = ids.flatMap((id) => {
+    const member = byId.get(id)
+    return member ? [member] : []
+  })
+  if (members.length !== ids.length) throw new BotInputError('BOT_GROUP_MEMBER_INVALID')
+  for (const member of members) assertGroupMemberCandidate(member, workspaceId)
+  return members
+}
+
+async function updateGroupWorkHostIdentity(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  group: BotSummary,
+  input: { name: string; description: string; memberIds: string[]; avatarPngBase64: string | null },
+): Promise<string> {
+  const members = await readGroupMemberBots(supabase, userId, group.workspaceId, input.memberIds)
+  const memberAgentIds = members.map((member) => member.workAgentId)
+  let agentId = group.workAgentId
+  try {
+    await updateBotAgent({
+      id: agentId,
+      name: input.name,
+      description: input.description,
+    })
+    await setBotGroupMembers(agentId, memberAgentIds)
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) throw error
+    const created = await createWorkHostGroup({
+      name: input.name,
+      description: input.description,
+      memberAgentIds,
+      externalId: group.id,
+    })
+    agentId = created.agent.id
+  }
+  if (input.avatarPngBase64) await setBotAgentAvatar(agentId, input.avatarPngBase64)
+  return agentId
+}
+
 interface BotGroupMemberRow {
   id: string
   workspace_id: string
   kind: 'bot' | 'group'
   name: string
+  work_agent_id: string
   avatar_shape: string
   avatar_color: string
   updated_at: string
@@ -620,6 +727,7 @@ function groupMemberSummary(row: BotGroupMemberRow): BotGroupMemberSummary {
   return {
     id: row.id,
     name: row.name,
+    workAgentId: row.work_agent_id,
     avatarShape: row.avatar_shape,
     avatarColor: row.avatar_color,
     updatedAt: row.updated_at,
@@ -643,7 +751,7 @@ async function readGroupMembers(
   const { data, error } = await supabase
     .schema('openlink')
     .from('bots')
-    .select('id, workspace_id, kind, name, avatar_shape, avatar_color, updated_at')
+    .select('id, workspace_id, kind, name, work_agent_id, avatar_shape, avatar_color, updated_at')
     .eq('user_id', userId)
     .eq('workspace_id', rows.find((row) => row.kind === 'group')?.workspace_id ?? '')
     .eq('kind', 'bot')
@@ -806,6 +914,21 @@ export async function getBotDetail(
   userId: string,
   bot: BotSummary,
 ): Promise<BotDetail> {
+  if (isGroupBot(bot)) {
+    let transcript: BotTranscriptEntry[] = []
+    try {
+      transcript = await readDurableGroupTranscript(supabase, userId, bot)
+    } catch (error) {
+      console.error(`[openlink-bots] group transcript read failed for ${bot.id}`, error)
+    }
+    return {
+      ...bot,
+      transcript,
+      runtimeReady: bot.members.length > 0,
+      pendingConfirmations: [],
+      routines: [],
+    }
+  }
   let transcript: BotTranscriptEntry[] = []
   let authoritativeBot = await ensureBotRuntimeProjection(supabase, userId, bot)
   let readError: unknown = null
@@ -1007,6 +1130,81 @@ export async function createBot(
   }
 }
 
+export async function createBotGroup(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  input: {
+    workspaceSlug: string
+    name: unknown
+    description?: unknown
+    avatarShape?: unknown
+    avatarColor?: unknown
+    avatarPngBase64?: unknown
+    memberIds: unknown
+  },
+): Promise<BotSummary> {
+  const workspace = await getAccessibleWorkspace(supabase, input.workspaceSlug)
+  if (!workspace) throw new BotInputError('BOT_WORKSPACE_NOT_FOUND')
+  const name = normalizeName(input.name)
+  const description = normalizeDescription(input.description)
+  const avatarShape = normalizeAvatar(input.avatarShape, 'blob')
+  const avatarColor = normalizeAvatar(input.avatarColor, 'orange')
+  const avatarPngBase64 = normalizePng(input.avatarPngBase64)
+  const memberIds = normalizeGroupMemberIds(input.memberIds)
+  if (!memberIds.length) throw new BotInputError('BOT_GROUP_MEMBER_REQUIRED')
+  const members = await readGroupMemberBots(supabase, userId, workspace.id, memberIds)
+  const botId = randomUUID()
+  let createdAgentId: string | null = null
+  try {
+    const created = await createWorkHostGroup({
+      name,
+      description,
+      memberAgentIds: members.map((member) => member.workAgentId),
+      externalId: botId,
+    })
+    createdAgentId = created.agent.id
+    if (avatarPngBase64) await setBotAgentAvatar(created.agent.id, avatarPngBase64)
+    const { data, error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .insert({
+        id: botId,
+        user_id: userId,
+        workspace_id: workspace.id,
+        project_id: null,
+        runtime_session_id: null,
+        runtime_status: 'ready',
+        runtime_ready_at: new Date().toISOString(),
+        work_agent_id: created.agent.id,
+        name,
+        description,
+        avatar_shape: avatarShape,
+        avatar_color: avatarColor,
+        kind: 'group',
+        member_ids: memberIds,
+        provider_id: null,
+        model_id: null,
+        last_entry_text: '',
+        last_activity_at: new Date().toISOString(),
+        last_viewed_at: new Date().toISOString(),
+      })
+      .select(BOT_SELECT)
+      .single()
+    if (error) throw error
+    return summary(data as BotRow, members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      workAgentId: member.workAgentId,
+      avatarShape: member.avatarShape,
+      avatarColor: member.avatarColor,
+      updatedAt: member.updatedAt,
+    })))
+  } catch (error) {
+    if (createdAgentId) await deleteBotAgent(createdAgentId).catch(() => undefined)
+    throw error
+  }
+}
+
 export async function updateBot(
   supabase: ServerSupabaseClient,
   userId: string,
@@ -1018,6 +1216,7 @@ export async function updateBot(
     avatarColor?: unknown
     avatarPngBase64?: unknown
     model?: unknown
+    memberIds?: unknown
   },
 ): Promise<BotSummary> {
   const name = input.name === undefined ? bot.name : normalizeName(input.name)
@@ -1025,6 +1224,44 @@ export async function updateBot(
   const avatarShape = input.avatarShape === undefined ? bot.avatarShape : normalizeAvatar(input.avatarShape, bot.avatarShape)
   const avatarColor = input.avatarColor === undefined ? bot.avatarColor : normalizeAvatar(input.avatarColor, bot.avatarColor)
   const avatarPngBase64 = normalizePng(input.avatarPngBase64)
+  if (isGroupBot(bot)) {
+    const memberIds = input.memberIds === undefined
+      ? bot.memberIds
+      : normalizeGroupMemberIds(input.memberIds)
+    if (!memberIds.length) throw new BotInputError('BOT_GROUP_MEMBER_REQUIRED')
+    const members = await readGroupMemberBots(supabase, userId, bot.workspaceId, memberIds)
+    const agentId = await updateGroupWorkHostIdentity(supabase, userId, bot, {
+      name,
+      description,
+      memberIds,
+      avatarPngBase64,
+    })
+    const { data, error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .update({
+        ...(agentId === bot.workAgentId ? {} : { work_agent_id: agentId }),
+        name,
+        description,
+        avatar_shape: avatarShape,
+        avatar_color: avatarColor,
+        member_ids: memberIds,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bot.id)
+      .eq('user_id', userId)
+      .select(BOT_SELECT)
+      .single()
+    if (error) throw error
+    return summary(data as BotRow, members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      workAgentId: member.workAgentId,
+      avatarShape: member.avatarShape,
+      avatarColor: member.avatarColor,
+      updatedAt: member.updatedAt,
+    })))
+  }
   const requestedModel = input.model === undefined
     ? (bot.providerId && bot.modelId ? { providerId: bot.providerId, modelId: bot.modelId } : null)
     : normalizeModel(input.model)
@@ -1109,6 +1346,24 @@ export async function deleteBot(
   userId: string,
   bot: BotSummary,
 ): Promise<void> {
+  if (isGroupBot(bot)) {
+    try {
+      await deleteBotAgent(bot.workAgentId)
+    } catch (error) {
+      if (!isMissingWorkHostAgentError(error)) {
+        console.error('[openlink-bots] Work Host group cleanup deferred', error)
+      }
+    }
+    const { error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .delete()
+      .eq('id', bot.id)
+      .eq('user_id', userId)
+      .eq('kind', 'group')
+    if (error) throw error
+    return
+  }
   let runtimeSession: BotProjectionSession | null = null
   try {
     runtimeSession = await readOwnedBotRuntimeSession(supabase, userId, bot)
@@ -1177,6 +1432,28 @@ export async function appendBotEntries(
   entries: readonly BotTranscriptEntry[],
 ): Promise<void> {
   if (!entries.length) return
+  if (isGroupBot(bot)) {
+    await writeDurableGroupEntries(supabase, userId, bot, entries)
+    try {
+      await appendBotAgentTranscriptEntries(bot.workAgentId, entries.map(toWorkHostEntry))
+    } catch (error) {
+      console.error(`[openlink-bots] group transcript mirror failed for ${bot.id}`, error)
+    }
+    const preview = previewFromEntries(entries) || bot.lastEntryText
+    const { error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .update({
+        last_entry_text: preview.slice(0, 2000),
+        last_activity_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bot.id)
+      .eq('user_id', userId)
+      .eq('kind', 'group')
+    if (error) throw error
+    return
+  }
   const authoritativeBot = await appendToWorkHost(
     supabase,
     userId,

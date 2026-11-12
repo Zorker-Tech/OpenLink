@@ -17,6 +17,7 @@ export interface BotRoutine {
 export interface BotGroupMemberSummary {
   id: string
   name: string
+  workAgentId: string
   avatarShape: string
   avatarColor: string
   updatedAt: string
