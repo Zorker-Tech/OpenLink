@@ -45,7 +45,7 @@ function activity(
 ): BotTranscriptEntry {
   return {
     kind: 'activity',
-    id,
+    id: id.slice(0, 256),
     timestampMs: at,
     activity: {
       label,
@@ -887,7 +887,7 @@ export function transcriptFromAgentEvents(events: readonly OpenLinkAgentEvent[])
     if (event.type === 'confirmation.requested') {
       const request = botConfirmationRequest(event)
       if (request) {
-        const id = `bot-confirmation-${safeId(request.id, 'confirmation')}`
+        const id = `bot-confirmation-${safeId(request.id, 'confirmation')}`.slice(0, 256)
         entries.set(id, {
           kind: 'confirmation',
           id,
@@ -905,7 +905,7 @@ export function transcriptFromAgentEvents(events: readonly OpenLinkAgentEvent[])
       continue
     }
     if (event.type === 'confirmation.resolved') {
-      const id = `bot-confirmation-${safeId(event.confirmationId, 'confirmation')}`
+      const id = `bot-confirmation-${safeId(event.confirmationId, 'confirmation')}`.slice(0, 256)
       const existing = entries.get(id)
       if (existing?.kind === 'confirmation') {
         entries.set(id, {
