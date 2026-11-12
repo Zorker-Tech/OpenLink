@@ -50,15 +50,19 @@ export function resolveGroupResponders(
   message: string,
 ): BotGroupMention[] {
   const normalized = message.toLowerCase()
-  const mentioned: BotGroupMention[] = []
+  const mentioned: Array<{ mention: BotGroupMention; index: number; order: number }> = []
   let everyone = false
-  for (const member of members) {
+  for (const [order, member] of members.entries()) {
     const name = normalizedMention(member.name)
     if (!name) continue
     const pattern = new RegExp(`(^|[^\\p{L}\\p{N}_])@${escapeRegExp(name)}(?=$|[^\\p{L}\\p{N}_])`, 'iu')
-    if (pattern.test(message)) {
-      mentioned.push({ id: member.id, name: member.name, mentioned: true })
-    }
+    const match = pattern.exec(message)
+    if (!match) continue
+    mentioned.push({
+      mention: { id: member.id, name: member.name, mentioned: true },
+      index: match.index,
+      order,
+    })
   }
   for (const word of MENTION_STOP_WORDS) {
     if (new RegExp(`(^|[^\\p{L}\\p{N}_])@${word}(?=$|[^\\p{L}\\p{N}_])`, 'iu').test(normalized)) {
@@ -69,7 +73,11 @@ export function resolveGroupResponders(
   if (everyone) {
     return members.map((member) => ({ id: member.id, name: member.name, mentioned: true }))
   }
-  if (mentioned.length) return mentioned
+  if (mentioned.length) {
+    return mentioned
+      .sort((left, right) => left.index - right.index || left.order - right.order)
+      .map((entry) => entry.mention)
+  }
   return members.map((member) => ({ id: member.id, name: member.name, mentioned: false }))
 }
 
@@ -95,4 +103,47 @@ export function assertGroupMemberCandidate(
   if (candidate.kind !== 'bot' || candidate.workspaceId !== workspaceId) {
     throw new Error('BOT_GROUP_MEMBER_INVALID')
   }
+}
+
+export type BotGroupTurnState = 'pending' | 'running' | 'done' | 'passed' | 'failed'
+
+export interface BotGroupTurnMember {
+  id: string
+  name: string
+  state: BotGroupTurnState
+}
+
+/**
+ * Choose the next member that still owes the group a response. Explicitly
+ * mentioned members go first in mention order; the remaining members follow in
+ * the stored group order. A member is never selected twice in one turn.
+ */
+export function nextGroupResponder(
+  members: readonly Pick<BotGroupMemberSummary, 'id' | 'name'>[],
+  mentions: readonly BotGroupMention[],
+  completed: ReadonlySet<string>,
+): BotGroupMention | null {
+  const byId = new Map(members.map((member) => [member.id, member]))
+  const ordered: BotGroupMention[] = []
+  const seen = new Set<string>()
+  for (const mention of mentions) {
+    if (seen.has(mention.id) || !byId.has(mention.id)) continue
+    seen.add(mention.id)
+    ordered.push(mention)
+  }
+  for (const member of members) {
+    if (seen.has(member.id)) continue
+    seen.add(member.id)
+    ordered.push({ id: member.id, name: member.name, mentioned: false })
+  }
+  return ordered.find((member) => !completed.has(member.id)) ?? null
+}
+
+/** A member only contributes a visible reply when it is not a pass. */
+export function groupMemberReply(
+  content: string,
+): { kind: 'pass' } | { kind: 'reply'; content: string } {
+  if (isGroupPassReply(content)) return { kind: 'pass' }
+  const bounded = boundedGroupReply(content)
+  return bounded ? { kind: 'reply', content: bounded } : { kind: 'pass' }
 }

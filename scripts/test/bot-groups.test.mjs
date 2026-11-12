@@ -3,7 +3,10 @@ import test from 'node:test'
 
 import {
   BOT_GROUP_MAX_MEMBERS,
+  boundedGroupReply,
+  groupMemberReply,
   isGroupPassReply,
+  nextGroupResponder,
   normalizeGroupMemberIds,
   resolveGroupResponders,
 } from '../../lib/bot-groups.ts'
@@ -60,4 +63,34 @@ test('pass replies are recognised without swallowing normal text', () => {
   assert.equal(isGroupPassReply('(pass)'), true)
   assert.equal(isGroupPassReply('  '), true)
   assert.equal(isGroupPassReply('I will pass the deck to Ada'), false)
+})
+
+test('mentioned members answer first, then the stored member order', () => {
+  const mentions = resolveGroupResponders(members, '@Ada and @Scout please review')
+  assert.deepEqual(
+    [nextGroupResponder(members, mentions, new Set())?.id,
+      nextGroupResponder(members, mentions, new Set(['b3']))?.id,
+      nextGroupResponder(members, mentions, new Set(['b3', 'b1']))?.id],
+    ['b3', 'b1', 'b2'],
+  )
+})
+
+test('a completed or removed member is never selected twice', () => {
+  const mentions = resolveGroupResponders(members, '@everyone')
+  assert.equal(nextGroupResponder(members, mentions, new Set(['b1', 'b2', 'b3'])), null)
+  assert.equal(
+    nextGroupResponder(members, [{ id: 'missing', name: 'Missing', mentioned: true }], new Set())?.id,
+    'b1',
+  )
+  assert.equal(
+    nextGroupResponder(members, [{ id: 'b1', name: 'Scout', mentioned: true }, { id: 'b1', name: 'Scout', mentioned: true }], new Set())?.id,
+    'b1',
+  )
+})
+
+test('group replies distinguish passes and bound their size', () => {
+  assert.deepEqual(groupMemberReply('(pass)'), { kind: 'pass' })
+  assert.deepEqual(groupMemberReply('   '), { kind: 'pass' })
+  assert.deepEqual(groupMemberReply('  Here is the summary.  '), { kind: 'reply', content: 'Here is the summary.' })
+  assert.equal(boundedGroupReply('x'.repeat(100_005)).length, 100_000)
 })
