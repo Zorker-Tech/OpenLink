@@ -676,9 +676,18 @@ export function BotWorkspace({
   }, [])
 
   const handleProfileDeleted = useCallback((botId: string) => {
-    const remaining = bots.filter((bot) => bot.id !== botId)
+    const remaining = bots
+      .filter((bot) => bot.id !== botId)
+      .flatMap((bot) => {
+        if (bot.kind !== 'group' || !bot.memberIds.includes(botId)) return [bot]
+        const memberIds = bot.memberIds.filter((id) => id !== botId)
+        // The server deletes a group that loses its last member; mirror that
+        // so the sidebar cannot point at a group that no longer exists.
+        if (!memberIds.length) return []
+        return [{ ...bot, memberIds, members: bot.members.filter((member) => member.id !== botId) }]
+      })
     setBots(remaining)
-    setActiveId((current) => current === botId ? (remaining[0]?.id ?? '') : current)
+    setActiveId((current) => remaining.some((bot) => bot.id === current) ? current : (remaining[0]?.id ?? ''))
     setDetails((previous) => {
       const next = { ...previous }
       delete next[botId]
