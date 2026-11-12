@@ -14,6 +14,14 @@ export interface BotRoutine {
   lastRunAt: number | null
 }
 
+export interface BotGroupMemberSummary {
+  id: string
+  name: string
+  avatarShape: string
+  avatarColor: string
+  updatedAt: string
+}
+
 export interface BotSummary {
   id: string
   userId: string
@@ -37,6 +45,9 @@ export interface BotSummary {
   createdAt: string
   updatedAt: string
   unread: boolean
+  kind: 'bot' | 'group'
+  memberIds: string[]
+  members: BotGroupMemberSummary[]
 }
 
 export interface BotDetail extends BotSummary {

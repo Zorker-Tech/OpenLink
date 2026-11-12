@@ -13,7 +13,14 @@ export const GROUP_CONFIG_VERSION = 1;
 export const GROUP_MAX_MEMBERS = 6;
 
 export interface RemoteGroupMember { ownerAuthId: string; agentId: string; name: string; avatarDataUrl?: string }
-export interface SlateGroupConfig { version: number; memberIds: string[]; remoteMembers?: RemoteGroupMember[]; sharedRoomId?: string }
+export interface SlateGroupConfig {
+  version: number;
+  memberIds: string[];
+  remoteMembers?: RemoteGroupMember[];
+  sharedRoomId?: string;
+  /** An idempotency key owned by the embedding product, never by Work-host itself. */
+  externalId?: string;
+}
 
 /** The file a group is kept in, beside its agent. */
 export function getSlateGroupPath(agentDir: string): string {
@@ -82,6 +89,12 @@ function sharedRoomIdOf(record: Record<string, unknown>): string | undefined {
   return typeof roomId === "string" && roomId.length > 0 ? roomId : undefined;
 }
 
+/** The embedding product's id for this group, when it has one. */
+function externalIdOf(record: Record<string, unknown>): string | undefined {
+  const value = record.externalId;
+  return typeof value === "string" && value.length > 0 && value.length <= 128 ? value : undefined;
+}
+
 export function readSlateGroupConfig(agentDir: string): SlateGroupConfig | null {
   let parsed: Record<string, unknown>;
   try {
@@ -93,12 +106,14 @@ export function readSlateGroupConfig(agentDir: string): SlateGroupConfig | null 
   const memberIds = normalizeMemberIds(parsed.memberIds);
   const remoteMembers = normalizeRemoteMembers(parsed.remoteMembers);
   const sharedRoomId = sharedRoomIdOf(parsed);
+  const externalId = externalIdOf(parsed);
   if (memberIds.length === 0 && remoteMembers.length === 0 && sharedRoomId === undefined) return null;
   return {
     version: typeof parsed.version === "number" ? parsed.version : GROUP_CONFIG_VERSION,
     memberIds,
     ...(remoteMembers.length > 0 ? { remoteMembers } : {}),
     ...(sharedRoomId === undefined ? {} : { sharedRoomId }),
+    ...(externalId === undefined ? {} : { externalId }),
   };
 }
 
@@ -110,6 +125,7 @@ function groupFileRecord(config: SlateGroupConfig): Record<string, unknown> {
     memberIds: normalizeMemberIds(config.memberIds),
     ...(remoteMembers.length > 0 ? { remoteMembers } : {}),
     ...(config.sharedRoomId ? { sharedRoomId: config.sharedRoomId } : {}),
+    ...(externalIdOf(config) === undefined ? {} : { externalId: externalIdOf(config) }),
   };
 }
 

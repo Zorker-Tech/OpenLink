@@ -376,7 +376,10 @@ export function createHostGatewayApi(
     createGroup: (args: any) => call(transcript, "createGroup")({
       name: args.name,
       description: args.description,
-      memberIds: args.memberAgentIds
+      memberIds: args.memberAgentIds,
+      ...(typeof args.externalId === "string" && args.externalId.length > 0
+        ? { externalId: args.externalId }
+        : {}),
     }),
     setGroupMembers: (args: any) =>
       call(transcript, "setGroupMembers")(args.id, args.memberAgentIds),
