@@ -28,6 +28,8 @@ export class PiWorkerError extends Error {
 }
 
 export class PiWorkerClient {
+  #lifetime: AbortController | null = null;
+
   constructor(private readonly binding: BotRuntimeBinding) {}
 
   private headers(): Record<string, string> {
@@ -35,6 +37,14 @@ export class PiWorkerClient {
   }
 
   async prompt(input: PiWorkerPromptInput): Promise<Response> {
+    // The connect timeout protects the handshake only. The response body is
+    // the turn stream and may legitimately stay open for a long Bot turn; the
+    // runner owns its idle/total deadlines and aborts this controller when it
+    // decides the turn is wedged.
+    const lifetime = new AbortController();
+    this.#lifetime = lifetime;
+    const connectTimer = setTimeout(() => lifetime.abort(), PROMPT_CONNECT_TIMEOUT_MS);
+    connectTimer.unref?.();
     let response: Response;
     try {
       response = await fetch(`${this.binding.workerUrl}/v1/events`, {
@@ -45,7 +55,7 @@ export class PiWorkerClient {
           ...(input.images === undefined || input.images.length === 0 ? {} : { attachments: input.images }),
         }),
         cache: "no-store",
-        signal: AbortSignal.timeout(PROMPT_CONNECT_TIMEOUT_MS),
+        signal: lifetime.signal,
       });
     } catch (error) {
       throw new PiWorkerError(
@@ -53,6 +63,8 @@ export class PiWorkerClient {
         503,
         true,
       );
+    } finally {
+      clearTimeout(connectTimer);
     }
     if (!response.ok || response.body === null) {
       const detail = await response.text().catch(() => "");
@@ -63,6 +75,11 @@ export class PiWorkerClient {
       );
     }
     return response;
+  }
+
+  /** Stop reading the turn stream. The worker is cancelled separately. */
+  abort(): void {
+    this.#lifetime?.abort();
   }
 
   async cancel(): Promise<void> {

@@ -21,6 +21,7 @@ type RunStepContext = Parameters<RunnerStep>[1];
 
 const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 60 * 60_000;
+const ABORT_GRACE_MS = 5_000;
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
 
 export interface PiBotRunStepOptions {
@@ -112,16 +113,24 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
     });
   };
 
+  // Ask the worker to stop, then stop reading its stream after a bounded
+  // grace. A worker that ignores the cancel cannot pin this turn forever.
+  const stopStream = () => {
+    void client.cancel();
+    const timer = setTimeout(() => client.abort(), ABORT_GRACE_MS);
+    timer.unref?.();
+  };
+
   const cancel = () => {
     aborted = true;
-    void client.cancel();
+    stopStream();
   };
 
   const resetIdle = () => {
     if (idleTimer !== undefined) clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
       failure = "BOT_TURN_IDLE_TIMEOUT";
-      void client.cancel();
+      stopStream();
     }, options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS);
     idleTimer.unref?.();
   };
@@ -132,7 +141,7 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
     resetIdle();
     totalTimer = setTimeout(() => {
       failure = "BOT_TURN_TIMEOUT";
-      void client.cancel();
+      stopStream();
     }, options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS);
     totalTimer.unref?.();
 
@@ -140,82 +149,98 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
     const response = await client.prompt(promptInput);
     if (response.body === null) throw new Error("BOT_WORKER_EMPTY_STREAM");
 
-    for await (const event of readJsonLines(response.body)) {
-      resetIdle();
-      const type = typeof event.type === "string" ? event.type : "";
-      if (type === "message_update") {
-        const assistant = recordOf(event.assistantMessageEvent);
-        const updateType = assistant === null ? "" : assistant.type;
-        if (updateType === "text_delta" && typeof assistant?.delta === "string") {
-          emit({ type: "text-delta", text: assistant.delta });
-        } else if (updateType === "thinking_delta" && typeof assistant?.delta === "string") {
-          emit({ type: "thinking-delta", text: assistant.delta });
-        } else if (updateType === "toolcall_end") {
-          const toolCall = recordOf(assistant?.toolCall);
-          emitToolCall(
-            typeof toolCall?.id === "string" ? toolCall.id : undefined,
-            typeof toolCall?.name === "string" ? toolCall.name : undefined,
-            "completed",
-          );
+    try {
+      for await (const event of readJsonLines(response.body)) {
+        resetIdle();
+        const type = typeof event.type === "string" ? event.type : "";
+        if (type === "message_update") {
+          const assistant = recordOf(event.assistantMessageEvent);
+          const updateType = assistant === null ? "" : assistant.type;
+          if (updateType === "text_delta" && typeof assistant?.delta === "string") {
+            emit({ type: "text-delta", text: assistant.delta });
+          } else if (updateType === "thinking_delta" && typeof assistant?.delta === "string") {
+            emit({ type: "thinking-delta", text: assistant.delta });
+          } else if (updateType === "toolcall_end") {
+            const toolCall = recordOf(assistant?.toolCall);
+            emitToolCall(
+              typeof toolCall?.id === "string" ? toolCall.id : undefined,
+              typeof toolCall?.name === "string" ? toolCall.name : undefined,
+              "completed",
+            );
+          }
+          continue;
         }
-        continue;
-      }
-      if (type === "tool_execution_start") {
-        emitToolCall(toolIdOf(event), toolNameOf(event), "pending");
-        continue;
-      }
-      if (type === "tool_execution_end") {
-        emitToolCall(toolIdOf(event), toolNameOf(event), event.isError === true ? "failed" : "completed");
-        continue;
-      }
-      if (type === "message_end") {
-        const message = event.message;
-        const text = assistantText(message);
-        if (text.trim().length > 0) finalText = text;
-        const messageUsage = usageOf(message);
-        if (messageUsage !== undefined) usage = messageUsage;
-        const record = recordOf(message);
-        if (record !== null && typeof record.errorMessage === "string" && record.errorMessage.trim()) {
-          failure = record.errorMessage.trim().slice(0, 2000);
+        if (type === "tool_execution_start") {
+          emitToolCall(toolIdOf(event), toolNameOf(event), "pending");
+          continue;
         }
-        continue;
+        if (type === "tool_execution_end") {
+          emitToolCall(toolIdOf(event), toolNameOf(event), event.isError === true ? "failed" : "completed");
+          continue;
+        }
+        if (type === "message_end") {
+          const message = event.message;
+          const text = assistantText(message);
+          if (text.trim().length > 0) finalText = text;
+          const messageUsage = usageOf(message);
+          if (messageUsage !== undefined) usage = messageUsage;
+          const record = recordOf(message);
+          if (record !== null && typeof record.errorMessage === "string" && record.errorMessage.trim()) {
+            failure = record.errorMessage.trim().slice(0, 2000);
+          }
+          continue;
+        }
+        if (type === "turn_end") {
+          const turnUsage = usageOf(event.message);
+          if (turnUsage !== undefined) usage = turnUsage;
+          continue;
+        }
+        if (type === "extension_ui_request") {
+          emitExtensionUiCard(event, emit, now, context.runOptions.ackToken, emitGateway);
+          continue;
+        }
+        if (type === "auto_retry_start") {
+          emit({ type: "retrying" });
+          continue;
+        }
+        if (type === "extension_error") {
+          if (typeof event.error === "string" && event.error.trim()) failure = event.error.trim().slice(0, 2000);
+          if (event.terminal === true) break;
+          continue;
+        }
+        if (type === "agent_settled") {
+          settled = true;
+          break;
+        }
       }
-      if (type === "turn_end") {
-        const turnUsage = usageOf(event.message);
-        if (turnUsage !== undefined) usage = turnUsage;
-        continue;
-      }
-      if (type === "extension_ui_request") {
-        emitExtensionUiCard(event, emit, now, context.runOptions.ackToken, emitGateway);
-        continue;
-      }
-      if (type === "auto_retry_start") {
-        emit({ type: "retrying" });
-        continue;
-      }
-      if (type === "extension_error") {
-        if (typeof event.error === "string" && event.error.trim()) failure = event.error.trim().slice(0, 2000);
-        if (event.terminal === true) break;
-        continue;
-      }
-      if (type === "agent_settled") {
-        settled = true;
-        break;
-      }
+    } catch (error) {
+      // A stream aborted by our own idle/total deadline or by the run signal
+      // is not an extra failure; the post-loop state decides the outcome.
+      if (!aborted && failure === undefined) throw error;
     }
+  } catch (error) {
+    if (!aborted && failure === undefined) {
+      emitGateway({
+        phase: "ended",
+        ok: false,
+        error: error instanceof Error ? error.message.slice(0, 2000) : "BOT_WORKER_FAILED",
+      });
+    }
+    throw error;
   } finally {
     if (idleTimer !== undefined) clearTimeout(idleTimer);
     if (totalTimer !== undefined) clearTimeout(totalTimer);
     context.signal.removeEventListener("abort", onAbort);
   }
 
-  if (aborted) {
+  if (aborted && failure === undefined) {
     emitGateway({ phase: "ended", aborted: true });
     return { done: true };
   }
-  if (!settled && failure !== undefined) {
-    emitGateway({ phase: "ended", ok: false, error: failure });
-    throw new Error(failure);
+  if (!settled) {
+    const error = failure ?? "BOT_WORKER_STREAM_ENDED";
+    emitGateway({ phase: "ended", ok: false, error });
+    throw new Error(error);
   }
 
   if (finalText.trim().length > 0) {
