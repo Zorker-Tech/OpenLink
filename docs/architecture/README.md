@@ -92,10 +92,11 @@ The current ADR set covers these areas:
   iframe-based annotations and Design tools while preserving separate Browser
   and Desktop runtimes
   ([ADR-0034](./ADR-0034-first-class-preview-and-web-annotation.md)).
-- the Bot domain is owned by Work-host, while Bot execution and computers use
-  the existing Code-mode Ubuntu Project VM, per-session OpenSandbox, Pi worker
-  and session desktop
-  ([ADR-0035](./ADR-0035-bot-work-host-integration.md)).
+- Bot control and Code control are separate planes over one execution
+  substrate: Work-host owns Bot profiles, transcripts, run queues, automations,
+  groups and box lifecycle, while Code mode remains passive and request-scoped
+  ([ADR-0036](./ADR-0036-bot-runtime-control-plane.md)). ADR-0035 is
+  superseded.
 
 New decisions use the format below and the next unused ADR number:
 
