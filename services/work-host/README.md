@@ -81,19 +81,20 @@ The bridge uses these additive gateway commands:
 
 `node ../../scripts/build-work-host.mjs` builds `dist/host.mjs`; `npm run smoke:openlink` boots an
 isolated host and verifies health, agent creation, transcript append/replace/read and avatar bytes.
+`npm run smoke:openlink:bot` boots the host against a fake substrate and a fake Pi worker, then
+drives a single Bot turn, a group turn, transcript streaming and release through the real gateway.
 
 ### Transcript recovery
 
-Work-host is the Bot transcript authority, while the durable Code-mode event log is the recovery
-source. The BFF reconciles both on every detail read:
+Work-host is the Bot transcript authority. Its data root is included in the self-hosted
+backup/restore set, so a lost local store is restored from that backup rather than rebuilt from a
+second authority.
 
-- A missing tail is appended in idempotent chunks of at most 500 entries.
-- A gap before the newest stored entry is an ordering violation and is repaired with one atomic
-  replacement.
-- A required replacement above 10,000 entries is never truncated. The BFF logs the explicit limit
-  error, keeps the complete durable transcript for rendering, and defers the mirror write.
-- Entries that exist only in Work-host are retained, so a partial event-log loss does not erase the
-  visible timeline.
+A Bot that predates this control plane may still have a legacy Code-mode event log. That log is
+migration input only: the BFF reads it once when the Work-host transcript has no migration marker,
+appends the missing entries idempotently, re-reads the Work-host authority, and records a completion
+marker. An interrupted migration resumes on the next read. A new Bot never creates a Code session
+and never depends on that log.
 
 ## Build from the Slate workspace
 
