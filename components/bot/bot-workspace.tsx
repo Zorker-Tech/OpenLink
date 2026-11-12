@@ -711,7 +711,11 @@ export function BotWorkspace({
     setPaletteView('search')
     setCreateInitialName('')
     window.history.replaceState(null, '', `/app/${encodeURIComponent(workspaceSlug)}/bots?bot=${encodeURIComponent(bot.id)}`)
-  }, [workspaceSlug])
+    // The create response is a summary; load the durable detail so an
+    // existing group transcript and the routine/confirmation projections are
+    // real immediately, not only after the first turn.
+    void loadBot(bot.id, true)
+  }, [loadBot, workspaceSlug])
 
   if (!activeBot || creating) {
     return (
