@@ -18,8 +18,7 @@ export function AppCommandPalette({ sessions, query, assetBase, onQueryChange, o
         ? [...sessionItems, createItem]
         : [createItem, ...sessionItems];
     useEffect(() => {
-        var _a;
-        (_a = inputRef.current) === null || _a === void 0 ? void 0 : _a.focus();
+        inputRef.current?.focus();
     }, []);
     useEffect(() => {
         setActiveIndex(0);
@@ -58,8 +57,8 @@ export function AppCommandPalette({ sessions, query, assetBase, onQueryChange, o
     };
     const createLabel = query.trim().length > 0
         ? `Create “${query.trim()}”`
-        : 'Create new agent';
-    return (_jsxs("div", { className: "zbd-app-palette-layer", children: [_jsx("button", { "aria-label": "Close agent search", className: "zbd-app-palette-scrim", onClick: onClose, type: "button" }), _jsxs("div", { "aria-label": "Search or create agents", "aria-modal": "false", className: "zbd-app-palette", role: "dialog", children: [_jsxs("div", { className: "zbd-app-palette-search", children: [_jsx("span", { className: "zbd-app-palette-to", children: "To:" }), _jsx("input", { "aria-label": "Search or create agents", onChange: (event) => onQueryChange(event.target.value), onKeyDown: onKeyDown, placeholder: "Search or create agents", ref: inputRef, type: "text", value: query })] }), _jsx("div", { className: "zbd-app-palette-list", role: "listbox", children: items.map((item, index) => {
+        : 'Create new Bot';
+    return (_jsxs("div", { className: "zbd-app-palette-layer", children: [_jsx("button", { "aria-label": "Close agent search", className: "zbd-app-palette-scrim", onClick: onClose, type: "button" }), _jsxs("div", { "aria-label": "Search or create Bots", "aria-modal": "false", className: "zbd-app-palette", role: "dialog", children: [_jsxs("div", { className: "zbd-app-palette-search", children: [_jsx("span", { className: "zbd-app-palette-to", children: "To:" }), _jsx("input", { "aria-label": "Search or create Bots", onChange: (event) => onQueryChange(event.target.value), onKeyDown: onKeyDown, placeholder: "Search or create Bots", ref: inputRef, type: "text", value: query })] }), _jsx("div", { className: "zbd-app-palette-list", role: "listbox", children: items.map((item, index) => {
                             const active = index === activeIndex;
                             if (item.kind === 'create') {
                                 return (_jsxs("button", { "aria-selected": active, className: "zbd-app-palette-row", "data-active": active ? '' : undefined, onClick: () => activate(item), onMouseEnter: () => setActiveIndex(index), role: "option", type: "button", children: [_jsx("span", { className: "zbd-app-palette-create-icon", children: _jsx(PlusIcon, { size: 15 }) }), _jsx("span", { className: "zbd-app-palette-row-name", children: createLabel })] }, item.key));

@@ -6,6 +6,9 @@ export type Agent = {
     timeLabel: string;
     ink: string;
     avatar: string;
+    avatarShape?: string;
+    avatarColor?: string;
+    avatarUrl?: string;
     unread?: boolean;
     group?: AgentId[];
 };
@@ -61,7 +64,18 @@ export type SystemEntryData = {
     };
     timestampMs: number;
 };
-export type TranscriptEntry = AgentMessageEntry | UserMessageEntry | ComputerEntry | SystemEntryData;
+export type ActivityEntry = {
+    kind: 'activity';
+    id: string;
+    timestampMs: number;
+    activity: {
+        label: string;
+        detail?: string;
+        tool?: string;
+        status: 'running' | 'done' | 'failed';
+    };
+};
+export type TranscriptEntry = AgentMessageEntry | UserMessageEntry | ComputerEntry | SystemEntryData | ActivityEntry;
 export type ScreenView = 'login' | 'portal';
 export type ScriptedScreen = {
     view: ScreenView;

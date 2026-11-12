@@ -4,8 +4,12 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
-  "sideEffects": ["**/*.css"],
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -26,7 +30,10 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-static.mjs"
+    "build": "npm --prefix ../avatar run build && tsc -p tsconfig.json && node scripts/copy-static.mjs"
+  },
+  "dependencies": {
+    "@zorker/avatar": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=19",

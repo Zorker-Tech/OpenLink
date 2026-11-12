@@ -10,6 +10,8 @@ export type AppSession = {
     title: string;
     description: string;
     avatar: string;
+    avatarColor?: string;
+    avatarUrl?: string;
     ink: string;
     group?: AgentId[];
     isGroup?: boolean;

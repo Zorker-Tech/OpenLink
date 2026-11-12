@@ -1,0 +1,1 @@
+{"version":3,"file":"ActivityCard.d.ts","sourceRoot":"","sources":["../../src/components/ActivityCard.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,UAAU,CAAA;AAE/C,MAAM,MAAM,iBAAiB,GAAG;IAC9B,KAAK,EAAE,OAAO,CAAC,eAAe,EAAE;QAAE,IAAI,EAAE,UAAU,CAAA;KAAE,CAAC,CAAA;CACtD,CAAA;AAQD,wBAAgB,YAAY,CAAC,EAAE,KAAK,EAAE,EAAE,iBAAiB,+BAYxD"}

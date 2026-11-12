@@ -6,7 +6,7 @@ import { PortalView } from './PortalView';
 import { useDesktopScale } from './useDesktopScale';
 export function RemoteDesktop({ assetBase, view, emailChars = 0, passwordChars = 0, focus = null, showDock = true, agentCursor = false, className, }) {
     const { ref, scale } = useDesktopScale();
-    return (_jsxs("div", { className: `zbd-rd ${className !== null && className !== void 0 ? className : ''}`, ref: ref, style: { ['--rd-scale']: scale }, children: [_jsx("img", { alt: "", className: "zbd-rd-wallpaper", draggable: false, src: `${assetBase}/wallpaper-light.webp` }), _jsx("div", { className: "zbd-rd-window", children: _jsxs("div", { className: "zbd-rd-window-inner", style: {
+    return (_jsxs("div", { className: `zbd-rd ${className ?? ''}`, ref: ref, style: { ['--rd-scale']: scale }, children: [_jsx("img", { alt: "", className: "zbd-rd-wallpaper", draggable: false, src: `${assetBase}/wallpaper-light.webp` }), _jsx("div", { className: "zbd-rd-window", children: _jsxs("div", { className: "zbd-rd-window-inner", style: {
                         width: 'calc(360px * 0.5)',
                         height: 'calc(225px * 0.72)',
                         transform: `scale(${scale})`,

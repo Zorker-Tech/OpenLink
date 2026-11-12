@@ -43,7 +43,7 @@ export function ZorkerBotDemo({ assetBase = '/zorker-bot-demo', autoStart = true
             cancel();
         };
     }, [applyEndState, autoStart, cancel, outerRef, start]);
-    return (_jsx("div", { className: `zbd-stage-outer ${className !== null && className !== void 0 ? className : ''}`, ref: outerRef, style: { height: DEMO_HEIGHT * scale }, children: _jsx("div", { className: "zbd-stage", ref: rootRef, style: {
+    return (_jsx("div", { className: `zbd-stage-outer ${className ?? ''}`, ref: outerRef, style: { height: DEMO_HEIGHT * scale }, children: _jsx("div", { className: "zbd-stage", ref: rootRef, style: {
                 height: DEMO_HEIGHT,
                 transform: `scale(${scale})`,
                 width: DEMO_WIDTH,

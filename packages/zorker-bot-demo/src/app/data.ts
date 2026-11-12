@@ -12,6 +12,8 @@ export type AppSession = {
   title: string
   description: string
   avatar: string
+  avatarColor?: string
+  avatarUrl?: string
   ink: string
   group?: AgentId[]
   isGroup?: boolean
@@ -505,6 +507,9 @@ export function sessionToAgent(
     timeLabel: formatSidebarTime(session.lastActivityMs),
     ink: session.ink,
     avatar: session.avatar,
+    avatarShape: session.avatar,
+    avatarColor: session.avatarColor,
+    avatarUrl: session.avatarUrl,
     group: session.group,
     unread: session.unread,
   }

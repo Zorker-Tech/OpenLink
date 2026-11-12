@@ -24,6 +24,9 @@
       }
     ],
     "paths": {
+      "@zorker/avatar": [
+        "./packages/avatar/src/index.ts"
+      ],
       "@zorker/bot-demo": [
         "./packages/zorker-bot-demo/src/index.ts"
       ],
