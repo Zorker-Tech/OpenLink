@@ -10,7 +10,7 @@
  * so a disconnect stops the projection, not the turn.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { readBody } from "./gateway-server-http.ts";
+import { readBody, respondError } from "./gateway-server-http.ts";
 import type { GatewayServerDeps } from "./gateway-server-contracts.ts";
 
 const IDLE_END_MS = 20 * 60_000;
@@ -87,7 +87,12 @@ export async function handleBotPromptStream(
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
-  const body = parseBody(await readBody(request));
+  let body: BotPromptBody;
+  try {
+    body = parseBody(await readBody(request));
+  } catch (error) {
+    return respondError(response, 400, error instanceof Error ? error.message : "Bot prompt is invalid");
+  }
 
   // Subscribe before accepting the prompt: the runner may start and settle
   // between the acceptance call and the first read of this stream.
