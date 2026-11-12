@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { resolveConfiguredModelSelection } from '@/lib/ai-provider-configurations.server'
 import {
   chunkWorkHostEntries,
@@ -393,8 +393,11 @@ export async function appendBotConfirmationResolved(
   bot: BotSummary,
   extensionUiId: string,
 ): Promise<void> {
+  // The marker id is bounded independently of the extension UI id so a long
+  // provider dialog id cannot exceed the Work-host entry-id limit.
+  const marker = createHash('sha256').update(extensionUiId).digest('hex').slice(0, 32)
   const entry = {
-    id: `confirmation-resolved-${extensionUiId}`,
+    id: `confirmation-resolved-${marker}`,
     kind: 'event',
     event: { type: 'confirmation-resolved', extensionUiId },
     timestampMs: Date.now(),
