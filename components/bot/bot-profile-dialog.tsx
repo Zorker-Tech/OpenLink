@@ -4,12 +4,13 @@ import {
   AgentAvatar,
   COLORS,
   SHAPES,
+  type AgentAvatarHandle,
 } from '@zorker/avatar'
 import { WorkModelSelector, type WorkModelOption } from '@/components/work-model-selector'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { BotSummary } from '@/lib/bot-types'
 import { Check, LoaderCircle, Trash2 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 type BotProfileDialogProps = {
   bot: BotSummary
@@ -66,6 +67,8 @@ export function BotProfileDialog({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const completeRef = useRef<AgentAvatarHandle>(null)
+  const hiddenCompleteRef = useRef<AgentAvatarHandle>(null)
   const isGroup = bot.kind === 'group'
   const candidates = bots.filter((candidate) => candidate.kind === 'bot' && candidate.id !== bot.id)
 
@@ -74,6 +77,12 @@ export function BotProfileDialog({
     setSaving(true)
     setError(null)
     try {
+      // Keep the durable avatar bytes aligned with the selected identity, the
+      // same way the onboarding flow does. The live renderer is still the
+      // default surface; the bytes serve clients that read the avatar route.
+      const png = await (hiddenCompleteRef.current?.getPngDataUrl(512)
+        ?? completeRef.current?.getPngDataUrl(512)
+        ?? Promise.resolve(''))
       const response = await fetch(`/api/bots/${encodeURIComponent(bot.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -82,6 +91,7 @@ export function BotProfileDialog({
           description,
           avatarShape: shape,
           avatarColor: color,
+          ...(png ? { avatarPngBase64: png.replace(/^data:image\/png;base64,/, '') } : {}),
           ...(isGroup ? { memberIds } : { model: modelId }),
         }),
         cache: 'no-store',
@@ -152,6 +162,7 @@ export function BotProfileDialog({
           <div className="zbd-app-create-grid">
             <div className="zbd-app-create-preview">
               <AgentAvatar
+                ref={completeRef}
                 color={color}
                 renderer="complete"
                 shape={shape}
@@ -160,6 +171,17 @@ export function BotProfileDialog({
                 theme={theme}
               />
               <span className="zbd-app-create-hint">{isGroup ? 'Group avatar' : 'Bot avatar'}</span>
+              <div aria-hidden="true" className="zbd-app-create-hidden-complete">
+                <AgentAvatar
+                  ref={hiddenCompleteRef}
+                  color={color}
+                  renderer="complete"
+                  shape={shape}
+                  size={512}
+                  state="finished"
+                  theme={theme}
+                />
+              </div>
             </div>
 
             <div className="zbd-app-create-fields">
