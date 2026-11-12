@@ -135,8 +135,17 @@ export async function ensureBotRuntimeProjection(
     if (!latest) throw new BotInputError('BOT_NOT_FOUND')
     // A group is a Work-host identity and routing projection only. Its members
     // own the isolated execution sandboxes, so a group must never acquire a
-    // Project or a runtime key of its own.
-    if (isGroupBot(latest)) return latest
+    // Project or a runtime key of its own. Its Work-host routing identity is
+    // still recoverable from the durable group row.
+    if (isGroupBot(latest)) {
+      try {
+        await getBotAgentTranscript(latest.workAgentId)
+        return latest
+      } catch (error) {
+        if (!isMissingWorkHostAgentError(error)) throw error
+        return await recoverBotGroupAgent(supabase, userId, latest)
+      }
+    }
 
     // A lost Work-host agent store is recoverable from the durable Bot row.
     // The transcript itself is reconciled by the detail read, which is the
@@ -252,6 +261,72 @@ async function recreateBotAgent(
   } finally {
     release()
     if (BOT_AGENT_RECOVERY_LOCKS.get(bot.id) === queued) BOT_AGENT_RECOVERY_LOCKS.delete(bot.id)
+  }
+}
+
+/**
+ * Recreate a lost Work-host group agent from the durable group row. The group
+ * has no sandbox of its own; its members keep their bindings, so recovery only
+ * has to restore the routing identity and membership.
+ */
+async function recoverBotGroupAgent(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  group: BotSummary,
+): Promise<BotSummary> {
+  const previous = BOT_AGENT_RECOVERY_LOCKS.get(group.id) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => { release = resolve })
+  const queued = previous.then(() => current)
+  BOT_AGENT_RECOVERY_LOCKS.set(group.id, queued)
+  await previous.catch(() => undefined)
+  try {
+    const latest = await getBot(supabase, userId, group.id)
+    if (!latest) throw new BotInputError('BOT_NOT_FOUND')
+    if (!isGroupBot(latest)) return latest
+    if (latest.workAgentId !== group.workAgentId) return latest
+
+    const members = await readGroupMemberBots(supabase, userId, latest.workspaceId, latest.memberIds)
+    const created = await createWorkHostGroup({
+      name: latest.name,
+      description: latest.description,
+      memberAgentIds: members.map((member) => member.workAgentId),
+      externalId: latest.id,
+    })
+    const { data, error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .update({
+        work_agent_id: created.agent.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', latest.id)
+      .eq('user_id', userId)
+      .eq('work_agent_id', latest.workAgentId)
+      .select(BOT_SELECT)
+      .maybeSingle()
+    if (error) {
+      // Do not delete the returned agent: `createGroup` may have matched an
+      // existing group by its external id, and that agent may already be the
+      // one another writer is using.
+      throw error
+    }
+    if (!data) {
+      const raced = await getBot(supabase, userId, group.id)
+      if (!raced) throw new BotInputError('BOT_NOT_FOUND')
+      return raced
+    }
+    return summary(data as BotRow, members.map((member) => ({
+      id: member.id,
+      name: member.name,
+      workAgentId: member.workAgentId,
+      avatarShape: member.avatarShape,
+      avatarColor: member.avatarColor,
+      updatedAt: member.updatedAt,
+    })))
+  } finally {
+    release()
+    if (BOT_AGENT_RECOVERY_LOCKS.get(group.id) === queued) BOT_AGENT_RECOVERY_LOCKS.delete(group.id)
   }
 }
 
@@ -726,12 +801,20 @@ export async function getBotDetail(
   bot: BotSummary,
 ): Promise<BotDetail> {
   if (isGroupBot(bot)) {
+    let authoritative = bot
+    try {
+      // A lost Work-host group agent is recoverable from the durable group
+      // row; recovery preserves the member set and the routing identity.
+      authoritative = await ensureBotRuntimeProjection(supabase, userId, bot)
+    } catch (error) {
+      console.error(`[openlink-bots] group agent recovery failed for ${bot.id}`, error)
+    }
     let transcript: BotTranscriptEntry[] = []
-    let runtimeReady = bot.members.length > 0
+    let runtimeReady = authoritative.members.length > 0
     try {
       // The group agent's Work-host transcript is the authority: member
       // messages are posted into the group room with their author metadata.
-      transcript = normalizeWorkHostTranscript(await getBotAgentTranscript(bot.workAgentId))
+      transcript = normalizeWorkHostTranscript(await getBotAgentTranscript(authoritative.workAgentId))
     } catch (error) {
       if (!isMissingWorkHostAgentError(error)) {
         console.error(`[openlink-bots] group transcript read failed for ${bot.id}`, error)
@@ -742,13 +825,13 @@ export async function getBotDetail(
       // Migration input: groups created before the Work-host group transcript
       // existed kept their timeline in the application projection.
       try {
-        transcript = await readDurableGroupTranscript(supabase, userId, bot)
+        transcript = await readDurableGroupTranscript(supabase, userId, authoritative)
       } catch (error) {
         console.error(`[openlink-bots] legacy group transcript read failed for ${bot.id}`, error)
       }
     }
     return {
-      ...bot,
+      ...authoritative,
       transcript,
       runtimeReady,
       pendingConfirmations: [],
