@@ -22,7 +22,11 @@
       "import": "./dist/box-exec-sdk.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=22.19.0"
@@ -49,7 +53,8 @@
     "start": "node dist/host/main.js",
     "smoke": "node scripts/smoke.mjs",
     "smoke:openlink": "node scripts/smoke-openlink.mjs",
-    "rewrite:triage": "node scripts/rewrite-triage.mjs"
+    "rewrite:triage": "node scripts/rewrite-triage.mjs",
+    "smoke:openlink:bot": "node scripts/smoke-openlink-bot.mjs"
   },
   "dependencies": {
     "@slate/work-domain": "file:vendor/work-domain",
