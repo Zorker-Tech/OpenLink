@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-0036](./ADR-0036-bot-runtime-control-plane.md).
+
+The execution boundary in this record is no longer authoritative. Work-host
+owns the Bot control plane and its own runner/box lifecycle; Agent Host remains
+the Code-mode control plane. The shared substrate decision is retained, but a
+Bot is not addressed by a hidden Code chat session.
 
 ## Context
 
