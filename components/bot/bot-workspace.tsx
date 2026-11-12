@@ -894,66 +894,71 @@ export function BotWorkspace({
                 />
               ) : null}
 
-              {paletteOpen && paletteView === 'create' ? (
-                <BotCreateDialog
-                  bots={bots}
-                  initialName={createInitialName}
-                  models={models}
-                  workHostReady={workHostReady}
-                  onBack={() => {
-                    setPaletteQuery(createInitialName)
-                    setPaletteView('search')
-                  }}
-                  onClose={closePalette}
-                  onCreated={(bot) => {
-                    closePalette()
-                    handleCreated(bot)
-                  }}
-                  theme={activeTheme}
-                  workspaceSlug={workspaceSlug}
-                />
-              ) : paletteOpen ? (
-                <AppCommandPalette
-                  assetBase={ASSET_BASE}
-                  onClose={closePalette}
-                  onCreate={(query) => {
-                    setCreateInitialName(query.trim())
-                    setPaletteView('create')
-                  }}
-                  onQueryChange={setPaletteQuery}
-                  onSelect={(sessionId) => {
-                    closePalette()
-                    selectBot(sessionId)
-                  }}
-                  query={paletteQuery}
-                  sessions={paletteSessions}
-                />
-              ) : null}
-
-              {profileOpen ? (
-                <BotProfileDialog
-                  bot={activeBot}
-                  bots={bots}
-                  models={models}
-                  theme={activeTheme}
-                  onClose={() => setProfileOpen(false)}
-                  onDeleted={handleProfileDeleted}
-                  onSaved={handleProfileSaved}
-                />
-              ) : null}
-
-              {routineEditor ? (
-                <BotRoutineDialog
-                  botName={activeBot.name}
-                  onClose={() => setRoutineEditor(null)}
-                  onDelete={routineEditor.routine ? deleteRoutine : undefined}
-                  onSave={saveRoutine}
-                  routine={routineEditor.routine}
-                />
-              ) : null}
             </div>
           </main>
         </PageTransition>
+
+        {paletteOpen || profileOpen || routineEditor ? (
+          <div className="zbd-root absolute inset-0 z-40" style={{ background: 'transparent', borderRadius: 0, boxShadow: 'none' }}>
+                {paletteOpen && paletteView === 'create' ? (
+                  <BotCreateDialog
+                    bots={bots}
+                    initialName={createInitialName}
+                    models={models}
+                    workHostReady={workHostReady}
+                    onBack={() => {
+                      setPaletteQuery(createInitialName)
+                      setPaletteView('search')
+                    }}
+                    onClose={closePalette}
+                    onCreated={(bot) => {
+                      closePalette()
+                      handleCreated(bot)
+                    }}
+                    theme={activeTheme}
+                    workspaceSlug={workspaceSlug}
+                  />
+                ) : paletteOpen ? (
+                  <AppCommandPalette
+                    assetBase={ASSET_BASE}
+                    onClose={closePalette}
+                    onCreate={(query) => {
+                      setCreateInitialName(query.trim())
+                      setPaletteView('create')
+                    }}
+                    onQueryChange={setPaletteQuery}
+                    onSelect={(sessionId) => {
+                      closePalette()
+                      selectBot(sessionId)
+                    }}
+                    query={paletteQuery}
+                    sessions={paletteSessions}
+                  />
+                ) : null}
+
+                {profileOpen ? (
+                  <BotProfileDialog
+                    bot={activeBot}
+                    bots={bots}
+                    models={models}
+                    theme={activeTheme}
+                    onClose={() => setProfileOpen(false)}
+                    onDeleted={handleProfileDeleted}
+                    onSaved={handleProfileSaved}
+                  />
+                ) : null}
+
+                {routineEditor ? (
+                  <BotRoutineDialog
+                    botName={activeBot.name}
+                    onClose={() => setRoutineEditor(null)}
+                    onDelete={routineEditor.routine ? deleteRoutine : undefined}
+                    onSave={saveRoutine}
+                    routine={routineEditor.routine}
+                  />
+                ) : null}
+          </div>
+        ) : null}
 
         {error ? (
           <button

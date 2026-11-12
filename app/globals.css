@@ -802,9 +802,10 @@
   border-left-color: var(--app-border);
 }
 .bot-workspace .zbd-app-palette {
-  top: 52px;
-  left: max(16px, calc(50% - 340px));
+  top: 50%;
+  left: 50%;
   width: min(680px, calc(100% - 32px));
+  transform: translate(-50%, -50%);
   background: var(--app-elevated);
 }
 .bot-workspace .zbd-app-palette-scrim {
@@ -812,9 +813,11 @@
 }
 
 .bot-workspace .zbd-app-palette.zbd-app-create-palette {
-  top: 52px;
+  top: 50%;
+  left: 50%;
   width: min(760px, calc(100% - 32px));
-  max-height: min(760px, calc(100dvh - 80px));
+  max-height: min(760px, calc(100% - 80px));
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
 }
@@ -1026,8 +1029,13 @@
 }
 
 .zbd-app-create-cancel {
+  display: inline-flex;
   height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border-radius: 9px;
+  background: transparent;
   padding: 0 12px;
   color: var(--zbd-text-secondary);
   font-size: 13px;

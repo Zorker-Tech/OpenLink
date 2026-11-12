@@ -2367,9 +2367,11 @@
 
 .zbd-app-palette {
   position: absolute;
-  top: 44px;
-  left: 280px;
-  width: min(680px, calc(100% - 300px));
+  top: 50%;
+  left: 50%;
+  width: min(680px, calc(100% - 48px));
+  max-height: calc(100% - 48px);
+  transform: translate(-50%, -50%);
   overflow: hidden;
   border: 0.5px solid var(--zbd-border-default);
   border-radius: 14px;
@@ -2699,11 +2701,11 @@
 @keyframes zbd-app-palette-in {
   from {
     opacity: 0;
-    transform: translateY(-6px) scale(0.985);
+    transform: translate(-50%, calc(-50% - 6px)) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
