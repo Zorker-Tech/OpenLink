@@ -167,6 +167,7 @@ export function BotWorkspace({
   const activeBot = bots.find((bot) => bot.id === activeId) ?? null
   const activeBotId = activeBot?.id ?? null
   const activeBotKind = activeBot?.kind ?? null
+  const activeBotStatus = activeBot?.runtimeStatus ?? null
   const activeDetail = activeBot ? details[activeBot.id] ?? null : null
   const activeTranscript = activeDetail?.transcript ?? []
   const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
@@ -297,9 +298,10 @@ export function BotWorkspace({
 
   useEffect(() => {
     if (!workHostReady || !activeBotId || activeBotKind === 'group') return
+    if (activeBotStatus === 'ready') return
     if (skipWarmOnceRef.current.delete(activeBotId)) return
     void warmBot(activeBotId)
-  }, [activeBotId, activeBotKind, warmBot, workHostReady])
+  }, [activeBotId, activeBotKind, activeBotStatus, warmBot, workHostReady])
 
   useEffect(() => {
     setBots((previous) => {
