@@ -28,6 +28,8 @@ export interface PiBotRunStepOptions {
   readonly agentId: string;
   readonly getBinding: () => BotRuntimeBinding | null;
   readonly emitGatewayEvent?: (event: unknown) => void;
+  /** A group member turn must not drive the member's own DM stream. */
+  readonly groupMember?: boolean;
   readonly idleTimeoutMs?: number;
   readonly totalTimeoutMs?: number;
   readonly now?: () => number;
@@ -85,7 +87,15 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
   const requestId = context.requestId;
   const emit = (update: RunnerUpdate) => context.emitUpdate(update);
   const emitGateway = (payload: Record<string, unknown>) => {
-    options.emitGatewayEvent?.({ channel: "bot-turn", payload: { agentId: options.agentId, requestId, ...payload } });
+    options.emitGatewayEvent?.({
+      channel: "bot-turn",
+      payload: {
+        agentId: options.agentId,
+        requestId,
+        ...(options.groupMember === true ? { groupMember: true } : {}),
+        ...payload,
+      },
+    });
   };
 
   emitGateway({ phase: "started" });
