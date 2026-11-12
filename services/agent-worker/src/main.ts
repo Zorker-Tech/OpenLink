@@ -47,6 +47,7 @@ interface WorkerConfig {
   providerId?: string
   providerBaseUrl?: string
   providerApiKey?: string
+  providerModelConfig?: ProviderModelConfig
   browserHostUrl?: string
   browserSessionId?: string
   browserControlToken?: string
@@ -76,6 +77,61 @@ interface PendingExtensionUiRequest {
   cancel(): void
 }
 
+/**
+ * Model metadata for a provider without a built-in Pi catalog. The account
+ * supplies it through the BFF; the worker registers it as the exact model the
+ * runtime can select instead of relying on a guessed catalog entry.
+ */
+interface ProviderModelConfig {
+  id: string
+  name: string
+  api?: string
+  reasoning: boolean
+  input: Array<'text' | 'image'>
+  contextWindow: number
+  maxTokens: number
+  cost: { input: number; output: number; cacheRead: number; cacheWrite: number }
+}
+
+function providerModelConfig(): ProviderModelConfig | undefined {
+  const raw = process.env.OPENLINK_PROVIDER_MODEL_CONFIG?.trim()
+  if (!raw || raw.length > 16_000) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return undefined
+  }
+  if (!parsed || typeof parsed !== 'object') return undefined
+  const input = parsed as Record<string, unknown>
+  const id = typeof input.id === 'string' ? input.id.trim() : ''
+  if (!id || id.length > 256) return undefined
+  const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim().slice(0, 256) : id
+  const api = typeof input.api === 'string' && /^[a-z0-9-]{1,64}$/.test(input.api) ? input.api : undefined
+  const inputTypes = Array.isArray(input.input)
+    ? input.input.filter((item): item is 'text' | 'image' => item === 'text' || item === 'image')
+    : []
+  const positiveInteger = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback
+  const nonNegative = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+  const cost = input.cost && typeof input.cost === 'object' ? input.cost as Record<string, unknown> : {}
+  return {
+    id,
+    name,
+    ...(api !== undefined ? { api } : {}),
+    reasoning: input.reasoning === true,
+    input: inputTypes.length > 0 ? inputTypes : ['text'],
+    contextWindow: positiveInteger(input.contextWindow, 128_000),
+    maxTokens: positiveInteger(input.maxTokens, 8_192),
+    cost: {
+      input: nonNegative(cost.input),
+      output: nonNegative(cost.output),
+      cacheRead: nonNegative(cost.cacheRead),
+      cacheWrite: nonNegative(cost.cacheWrite),
+    },
+  }
+}
+
 function required(key: string): string {
   const value = process.env[key]?.trim()
   if (!value) throw new Error(`${key} is required`)
@@ -100,6 +156,7 @@ function config(): WorkerConfig {
     providerId: process.env.OPENLINK_PROVIDER_ID || (process.env.GEMINI_API_KEY ? 'google' : undefined),
     providerBaseUrl: process.env.OPENLINK_PROVIDER_BASE_URL || process.env.GOOGLE_GEMINI_BASE_URL,
     providerApiKey: process.env.OPENLINK_PROVIDER_API_KEY || process.env.GEMINI_API_KEY,
+    providerModelConfig: providerModelConfig(),
     browserHostUrl: process.env.OPENLINK_BROWSER_HOST_URL,
     browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
@@ -759,7 +816,25 @@ class SdkAgentRuntime {
       authPath: resolve(this.worker.sessionRoot, 'auth.json'),
       modelsPath: resolve(this.worker.sessionRoot, 'models.json'),
     })
-    if (this.worker.providerId && this.worker.providerBaseUrl) {
+    const modelConfig = this.worker.providerModelConfig
+    if (this.worker.providerId && modelConfig) {
+      // Custom endpoints have no catalog entry: register the selected model
+      // explicitly so Pi can resolve it and stream with the configured API.
+      modelRuntime.registerProvider(this.worker.providerId, {
+        baseUrl: this.worker.providerBaseUrl,
+        ...(modelConfig.api !== undefined ? { api: modelConfig.api } : {}),
+        models: [{
+          id: modelConfig.id,
+          name: modelConfig.name,
+          ...(modelConfig.api !== undefined ? { api: modelConfig.api } : {}),
+          reasoning: modelConfig.reasoning,
+          input: modelConfig.input,
+          cost: modelConfig.cost,
+          contextWindow: modelConfig.contextWindow,
+          maxTokens: modelConfig.maxTokens,
+        }],
+      })
+    } else if (this.worker.providerId && this.worker.providerBaseUrl) {
       modelRuntime.registerProvider(this.worker.providerId, { baseUrl: this.worker.providerBaseUrl })
     }
     if (this.worker.providerId && this.worker.providerApiKey) {

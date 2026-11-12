@@ -15,7 +15,7 @@ import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
 import { createSessionStorageLayout, ensureSessionStorage, type SessionStorageLayout } from '../storage.js'
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
-import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
+import { ambientProviderEnvironment, providerModelEnvironment, providerNetworkTargets } from '../provider-environment.js'
 import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus, type DesktopSuspendResult } from './desktop-runtime.js'
 import type { AgentResourceRequest, PromptAttachment, PromptRuntimeAgentOptions } from '../prompt-http-server.js'
 import type { CodexPluginSnapshot } from '../codex-plugin-snapshot.js'
@@ -680,6 +680,7 @@ export class LocalOpenSandboxBackend {
         OPENLINK_AGENT_MODEL: model,
         OPENLINK_PROVIDER_ID: providerId,
         OPENLINK_PROVIDER_BASE_URL: providerBaseUrl,
+        ...providerModelEnvironment(runtimeConfiguration),
         OPENLINK_AGENT_KIND: agentOptions?.agent === 'codex' ? 'codex' : 'pi',
         ...(agentOptions?.agent === 'codex' ? { XDG_CACHE_HOME: '/openlink/session/codex-cache' } : {}),
         ...(agentOptions?.accessMode ? { OPENLINK_AGENT_ACCESS_MODE: agentOptions.accessMode } : {}),

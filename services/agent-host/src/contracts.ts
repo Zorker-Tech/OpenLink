@@ -37,6 +37,14 @@ export interface AgentProviderRuntimeConfiguration {
   apiKey: string
   baseUrl: string
   revision: string
+  /** Optional model metadata for a provider that has no built-in catalog. */
+  api?: string
+  name?: string
+  reasoning?: boolean
+  input?: string[]
+  contextWindow?: number
+  maxTokens?: number
+  cost?: { input: number; output: number; cacheRead?: number; cacheWrite?: number }
 }
 
 /** Pi-native append-only session materialized from the Cloud PostgreSQL authority. */
