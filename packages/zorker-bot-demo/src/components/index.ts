@@ -1,4 +1,5 @@
 export * from './AgentAvatar'
+export * from './ActivityCard'
 export * from './ChatHeader'
 export * from './Composer'
 export * from './ComputerBadge'

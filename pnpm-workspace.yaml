@@ -1,4 +1,5 @@
 packages:
+  - packages/avatar
   - packages/zorker-bot-demo
   - demo/zorker-bot-vite
 

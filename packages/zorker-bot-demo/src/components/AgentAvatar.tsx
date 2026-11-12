@@ -1,3 +1,4 @@
+import { AgentAvatar as LiveAgentAvatar } from '@zorker/avatar'
 import { AGENTS } from '../data/agents'
 import type { Agent } from '../types'
 
@@ -45,13 +46,40 @@ export function AgentAvatar({
     )
   }
 
+  if (agent.avatarShape && agent.avatarColor) {
+    return (
+      <span
+        aria-hidden="true"
+        className={`zbd-agent-avatar zbd-agent-avatar-live ${className ?? ''}`}
+        style={{ width: size, height: size, ['--agent-ink' as string]: agent.ink }}
+      >
+        <LiveAgentAvatar
+          autoBlink
+          className="zbd-agent-avatar-engine"
+          color={agent.avatarColor}
+          effects={false}
+          glow={0}
+          idleMotion
+          interactive={false}
+          renderer="complete"
+          ring={false}
+          shadow={false}
+          shape={agent.avatarShape}
+          size={size}
+          state="idle"
+          theme="auto"
+        />
+      </span>
+    )
+  }
+
   return (
     <span
       aria-hidden="true"
       className={`zbd-agent-avatar ${className ?? ''}`}
       style={{ width: size, height: size, ['--agent-ink' as string]: agent.ink }}
     >
-      <img alt="" draggable={false} src={`${assetBase}/avatars/${agent.avatar}.svg`} />
+      <img alt="" draggable={false} src={agent.avatarUrl ?? `${assetBase}/avatars/${agent.avatar}.svg`} />
     </span>
   )
 }

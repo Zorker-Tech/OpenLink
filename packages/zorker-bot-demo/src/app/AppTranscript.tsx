@@ -5,6 +5,7 @@ import type {
   ScriptedScreen,
   TranscriptEntry,
 } from '../types'
+import { ActivityCard } from '../components/ActivityCard'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { ComputerCard } from '../components/ComputerCard'
 import { MessageBubble } from '../components/MessageBubble'
@@ -96,6 +97,15 @@ export function AppTranscript({
             )
           }
 
+          if (entry.kind === 'activity') {
+            previousTimestamp = entry.timestampMs
+            return (
+              <div className="zbd-entry" key={entry.id}>
+                <ActivityCard entry={entry} />
+              </div>
+            )
+          }
+
           const showTimestamp =
             previousTimestamp === null ||
             entry.timestampMs - previousTimestamp >= TIMESTAMP_GAP_MS
@@ -136,7 +146,7 @@ export function AppTranscript({
             <PendingRow assetBase={assetBase} pending={pending} />
           </div>
         ) : null}
-        {entries.length === 0 && !pending && session.isDraft ? (
+        {entries.length === 0 && !pending ? (
           <div className="zbd-app-empty">
             <span className="zbd-app-empty-avatar">
               <AgentAvatar

@@ -1,13 +1,4 @@
 'use client';
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState, } from 'react';
 import { DemoCursor } from '../components/DemoCursor';
@@ -25,8 +16,6 @@ import { AppSidebar } from './AppSidebar';
 import { AppTranscript } from './AppTranscript';
 import { APP_NOW, createInitialSessions, createNewAgentSession, entryPreview, formatSidebarTime, isSessionMatch, replyForSession, sessionActivityMs, sessionPreview, titleFromMessage, transcriptTimestamp, uniqueEntryId, } from './data';
 export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = true, className, }) {
-    var _a;
-    var _b, _c, _d, _e;
     const rootRef = useRef(null);
     const transcriptRef = useRef(null);
     const rootSize = useElementSize(rootRef);
@@ -45,31 +34,30 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
     const [sending, setSending] = useState(false);
     const [newAgentSequence, setNewAgentSequence] = useState(1);
     const [backTarget, setBackTarget] = useState(null);
-    const activeSession = (_b = sessions.find((session) => session.id === activeId)) !== null && _b !== void 0 ? _b : sessions[0];
+    const activeSession = sessions.find((session) => session.id === activeId) ?? sessions[0];
     const isSales = activeId === 'sales-outbound';
     const displayName = isSales ? demo.agentName : activeSession.name;
-    const activeExtras = (_c = extras[activeId]) !== null && _c !== void 0 ? _c : [];
+    const activeExtras = extras[activeId] ?? [];
     const activeEntries = useMemo(() => [
         ...(isSales ? demo.transcript : activeSession.transcript),
         ...activeExtras,
     ], [activeExtras, activeSession.transcript, demo.transcript, isSales]);
     const activePending = isSales
         ? demo.pending
-        : ((_d = pendingMap[activeId]) !== null && _d !== void 0 ? _d : null);
+        : (pendingMap[activeId] ?? null);
     const introRunning = isSales && demo.pending !== null;
     const composerDisabled = introRunning || sending;
-    const lastSalesExtra = (_a = extras['sales-outbound']) === null || _a === void 0 ? void 0 : _a.at(-1);
+    const lastSalesExtra = extras['sales-outbound']?.at(-1);
     const salesPreview = lastSalesExtra
         ? entryPreview(lastSalesExtra) || demo.agentPreview
         : demo.agentPreview;
     const salesTime = lastSalesExtra
-        ? formatSidebarTime((_e = transcriptTimestamp(lastSalesExtra)) !== null && _e !== void 0 ? _e : Date.now())
+        ? formatSidebarTime(transcriptTimestamp(lastSalesExtra) ?? Date.now())
         : demo.transcript.length === 0
             ? formatSidebarTime(APP_NOW)
             : demo.agentTime;
     const rows = sessions.map((session) => {
-        var _a;
-        const sessionExtras = (_a = extras[session.id]) !== null && _a !== void 0 ? _a : [];
+        const sessionExtras = extras[session.id] ?? [];
         const rowIsSales = session.id === 'sales-outbound';
         return {
             session,
@@ -131,7 +119,8 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
         }
         setActiveId(sessionId);
         setSessions((previous) => previous.map((session) => session.id === sessionId
-            ? Object.assign(Object.assign({}, session), { unread: false, unreadCount: 0 }) : session));
+            ? { ...session, unread: false, unreadCount: 0 }
+            : session));
         setBackTarget(null);
         setDraft('');
         setLightboxOpen(false);
@@ -159,11 +148,10 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
         setSearch('');
     }, [activeId, applyEndState, introRunning, newAgentSequence]);
     const goBack = useCallback(() => {
-        var _a;
-        const target = backTarget !== null && backTarget !== void 0 ? backTarget : 'sales-outbound';
+        const target = backTarget ?? 'sales-outbound';
         const current = sessions.find((session) => session.id === activeId);
-        const currentExtras = (_a = extras[activeId]) !== null && _a !== void 0 ? _a : [];
-        if ((current === null || current === void 0 ? void 0 : current.isDraft) && currentExtras.length === 0) {
+        const currentExtras = extras[activeId] ?? [];
+        if (current?.isDraft && currentExtras.length === 0) {
             setSessions((previous) => previous.filter((session) => session.id !== activeId));
         }
         setActiveId(target);
@@ -192,13 +180,12 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
             setLightboxOpen(true);
         }
     }, [demo, isSales]);
-    const sendMessage = useCallback(() => __awaiter(this, void 0, void 0, function* () {
-        var _a;
+    const sendMessage = useCallback(async () => {
         const content = draft.trim();
         if (!content || sending || introRunning)
             return;
         const sessionId = activeId;
-        const session = (_a = sessions.find((item) => item.id === sessionId)) !== null && _a !== void 0 ? _a : activeSession;
+        const session = sessions.find((item) => item.id === sessionId) ?? activeSession;
         const userEntry = {
             kind: 'user-message',
             id: uniqueEntryId('user'),
@@ -207,17 +194,23 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
         };
         setSending(true);
         setDraft('');
-        setExtras((previous) => { var _a; return (Object.assign(Object.assign({}, previous), { [sessionId]: [...((_a = previous[sessionId]) !== null && _a !== void 0 ? _a : []), userEntry] })); });
+        setExtras((previous) => ({
+            ...previous,
+            [sessionId]: [...(previous[sessionId] ?? []), userEntry],
+        }));
         setSessions((previous) => previous.map((item) => {
             if (item.id !== sessionId)
                 return item;
             if (!item.isDraft)
                 return item;
             const nextName = titleFromMessage(content);
-            return Object.assign(Object.assign({}, item), { name: nextName, title: nextName, isDraft: false });
+            return { ...item, name: nextName, title: nextName, isDraft: false };
         }));
-        setPendingMap((previous) => (Object.assign(Object.assign({}, previous), { [sessionId]: { label: 'Thinking', showLabel: true } })));
-        yield wait(900);
+        setPendingMap((previous) => ({
+            ...previous,
+            [sessionId]: { label: 'Thinking', showLabel: true },
+        }));
+        await wait(900);
         const replyEntry = {
             kind: 'agent-message',
             id: uniqueEntryId('agent'),
@@ -227,10 +220,13 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
                 ? { id: 'chief-of-staff', name: 'Chief' }
                 : undefined,
         };
-        setExtras((previous) => { var _a; return (Object.assign(Object.assign({}, previous), { [sessionId]: [...((_a = previous[sessionId]) !== null && _a !== void 0 ? _a : []), replyEntry] })); });
-        setPendingMap((previous) => (Object.assign(Object.assign({}, previous), { [sessionId]: null })));
+        setExtras((previous) => ({
+            ...previous,
+            [sessionId]: [...(previous[sessionId] ?? []), replyEntry],
+        }));
+        setPendingMap((previous) => ({ ...previous, [sessionId]: null }));
         setSending(false);
-    }), [
+    }, [
         activeId,
         activeSession,
         draft,
@@ -256,16 +252,20 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
                 triggerDescription: routine.triggerDescription,
             },
         };
-        setExtras((previous) => { var _a; return (Object.assign(Object.assign({}, previous), { [activeId]: [...((_a = previous[activeId]) !== null && _a !== void 0 ? _a : []), entry] })); });
+        setExtras((previous) => ({
+            ...previous,
+            [activeId]: [...(previous[activeId] ?? []), entry],
+        }));
         setSessions((previous) => previous.map((session) => session.id === activeId
-            ? Object.assign(Object.assign({}, session), { routines: [...session.routines, routine] }) : session));
+            ? { ...session, routines: [...session.routines, routine] }
+            : session));
     }, [activeId, introRunning]);
     const useSuggestion = useCallback((suggestion) => {
         setDraft(suggestion);
         window.requestAnimationFrame(() => {
-            var _a;
-            (_a = document
-                .querySelector('.zbd-app-composer-input')) === null || _a === void 0 ? void 0 : _a.focus();
+            document
+                .querySelector('.zbd-app-composer-input')
+                ?.focus();
         });
     }, []);
     useEffect(() => {
@@ -284,7 +284,7 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
     }, [openPalette]);
     const sidebarWidth = computerOpen ? 68 : 280;
     const showBack = Boolean(backTarget) || activeSession.id.startsWith('new-agent');
-    return (_jsx("div", { className: `zbd-root zbd-app-root ${className !== null && className !== void 0 ? className : ''}`, "data-active-session": activeId, "data-theme": "cursor-light", ref: rootRef, children: _jsxs("div", { className: "zbd-shell zbd-app-shell", children: [_jsx(TrafficLights, {}), _jsx("div", { className: "zbd-sidebar-slot zbd-app-sidebar-slot", style: {
+    return (_jsx("div", { className: `zbd-root zbd-app-root ${className ?? ''}`, "data-active-session": activeId, "data-theme": "cursor-light", ref: rootRef, children: _jsxs("div", { className: "zbd-shell zbd-app-shell", children: [_jsx(TrafficLights, {}), _jsx("div", { className: "zbd-sidebar-slot zbd-app-sidebar-slot", style: {
                         width: sidebarWidth,
                         transition: 'width .45s cubic-bezier(.22,1,.36,1)',
                     }, children: _jsx(AppSidebar, { activeId: activeId, assetBase: assetBase, collapsed: computerOpen, onNewAgent: openPalette, onSearch: setSearch, onSearchFocus: () => {

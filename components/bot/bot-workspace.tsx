@@ -3,43 +3,41 @@
 import '@zorker/bot-demo/styles.css'
 
 import {
-  COMPUTER_ASK,
   END_SCREEN,
-  FINAL_TRANSCRIPT,
-  ScreenOverlay,
   useAutoScroll,
   type PendingBeat,
-  type ScreenOverlayState,
   type TranscriptEntry,
 } from '@zorker/bot-demo'
 import {
   AppChatHeader,
   AppCommandPalette,
   AppComposer,
-  AppComputerPane,
-  AppScreenLightbox,
   AppTranscript,
-  createInitialSessions,
-  createNewAgentSession,
-  entryPreview,
   formatSidebarTime,
-  replyForSession,
-  sessionActivityMs,
-  sessionPreview,
-  titleFromMessage,
-  uniqueEntryId,
   type AppSession,
   type AppSidebarRow,
 } from '@zorker/bot-demo/app'
+import { resolveColor } from '@zorker/avatar'
 import type { ThemeMode } from '@/components/account-drawer'
+import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
+import { BotComputerLightbox, BotComputerPane } from '@/components/bot/bot-computer'
+import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
+import { BotOnboarding } from '@/components/bot/bot-onboarding'
 import { BotSidebar } from '@/components/bot/bot-sidebar'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import { PageTransition } from '@/components/ui/page-transition'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
+import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
+import type { BotDetail, BotSummary } from '@/lib/bot-types'
+import {
+  previewFromEntries,
+  type BotStreamUpdate,
+  type BotTranscriptEntry,
+} from '@/lib/bot-transcript'
 import { useT } from '@/lib/i18n/client'
 import type { OrganizationSummary } from '@/lib/organizations'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const ASSET_BASE = '/zorker-bot-demo'
 
@@ -47,80 +45,135 @@ type BotWorkspaceProps = {
   activeWorkspace: ActiveWorkspaceSummary
   avatarUrl: string | null
   email: string
+  initialBot: BotDetail | null
+  initialBots: BotSummary[]
+  models: readonly ConfiguredModelOption[]
   nickname: string
   organizations: OrganizationSummary[]
   personalWorkspace: PersonalWorkspaceSummary
   workspaceSlug: string
+  workHostReady: boolean
 }
 
-function createDemoSessions(): AppSession[] {
-  return createInitialSessions().map((session) => {
-    if (session.id !== 'sales-outbound') return session
-    const transcript = FINAL_TRANSCRIPT.map((entry) => ({ ...entry }))
-    return {
-      ...session,
-      transcript,
-      lastEntryText: entryPreview(transcript.at(-1)) || session.lastEntryText,
-    }
-  })
+function botAvatarUrl(bot: BotSummary): string {
+  return `/api/bots/${encodeURIComponent(bot.id)}/avatar?v=${encodeURIComponent(bot.updatedAt)}`
+}
+
+function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[]): AppSession {
+  return {
+    id: bot.id,
+    name: bot.name,
+    title: bot.name,
+    description: bot.description,
+    avatar: bot.avatarShape,
+    avatarColor: bot.avatarColor,
+    avatarUrl: botAvatarUrl(bot),
+    ink: resolveColor(bot.avatarColor, 'dark'),
+    lastActivityMs: Date.parse(bot.lastActivityAt) || Date.now(),
+    lastEntryText: bot.lastEntryText,
+    transcript,
+    routines: [],
+    screenKind: 'desktop',
+  }
+}
+
+function upsertEntry(
+  transcript: BotTranscriptEntry[],
+  entry: BotTranscriptEntry,
+): BotTranscriptEntry[] {
+  const index = transcript.findIndex((candidate) => candidate.id === entry.id)
+  if (index === -1) return [...transcript, entry]
+  const next = [...transcript]
+  next[index] = entry
+  return next
+}
+
+function friendlyRuntimeError(value: string): string {
+  const messages: Record<string, string> = {
+    AGENT_HOST_NOT_CONFIGURED: 'The Bot runtime is not running. Start the OpenLink Agent Host.',
+    BOT_RUNTIME_UNAVAILABLE: 'The Bot computer is not available yet.',
+    BOT_RUNTIME_NOT_READY: 'This Bot has no isolated computer yet.',
+    BOT_TRANSCRIPT_WRITE_FAILED: 'The Bot transcript could not be saved.',
+    BOT_CREATE_FAILED: 'The Bot could not be created.',
+    BOT_READ_FAILED: 'The Bot could not be loaded.',
+    BOT_PROJECT_NOT_READY: 'The Bot project is not ready yet.',
+    PI_SESSION_READ_FAILED: 'The Bot memory could not be read.',
+    MODEL_CONFIGURATION_REQUIRED: 'Configure an AI provider for this Bot.',
+    PROVIDER_API_KEY_REQUIRED: 'The selected provider needs an API key.',
+    PROVIDER_CREDENTIAL_REKEY_REQUIRED: 'The selected provider credentials must be refreshed.',
+    MODEL_NOT_ENABLED: 'The selected model is not enabled.',
+    UNKNOWN_PROVIDER_MODEL: 'The selected model is no longer available.',
+    SESSION_BUSY: 'This Bot is already working on another turn.',
+  }
+  return messages[value] ?? value
 }
 
 export function BotWorkspace({
   activeWorkspace,
   avatarUrl,
   email,
+  initialBot,
+  initialBots,
+  models,
   nickname,
   organizations,
   personalWorkspace,
   workspaceSlug,
+  workHostReady,
 }: BotWorkspaceProps) {
   const t = useT()
-  const rootRef = useRef<HTMLDivElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
-  const rootSize = useElementSize(rootRef)
+  const loadedRef = useRef(new Set<string>())
+  const warmingRef = useRef(new Set<string>())
+  const skipWarmOnceRef = useRef(new Set<string>())
   const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
-  const [sessions, setSessions] = useState<AppSession[]>(createDemoSessions)
-  const [activeId, setActiveId] = useState('sales-outbound')
-  const [extras, setExtras] = useState<Record<string, TranscriptEntry[]>>({})
+  const [bots, setBots] = useState<BotSummary[]>(initialBots)
+  const [activeId, setActiveId] = useState(initialBot?.id ?? initialBots[0]?.id ?? '')
+  const [details, setDetails] = useState<Record<string, BotDetail>>(
+    initialBot ? { [initialBot.id]: initialBot } : {},
+  )
   const [pendingMap, setPendingMap] = useState<Record<string, PendingBeat | null>>({})
+  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
+  const [warmingMap, setWarmingMap] = useState<Record<string, boolean>>({})
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const [newAgentSequence, setNewAgentSequence] = useState(1)
-  const [backTarget, setBackTarget] = useState<string | null>(null)
+  const [creating, setCreating] = useState(initialBots.length === 0)
+  const [onboardingName, setOnboardingName] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteQuery, setPaletteQuery] = useState('')
+  const [paletteView, setPaletteView] = useState<'search' | 'create'>('search')
+  const [createInitialName, setCreateInitialName] = useState('')
   const [computerOpen, setComputerOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [overlay, setOverlay] = useState<ScreenOverlayState | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const activeSession = sessions.find((session) => session.id === activeId) ?? sessions[0]
-  const activeExtras = extras[activeId] ?? []
-  const activeEntries = useMemo(
-    () => [...activeSession.transcript, ...activeExtras],
-    [activeExtras, activeSession.transcript],
-  )
+  const activeBot = bots.find((bot) => bot.id === activeId) ?? null
+  const activeDetail = activeBot ? details[activeBot.id] ?? null : null
+  const activeTranscript = activeDetail?.transcript ?? []
+  const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
   const activePending = pendingMap[activeId] ?? null
-  const isSales = activeId === 'sales-outbound'
-  const displayName = activeSession.name
+  const activeWarming = activeId ? warmingMap[activeId] === true : false
+  const activeSession = activeBot ? botToSession(activeBot, activeTranscript) : null
+  const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
 
-  const rows: AppSidebarRow[] = sessions.map((session) => {
-    const sessionExtras = extras[session.id] ?? []
+  const rows: AppSidebarRow[] = useMemo(() => bots.map((bot) => {
+    const transcript = details[bot.id]?.transcript ?? []
+    const preview = bot.lastEntryText || (transcript.length ? previewFromEntries(transcript) : '')
     return {
-      session,
-      name: session.name,
-      preview: sessionPreview(session, sessionExtras),
-      time: formatSidebarTime(sessionActivityMs(session, sessionExtras)),
-      unread: session.unread,
+      session: botToSession(bot, transcript),
+      name: bot.name,
+      preview: preview || 'No messages yet',
+      time: formatSidebarTime(Date.parse(bot.lastActivityAt) || Date.now(), Date.now()),
+      unread: bot.unread,
     }
-  })
-  const botUnreadCount = sessions.reduce((count, session) => count + (session.unread ? 1 : 0), 0)
+  }), [bots, details])
+  const botUnreadCount = bots.reduce((count, bot) => count + (bot.unread ? 1 : 0), 0)
   const paletteSessions = rows.map(({ session, name }) => ({ session, name }))
-  const showBack = Boolean(backTarget) || activeSession.id.startsWith('new-agent')
 
-  useAutoScroll(transcriptRef, [activeId, activeEntries.length, activePending, displayName])
+  useAutoScroll(transcriptRef, [activeId, activeTranscript.length, activePending, activeConfirmations.length, activeBot?.name])
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('openlink-theme') as ThemeMode | null
@@ -133,168 +186,322 @@ export function BotWorkspace({
     return () => media.removeEventListener('change', updateSystemTheme)
   }, [])
 
-  const handleThemeChange = (mode: ThemeMode) => {
-    setThemeMode(mode)
-    window.localStorage.setItem('openlink-theme', mode)
-  }
-  const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
-
   useEffect(() => {
     const root = document.documentElement
     if (activeTheme === 'dark') root.classList.add('dark')
     else root.classList.remove('dark')
   }, [activeTheme])
 
+  const handleThemeChange = (mode: ThemeMode) => {
+    setThemeMode(mode)
+    window.localStorage.setItem('openlink-theme', mode)
+  }
+
+  const loadBot = useCallback(async (botId: string, force = false) => {
+    const cached = details[botId]
+    if (!force && cached && (cached.transcript.length > 0 || loadedRef.current.has(botId) || !cached.lastEntryText)) return
+    setLoadingMap((previous) => ({ ...previous, [botId]: true }))
+    try {
+      const response = await fetch(`/api/bots/${encodeURIComponent(botId)}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => null) as { bot?: BotDetail; error?: { message?: string } } | null
+      if (!response.ok || !payload?.bot) {
+        throw new Error(friendlyRuntimeError(payload?.error?.message || 'BOT_READ_FAILED'))
+      }
+      setDetails((previous) => ({ ...previous, [botId]: payload.bot! }))
+      setBots((previous) => previous.map((bot) => (
+        bot.id === botId
+          ? {
+              ...bot,
+              unread: false,
+              lastEntryText: payload.bot!.lastEntryText || bot.lastEntryText,
+              runtimeStatus: payload.bot!.runtimeStatus,
+              runtimeReadyAt: payload.bot!.runtimeReadyAt,
+              runtimeLastError: payload.bot!.runtimeLastError,
+              runtimeCheckedAt: payload.bot!.runtimeCheckedAt,
+            }
+          : bot
+      )))
+    } catch (loadError) {
+      setError(loadError instanceof Error ? friendlyRuntimeError(loadError.message) : 'The Bot could not be loaded.')
+    } finally {
+      loadedRef.current.add(botId)
+      setLoadingMap((previous) => ({ ...previous, [botId]: false }))
+    }
+  }, [details])
+
+  useEffect(() => {
+    if (activeId) void loadBot(activeId)
+  }, [activeId, loadBot])
+
+  const warmBot = useCallback(async (botId: string) => {
+    if (warmingRef.current.has(botId)) return
+    warmingRef.current.add(botId)
+    setWarmingMap((previous) => ({ ...previous, [botId]: true }))
+    try {
+      const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/warm`, {
+        method: 'POST',
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => null) as {
+        ready?: unknown
+        error?: { message?: string }
+      } | null
+      if (!response.ok || payload?.ready !== true) {
+        throw new Error(friendlyRuntimeError(payload?.error?.message || 'BOT_RUNTIME_UNAVAILABLE'))
+      }
+      const now = new Date().toISOString()
+      setDetails((previous) => {
+        const detail = previous[botId]
+        return detail
+          ? { ...previous, [botId]: { ...detail, runtimeReady: true, runtimeStatus: 'ready', runtimeReadyAt: now, runtimeLastError: null } }
+          : previous
+      })
+      setBots((previous) => previous.map((bot) => (
+        bot.id === botId
+          ? { ...bot, runtimeStatus: 'ready', runtimeReadyAt: now, runtimeLastError: null, updatedAt: now }
+          : bot
+      )))
+    } catch (warmError) {
+      const message = warmError instanceof Error ? warmError.message : 'BOT_RUNTIME_UNAVAILABLE'
+      setDetails((previous) => {
+        const detail = previous[botId]
+        return detail
+          ? { ...previous, [botId]: { ...detail, runtimeReady: false, runtimeStatus: 'failed', runtimeLastError: message } }
+          : previous
+      })
+      setBots((previous) => previous.map((bot) => (
+        bot.id === botId ? { ...bot, runtimeStatus: 'failed', runtimeLastError: message } : bot
+      )))
+      setError(friendlyRuntimeError(message))
+    } finally {
+      warmingRef.current.delete(botId)
+      setWarmingMap((previous) => ({ ...previous, [botId]: false }))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!workHostReady || !activeBot?.runtimeSessionId) return
+    if (skipWarmOnceRef.current.delete(activeBot.id)) return
+    void warmBot(activeBot.id)
+  }, [activeBot?.id, activeBot?.runtimeSessionId, warmBot, workHostReady])
+
+  useEffect(() => {
+    setBots((previous) => {
+      let changed = false
+      const next = previous.map((bot) => {
+        const detail = details[bot.id]
+        if (!detail?.transcript.length) return bot
+        const preview = previewFromEntries(detail.transcript)
+        if (!preview || preview === bot.lastEntryText) return bot
+        changed = true
+        return { ...bot, lastEntryText: preview, lastActivityAt: new Date().toISOString() }
+      })
+      return changed ? next : previous
+    })
+  }, [details])
+
+  const markViewed = useCallback((botId: string) => {
+    setBots((previous) => previous.map((bot) => bot.id === botId ? { ...bot, unread: false } : bot))
+    void fetch(`/api/bots/${encodeURIComponent(botId)}/view`, { method: 'POST' }).catch(() => undefined)
+  }, [])
+
+  const selectBot = useCallback((botId: string) => {
+    setActiveId(botId)
+    setError(null)
+    setDraft('')
+    setComputerOpen(false)
+    setLightboxOpen(false)
+    setPaletteOpen(false)
+    setPaletteView('search')
+    setPaletteQuery('')
+    markViewed(botId)
+    void loadBot(botId, true)
+  }, [loadBot, markViewed])
+
+  const applyUpdate = useCallback((botId: string, update: BotStreamUpdate) => {
+    if (update.type === 'pending') {
+      setPendingMap((previous) => ({ ...previous, [botId]: update.pending }))
+      return
+    }
+    if (update.type === 'delta') {
+      setDetails((previous) => {
+        const detail = previous[botId]
+        if (!detail) return previous
+        const index = detail.transcript.findIndex((entry) => entry.id === update.id)
+        if (index === -1) {
+          const entry: BotTranscriptEntry = {
+            kind: 'agent-message',
+            id: update.id,
+            content: update.delta,
+            timestampMs: Date.now(),
+          }
+          return { ...previous, [botId]: { ...detail, transcript: [...detail.transcript, entry] } }
+        }
+        const existing = detail.transcript[index]
+        if (existing.kind !== 'agent-message') return previous
+        const transcript = [...detail.transcript]
+        transcript[index] = { ...existing, content: `${existing.content}${update.delta}` }
+        return { ...previous, [botId]: { ...detail, transcript } }
+      })
+      return
+    }
+    if (update.type === 'entry') {
+      setDetails((previous) => {
+        const detail = previous[botId]
+        if (!detail) return previous
+        return { ...previous, [botId]: { ...detail, transcript: upsertEntry(detail.transcript, update.entry) } }
+      })
+      return
+    }
+    if (update.type === 'confirmation') {
+      setDetails((previous) => {
+        const detail = previous[botId]
+        if (!detail) return previous
+        const pendingConfirmations = detail.pendingConfirmations.some((request) => request.id === update.request.id)
+          ? detail.pendingConfirmations.map((request) => request.id === update.request.id ? update.request : request)
+          : [...detail.pendingConfirmations, update.request]
+        return { ...previous, [botId]: { ...detail, pendingConfirmations } }
+      })
+      return
+    }
+    if (update.type === 'confirmation-resolved') {
+      setDetails((previous) => {
+        const detail = previous[botId]
+        if (!detail) return previous
+        return {
+          ...previous,
+          [botId]: {
+            ...detail,
+            pendingConfirmations: detail.pendingConfirmations.filter((request) => request.id !== update.id),
+          },
+        }
+      })
+      return
+    }
+    if (update.type === 'error') {
+      setError(friendlyRuntimeError(update.message))
+      setPendingMap((previous) => ({ ...previous, [botId]: null }))
+      return
+    }
+    if (update.type === 'done') {
+      setPendingMap((previous) => ({ ...previous, [botId]: null }))
+      setSending(false)
+    }
+  }, [])
+
+  const resolveBotConfirmation = useCallback(async (
+    botId: string,
+    confirmationId: string,
+    approved: boolean,
+    value?: string,
+  ) => {
+    const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/confirmation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: confirmationId,
+        ...(value !== undefined ? { value } : { approved }),
+      }),
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+      throw new Error(friendlyRuntimeError(payload?.error?.message || 'CONFIRMATION_FAILED'))
+    }
+    setDetails((previous) => {
+      const detail = previous[botId]
+      if (!detail) return previous
+      return {
+        ...previous,
+        [botId]: {
+          ...detail,
+          pendingConfirmations: detail.pendingConfirmations.filter((request) => request.id !== confirmationId),
+        },
+      }
+    })
+  }, [])
+
+  const sendMessage = useCallback(async () => {
+    const content = draft.trim()
+    if (!content || sending || activeWarming || !activeBot || !activeDetail?.runtimeReady) return
+    const botId = activeBot.id
+    let accepted = false
+    setSending(true)
+    setDraft('')
+    setError(null)
+    setPendingMap((previous) => ({ ...previous, [botId]: { label: 'Working', showLabel: true } }))
+    try {
+      const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content }),
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+        throw new Error(friendlyRuntimeError(payload?.error?.message || 'BOT_RUNTIME_UNAVAILABLE'))
+      }
+      if (!response.body) throw new Error('The Bot returned no response stream.')
+      accepted = true
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (!data) continue
+          try {
+            applyUpdate(botId, JSON.parse(data) as BotStreamUpdate)
+          } catch {}
+        }
+      }
+    } catch (sendError) {
+      if (!accepted) setDraft((current) => current || content)
+      setError(sendError instanceof Error ? friendlyRuntimeError(sendError.message) : 'The Bot could not finish this turn.')
+    } finally {
+      setSending(false)
+      setPendingMap((previous) => ({ ...previous, [botId]: null }))
+      void loadBot(botId, true)
+    }
+  }, [activeBot, activeDetail?.runtimeReady, activeWarming, applyUpdate, draft, loadBot, sending])
+
   const openPalette = useCallback(() => {
     setComputerOpen(false)
     setLightboxOpen(false)
-    setOverlay(null)
     setPaletteOpen(true)
+    setPaletteView('search')
+    setCreateInitialName('')
     setPaletteQuery('')
   }, [])
 
   const closePalette = useCallback(() => {
     setPaletteOpen(false)
+    setPaletteView('search')
     setPaletteQuery('')
   }, [])
-
-  const selectSession = useCallback((sessionId: string) => {
-    setActiveId(sessionId)
-    setSessions((previous) => previous.map((session) => (
-      session.id === sessionId ? { ...session, unread: false } : session
-    )))
-    setBackTarget(null)
-    setDraft('')
-    setComputerOpen(false)
-    setLightboxOpen(false)
-    setOverlay(null)
-    setPaletteOpen(false)
-    setPaletteQuery('')
-  }, [])
-
-  const createAgent = useCallback((query = '') => {
-    const sequence = newAgentSequence
-    setNewAgentSequence((value) => value + 1)
-    const session = createNewAgentSession(sequence)
-    const cleanQuery = query.trim()
-    if (cleanQuery) {
-      session.name = titleFromMessage(cleanQuery)
-      session.title = session.name
-    }
-    setSessions((previous) => [session, ...previous])
-    setBackTarget(activeId)
-    setActiveId(session.id)
-    setDraft('')
-    setComputerOpen(false)
-    setLightboxOpen(false)
-    setOverlay(null)
-    setPaletteOpen(false)
-    setPaletteQuery('')
-  }, [activeId, newAgentSequence])
-
-  const goBack = useCallback(() => {
-    const target = backTarget ?? 'sales-outbound'
-    const current = sessions.find((session) => session.id === activeId)
-    const currentExtras = extras[activeId] ?? []
-    if (current?.isDraft && currentExtras.length === 0) {
-      setSessions((previous) => previous.filter((session) => session.id !== activeId))
-    }
-    setActiveId(target)
-    setBackTarget(null)
-    setDraft('')
-    setComputerOpen(false)
-    setLightboxOpen(false)
-    setOverlay(null)
-  }, [activeId, backTarget, extras, sessions])
 
   const toggleComputer = useCallback(() => {
+    if (!activeBot?.runtimeSessionId) {
+      setError('This Bot has no isolated computer yet.')
+      return
+    }
     setComputerOpen((open) => !open)
     setLightboxOpen(false)
-    setOverlay(null)
-  }, [])
+  }, [activeBot?.runtimeSessionId])
 
-  const openScreen = useCallback(() => {
-    if (isSales) setOverlay({ mode: 'lightbox', origin: 'pane' })
-    else setLightboxOpen(true)
-  }, [isSales])
-
-  const openComputerFromCard = useCallback(() => {
-    if (isSales) setOverlay({ mode: 'lightbox', origin: 'entry' })
-    else setLightboxOpen(true)
-  }, [isSales])
-
-  const sendMessage = useCallback(async () => {
-    const content = draft.trim()
-    if (!content || sending) return
-
-    const sessionId = activeId
-    const session = sessions.find((item) => item.id === sessionId) ?? activeSession
-    const userEntry: TranscriptEntry = {
-      kind: 'user-message',
-      id: uniqueEntryId('user'),
-      content,
-      timestampMs: Date.now(),
+  const openComputer = useCallback(() => {
+    if (!activeBot?.runtimeSessionId) {
+      setError('This Bot has no isolated computer yet.')
+      return
     }
-
-    setSending(true)
-    setDraft('')
-    setExtras((previous) => ({
-      ...previous,
-      [sessionId]: [...(previous[sessionId] ?? []), userEntry],
-    }))
-    setSessions((previous) => previous.map((item) => {
-      if (item.id !== sessionId || !item.isDraft) return item
-      const nextName = titleFromMessage(content)
-      return { ...item, name: nextName, title: nextName, isDraft: false }
-    }))
-    setPendingMap((previous) => ({
-      ...previous,
-      [sessionId]: { label: 'Thinking', showLabel: true },
-    }))
-
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 900))
-
-    const replyEntry: TranscriptEntry = {
-      kind: 'agent-message',
-      id: uniqueEntryId('agent'),
-      content: replyForSession(session, content),
-      timestampMs: Date.now(),
-      author: session.isGroup ? { id: 'chief-of-staff', name: 'Chief' } : undefined,
-    }
-    setExtras((previous) => ({
-      ...previous,
-      [sessionId]: [...(previous[sessionId] ?? []), replyEntry],
-    }))
-    setPendingMap((previous) => ({ ...previous, [sessionId]: null }))
-    setSending(false)
-  }, [activeId, activeSession, draft, sending, sessions])
-
-  const createRoutine = useCallback(() => {
-    const routine = {
-      id: uniqueEntryId('routine'),
-      name: 'Weekly follow-up',
-      triggerDescription: 'Mondays at 9:00 AM',
-    }
-    const entry: TranscriptEntry = {
-      kind: 'system',
-      id: uniqueEntryId('system'),
-      timestampMs: Date.now(),
-      event: {
-        type: 'created-routine',
-        name: routine.name,
-        triggerDescription: routine.triggerDescription,
-      },
-    }
-    setExtras((previous) => ({
-      ...previous,
-      [activeId]: [...(previous[activeId] ?? []), entry],
-    }))
-    setSessions((previous) => previous.map((session) => (
-      session.id === activeId
-        ? { ...session, routines: [...session.routines, routine] }
-        : session
-    )))
-  }, [activeId])
+    setLightboxOpen(true)
+    setComputerOpen(false)
+  }, [activeBot?.runtimeSessionId])
 
   const useSuggestion = useCallback((suggestion: string) => {
     setDraft(suggestion)
@@ -312,16 +519,59 @@ export function BotWorkspace({
       if (event.key === 'Escape') {
         setPaletteOpen(false)
         setLightboxOpen(false)
-        setOverlay(null)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [openPalette])
 
+  const handleCreated = useCallback((bot: BotSummary) => {
+    const runtimeReady = bot.runtimeStatus === 'ready' && Boolean(bot.runtimeSessionId)
+    if (runtimeReady) skipWarmOnceRef.current.add(bot.id)
+    setBots((previous) => [bot, ...previous.filter((item) => item.id !== bot.id)])
+    setDetails((previous) => ({
+      ...previous,
+      [bot.id]: {
+        ...bot,
+        transcript: [],
+        runtimeReady,
+        runtimeStatus: bot.runtimeStatus ?? 'pending',
+        pendingConfirmations: [],
+      },
+    }))
+    setActiveId(bot.id)
+    setWarmingMap((previous) => ({ ...previous, [bot.id]: false }))
+    setCreating(false)
+    setOnboardingName('')
+    setPaletteOpen(false)
+    setPaletteView('search')
+    setCreateInitialName('')
+    window.history.replaceState(null, '', `/app/${encodeURIComponent(workspaceSlug)}/bots?bot=${encodeURIComponent(bot.id)}`)
+  }, [workspaceSlug])
+
+  if (!activeBot || creating) {
+    return (
+      <OpenLinkThemeProvider theme={activeTheme}>
+        <div className="bot-workspace openlink-app-shell" data-theme={activeTheme}>
+          <BotOnboarding
+            firstBot={bots.length === 0}
+            initialName={onboardingName}
+            models={models}
+            onCancel={bots.length ? () => { setCreating(false); setOnboardingName('') } : undefined}
+            onCreated={handleCreated}
+            theme={activeTheme}
+            workHostReady={workHostReady}
+            workspaceName={activeWorkspace.name}
+            workspaceSlug={workspaceSlug}
+          />
+        </div>
+      </OpenLinkThemeProvider>
+    )
+  }
+
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
-      <div className="bot-workspace openlink-app-shell workspace-navigation-shell flex h-dvh min-h-[560px] overflow-hidden" data-theme={activeTheme}>
+      <div className="bot-workspace openlink-app-shell workspace-navigation-shell relative flex h-dvh min-h-[560px] overflow-hidden" data-theme={activeTheme}>
         <BotSidebar
           activeId={activeId}
           activeWorkspace={activeWorkspace}
@@ -332,8 +582,10 @@ export function BotWorkspace({
           mobileOpen={mobileOpen}
           nickname={nickname}
           onCloseMobile={() => setMobileOpen(false)}
-          onNewAgent={openPalette}
-          onSelect={selectSession}
+          onNewAgent={() => {
+            openPalette()
+          }}
+          onSelect={selectBot}
           onThemeChange={handleThemeChange}
           onToggle={() => {
             if (mobileOpen) {
@@ -367,88 +619,125 @@ export function BotWorkspace({
               <span className="truncate text-sm font-medium text-[var(--app-foreground)]">{activeWorkspace.name}</span>
             </div>
 
-            <div className="bot-chat-root zbd-root relative flex min-h-0 min-w-0 flex-1" data-sidebar-collapsed={collapsed ? '' : undefined} ref={rootRef}>
+            <div className="bot-chat-root zbd-root relative flex min-h-0 min-w-0 flex-1" data-sidebar-collapsed={collapsed ? '' : undefined}>
               <section className="zbd-chat zbd-app-chat flex min-h-0 min-w-0 flex-1 flex-col">
                 <div className="zbd-chat-header-wrap">
                   <AppChatHeader
                     assetBase={ASSET_BASE}
                     computerOpen={computerOpen}
-                    displayName={displayName}
+                    displayName={activeBot.name}
                     introRunning={false}
-                    onBack={goBack}
+                    onBack={() => undefined}
                     onSkipIntro={() => undefined}
                     onToggleComputer={toggleComputer}
-                    session={activeSession}
-                    showBack={showBack}
+                    session={activeSession!}
+                    showBack={false}
                   />
                 </div>
-                <AppTranscript
-                  assetBase={ASSET_BASE}
-                  cardStatus="done"
-                  displayName={displayName}
-                  entries={activeEntries}
-                  key={activeId}
-                  onFinishComputer={() => setOverlay(null)}
-                  onOpenComputer={openComputerFromCard}
-                  onSuggestion={useSuggestion}
-                  onTakeOver={() => setOverlay({ mode: 'takeover', origin: 'entry', instruction: COMPUTER_ASK })}
-                  pending={activePending}
-                  screen={END_SCREEN}
-                  session={activeSession}
-                  transcriptRef={transcriptRef}
+                {loadingMap[activeId] && !activeDetail ? (
+                  <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--app-muted)]">
+                    Loading {activeBot.name}…
+                  </div>
+                ) : (
+                  <>
+                    {activeBot.runtimeStatus === 'failed' || activeBot.runtimeLastError ? (
+                      <div
+                        className="mx-[21px] mt-3 flex items-center gap-3 rounded-[12px] border border-[var(--app-border)] bg-[var(--app-elevated)] px-3.5 py-2.5 text-[12px] leading-[18px] text-[var(--app-foreground)]"
+                        role="alert"
+                      >
+                        <span className="min-w-0 flex-1 text-[var(--app-danger)]">
+                          {friendlyRuntimeError(activeBot.runtimeLastError || 'BOT_RUNTIME_UNAVAILABLE')}
+                        </span>
+                        <button
+                          className="flex h-7 shrink-0 items-center justify-center rounded-md border border-[var(--app-control-border)] px-2.5 text-[11px] font-medium text-[var(--app-foreground)] hover:bg-[var(--app-hover)] disabled:pointer-events-none disabled:opacity-50"
+                          disabled={activeWarming}
+                          onClick={() => { void warmBot(activeBot.id) }}
+                          type="button"
+                        >
+                          {activeWarming ? 'Retrying…' : 'Retry'}
+                        </button>
+                      </div>
+                    ) : null}
+                    <AppTranscript
+                      assetBase={ASSET_BASE}
+                      cardStatus="done"
+                      displayName={activeBot.name}
+                      entries={activeTranscript as TranscriptEntry[]}
+                      key={activeId}
+                      onFinishComputer={() => setLightboxOpen(false)}
+                      onOpenComputer={openComputer}
+                      onSuggestion={useSuggestion}
+                      onTakeOver={openComputer}
+                      pending={activePending}
+                      screen={END_SCREEN}
+                      session={activeSession!}
+                      transcriptRef={transcriptRef}
+                    />
+                  </>
+                )}
+                <ChatConfirmationDock
+                  onResolve={(id, approved, value) => resolveBotConfirmation(activeBot.id, id, approved, value)}
+                  requests={activeConfirmations}
                 />
                 <AppComposer
-                  disabled={sending}
-                  displayName={displayName}
+                  disabled={sending || activeWarming || !activeDetail?.runtimeReady}
+                  displayName={activeBot.name}
                   onChange={setDraft}
-                  onCreateRoutine={createRoutine}
+                  onCreateRoutine={() => undefined}
                   onSend={() => {
                     void sendMessage()
                   }}
+                  showRoutine={false}
                   value={draft}
                 />
               </section>
 
-              {computerOpen ? (
-                <AppComputerPane
-                  assetBase={ASSET_BASE}
-                  displayName={displayName}
-                  isSales={isSales}
-                  key={`${activeId}-computer`}
+              {computerOpen && activeBot.runtimeSessionId ? (
+                <BotComputerPane
+                  botName={activeBot.name}
+                  chatSessionId={activeBot.runtimeSessionId}
                   onClose={() => setComputerOpen(false)}
-                  onOpenScreen={openScreen}
-                  screen={END_SCREEN}
-                  session={activeSession}
                 />
               ) : null}
 
-              {overlay && rootSize.width > 0 ? (
-                <ScreenOverlay
-                  assetBase={ASSET_BASE}
-                  onClose={() => setOverlay(null)}
-                  onFinish={() => setOverlay(null)}
-                  overlay={overlay}
-                  rootHeight={rootSize.height}
-                  rootWidth={rootSize.width}
-                  screen={END_SCREEN}
-                />
-              ) : null}
-
-              {lightboxOpen && !isSales ? (
-                <AppScreenLightbox
-                  assetBase={ASSET_BASE}
-                  displayName={displayName}
+              {lightboxOpen && activeBot.runtimeSessionId ? (
+                <BotComputerLightbox
+                  botName={activeBot.name}
+                  chatSessionId={activeBot.runtimeSessionId}
                   onClose={() => setLightboxOpen(false)}
                 />
               ) : null}
 
-              {paletteOpen ? (
+              {paletteOpen && paletteView === 'create' ? (
+                <BotCreateDialog
+                  initialName={createInitialName}
+                  models={models}
+                  workHostReady={workHostReady}
+                  onBack={() => {
+                    setPaletteQuery(createInitialName)
+                    setPaletteView('search')
+                  }}
+                  onClose={closePalette}
+                  onCreated={(bot) => {
+                    closePalette()
+                    handleCreated(bot)
+                  }}
+                  theme={activeTheme}
+                  workspaceSlug={workspaceSlug}
+                />
+              ) : paletteOpen ? (
                 <AppCommandPalette
                   assetBase={ASSET_BASE}
                   onClose={closePalette}
-                  onCreate={createAgent}
+                  onCreate={(query) => {
+                    setCreateInitialName(query.trim())
+                    setPaletteView('create')
+                  }}
                   onQueryChange={setPaletteQuery}
-                  onSelect={selectSession}
+                  onSelect={(sessionId) => {
+                    closePalette()
+                    selectBot(sessionId)
+                  }}
                   query={paletteQuery}
                   sessions={paletteSessions}
                 />
@@ -456,26 +745,17 @@ export function BotWorkspace({
             </div>
           </main>
         </PageTransition>
+
+        {error ? (
+          <button
+            className="absolute bottom-24 left-1/2 z-50 max-w-[min(560px,calc(100%-32px))] -translate-x-1/2 rounded-full border border-[var(--app-border)] bg-[var(--app-elevated)] px-4 py-2 text-[12px] text-[var(--app-foreground)] shadow-[0_12px_36px_var(--app-shadow)]"
+            onClick={() => setError(null)}
+            type="button"
+          >
+            {error}
+          </button>
+        ) : null}
       </div>
     </OpenLinkThemeProvider>
   )
-}
-
-function useElementSize(ref: RefObject<HTMLElement | null>) {
-  const [size, setSize] = useState({ width: 0, height: 0 })
-
-  useEffect(() => {
-    const element = ref.current
-    if (!element) return
-    const update = () => {
-      const rect = element.getBoundingClientRect()
-      setSize({ width: rect.width, height: rect.height })
-    }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [ref])
-
-  return size
 }

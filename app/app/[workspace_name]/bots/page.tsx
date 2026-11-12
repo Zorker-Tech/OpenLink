@@ -1,6 +1,10 @@
 import { BotWorkspace } from '@/components/bot/bot-workspace'
+import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
+import { getBotDetail, listBots } from '@/lib/bots'
+import type { BotDetail } from '@/lib/bot-types'
 import { listOrganizations } from '@/lib/organizations'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
+import { getWorkHostHealth, isWorkHostConfigured } from '@/lib/work-host-client.server'
 import { createClient } from '@/utils/supabase/server'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
@@ -11,10 +15,12 @@ export const metadata: Metadata = {
 
 export default async function WorkspaceBotsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspace_name: string }>
+  searchParams: Promise<{ bot?: string }>
 }) {
-  const { workspace_name } = await params
+  const [{ workspace_name }, { bot: requestedBotId }] = await Promise.all([params, searchParams])
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -29,13 +35,27 @@ export default async function WorkspaceBotsPage({
   ])
   if (!workspace || !personalWorkspace) redirect('/app')
 
-  const { data: profile } = await supabase
-    .schema('openlink')
-    .from('profiles')
-    .select('nickname')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  const [{ data: profile }, models, bots, workHostHealth] = await Promise.all([
+    supabase
+      .schema('openlink')
+      .from('profiles')
+      .select('nickname')
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    listConfiguredModels(supabase, user.id),
+    listBots(supabase, user.id, workspace.id),
+    getWorkHostHealth(),
+  ])
   const nickname = (profile as { nickname?: string } | null)?.nickname ?? workspace.name
+  const selected = bots.find((bot) => bot.id === requestedBotId) ?? bots[0] ?? null
+  let initialBot: BotDetail | null = null
+  if (selected) {
+    try {
+      initialBot = await getBotDetail(supabase, user.id, selected)
+    } catch (error) {
+      console.error('[openlink-bots] initial detail failed', error)
+    }
+  }
 
   return (
     <BotWorkspace
@@ -47,10 +67,14 @@ export default async function WorkspaceBotsPage({
       }}
       avatarUrl={getAvatarUrl(user)}
       email={user.email ?? nickname}
+      initialBot={initialBot}
+      initialBots={bots}
+      models={models}
       nickname={nickname}
       organizations={organizations}
       personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}
       workspaceSlug={workspace.slug}
+      workHostReady={isWorkHostConfigured() && workHostHealth?.ok === true}
     />
   )
 }

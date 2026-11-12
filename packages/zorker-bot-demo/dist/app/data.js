@@ -1,6 +1,6 @@
-const MINUTE = 60000;
-const HOUR = 3600000;
-const DAY = 86400000;
+const MINUTE = 60_000;
+const HOUR = 3_600_000;
+const DAY = 86_400_000;
 export const APP_NOW = Date.now();
 export const SALES_ROUTINE = {
     id: 'outbound-auto-1',
@@ -406,7 +406,12 @@ export function createNewAgentSession(sequence) {
     };
 }
 export function cloneSession(session) {
-    return Object.assign(Object.assign({}, session), { transcript: session.transcript.map((entry) => (Object.assign({}, entry))), routines: session.routines.map((routine) => (Object.assign({}, routine))), group: session.group ? [...session.group] : undefined });
+    return {
+        ...session,
+        transcript: session.transcript.map((entry) => ({ ...entry })),
+        routines: session.routines.map((routine) => ({ ...routine })),
+        group: session.group ? [...session.group] : undefined,
+    };
 }
 export function sessionToAgent(session, name = session.name) {
     return {
@@ -416,6 +421,9 @@ export function sessionToAgent(session, name = session.name) {
         timeLabel: formatSidebarTime(session.lastActivityMs),
         ink: session.ink,
         avatar: session.avatar,
+        avatarShape: session.avatar,
+        avatarColor: session.avatarColor,
+        avatarUrl: session.avatarUrl,
         group: session.group,
         unread: session.unread,
     };
@@ -481,8 +489,7 @@ export function sessionPreview(session, extras) {
     return entryPreview(last) || session.lastEntryText;
 }
 export function sessionActivityMs(session, extras) {
-    var _a;
-    return (_a = transcriptTimestamp(extras.at(-1))) !== null && _a !== void 0 ? _a : session.lastActivityMs;
+    return transcriptTimestamp(extras.at(-1)) ?? session.lastActivityMs;
 }
 export function isSessionMatch(session, query, name = session.name) {
     const needle = query.trim().toLowerCase();

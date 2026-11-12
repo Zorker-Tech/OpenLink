@@ -1,12 +1,3 @@
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 import { useCallback, useRef, useState } from 'react';
 import { rootPoint, wait, waitForTarget as waitForTargetInRoot } from '../lib/dom';
 export function useCursor(rootRef) {
@@ -24,40 +15,40 @@ export function useCursor(rootRef) {
         setCursor(next);
         return duration;
     }, []);
-    const showAt = useCallback((x, y) => __awaiter(this, void 0, void 0, function* () {
+    const showAt = useCallback(async (x, y) => {
         moveTo(x, y, true);
-        yield wait(350);
-    }), [moveTo]);
-    const moveToTarget = useCallback((element_1, ...args_1) => __awaiter(this, [element_1, ...args_1], void 0, function* (element, xRatio = 0.5, yRatio = 0.55) {
+        await wait(350);
+    }, [moveTo]);
+    const moveToTarget = useCallback(async (element, xRatio = 0.5, yRatio = 0.55) => {
         const root = rootRef.current;
         if (!root)
             return;
         const point = rootPoint(root, element, xRatio, yRatio);
         const duration = moveTo(point.x, point.y);
-        yield wait(duration + 80);
-    }), [moveTo, rootRef]);
-    const click = useCallback((action) => __awaiter(this, void 0, void 0, function* () {
+        await wait(duration + 80);
+    }, [moveTo, rootRef]);
+    const click = useCallback(async (action) => {
         const point = cursorRef.current;
         const ripple = { id: (rippleIdRef.current += 1), x: point.x, y: point.y };
         setRipples((previous) => [...previous, ripple]);
         window.setTimeout(() => setRipples((previous) => previous.filter((item) => item.id !== ripple.id)), 450);
-        yield wait(140);
+        await wait(140);
         action();
-        yield wait(180);
-    }), []);
+        await wait(180);
+    }, []);
     const hide = useCallback(() => {
-        setCursor((previous) => (Object.assign(Object.assign({}, previous), { visible: false })));
+        setCursor((previous) => ({ ...previous, visible: false }));
     }, []);
     const reset = useCallback(() => {
         setCursor({ x: 0, y: 0, duration: 0, visible: false });
         setRipples([]);
     }, []);
-    const waitForTarget = useCallback((name_1, ...args_1) => __awaiter(this, [name_1, ...args_1], void 0, function* (name, timeoutMs = 15000) {
+    const waitForTarget = useCallback(async (name, timeoutMs = 15_000) => {
         const root = rootRef.current;
         if (!root)
             throw new Error('Zorker Bot demo root is not mounted');
         return waitForTargetInRoot(root, name, timeoutMs);
-    }), [rootRef]);
+    }, [rootRef]);
     return {
         cursor,
         ripples,

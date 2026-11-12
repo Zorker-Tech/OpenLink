@@ -1,16 +1,23 @@
 {
-  "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "target": "ES2022",
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": false,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
     "rootDir": "src",
     "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
-    "jsx": "react-jsx",
-    "noEmit": false,
     "incremental": false,
-    "allowImportingTsExtensions": false,
-    "module": "esnext",
-    "moduleResolution": "bundler"
+    "allowImportingTsExtensions": false
   },
   "include": ["src"]
 }

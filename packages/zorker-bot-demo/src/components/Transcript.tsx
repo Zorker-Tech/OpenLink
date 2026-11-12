@@ -5,6 +5,7 @@ import type {
   ScriptedScreen,
   TranscriptEntry,
 } from '../types'
+import { ActivityCard } from './ActivityCard'
 import { ComputerCard } from './ComputerCard'
 import { MessageBubble } from './MessageBubble'
 import { PendingRow } from './PendingRow'
@@ -61,6 +62,14 @@ export function Transcript({
                   screen={screen}
                   status={cardStatus}
                 />
+              </div>
+            )
+          }
+
+          if (entry.kind === 'activity') {
+            return (
+              <div className="zbd-entry" key={entry.id}>
+                <ActivityCard entry={entry} />
               </div>
             )
           }

@@ -13,7 +13,7 @@ export function ZorkerBotWindow({ demo, rootSize, assetBase }) {
     const transcriptRef = useRef(null);
     useAutoScroll(transcriptRef, [demo.transcript, demo.pending]);
     const sidebarWidth = demo.sidePaneOpen ? 68 : 280;
-    const activeAgent = Object.assign(Object.assign({}, demo.activeAgent), { name: demo.agentName });
+    const activeAgent = { ...demo.activeAgent, name: demo.agentName };
     return (_jsx("div", { className: "zbd-root", "data-theme": "cursor-light", children: _jsxs("div", { className: "zbd-shell", children: [_jsx(TrafficLights, {}), _jsx("div", { className: "zbd-sidebar-slot", style: {
                         width: sidebarWidth,
                         transition: 'width .45s cubic-bezier(.22,1,.36,1)',

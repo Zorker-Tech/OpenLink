@@ -14,6 +14,7 @@ import {
 export type AppComposerProps = {
   displayName: string
   disabled: boolean
+  showRoutine?: boolean
   value: string
   onChange: (value: string) => void
   onSend: () => void
@@ -23,6 +24,7 @@ export type AppComposerProps = {
 export function AppComposer({
   displayName,
   disabled,
+  showRoutine = true,
   value,
   onChange,
   onSend,
@@ -101,13 +103,15 @@ export function AppComposer({
                   <small>Bring in an agent or file</small>
                 </span>
               </button>
-              <button onClick={createRoutine} role="menuitem" type="button">
-                <ClockIcon size={15} />
-                <span>
-                  <strong>Create a routine</strong>
-                  <small>Run this on a schedule</small>
-                </span>
-              </button>
+              {showRoutine ? (
+                <button onClick={createRoutine} role="menuitem" type="button">
+                  <ClockIcon size={15} />
+                  <span>
+                    <strong>Create a routine</strong>
+                    <small>Run this on a schedule</small>
+                  </span>
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>

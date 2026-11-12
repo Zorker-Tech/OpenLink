@@ -97,7 +97,7 @@ export function AppCommandPalette({
   const createLabel =
     query.trim().length > 0
       ? `Create “${query.trim()}”`
-      : 'Create new agent'
+      : 'Create new Bot'
 
   return (
     <div className="zbd-app-palette-layer">
@@ -108,7 +108,7 @@ export function AppCommandPalette({
         type="button"
       />
       <div
-        aria-label="Search or create agents"
+        aria-label="Search or create Bots"
         aria-modal="false"
         className="zbd-app-palette"
         role="dialog"
@@ -116,10 +116,10 @@ export function AppCommandPalette({
         <div className="zbd-app-palette-search">
           <span className="zbd-app-palette-to">To:</span>
           <input
-            aria-label="Search or create agents"
+            aria-label="Search or create Bots"
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Search or create agents"
+            placeholder="Search or create Bots"
             ref={inputRef}
             type="text"
             value={query}

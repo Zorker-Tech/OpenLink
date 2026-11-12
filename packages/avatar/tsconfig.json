@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "jsx": "react-jsx",
+    "noEmit": false,
+    "incremental": false,
+    "allowJs": false,
+    "allowImportingTsExtensions": false,
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["src/index.ts", "src/components/AgentAvatar.tsx", "src/styles.d.ts"]
+}
