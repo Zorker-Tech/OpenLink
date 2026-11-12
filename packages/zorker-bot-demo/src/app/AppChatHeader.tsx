@@ -1,5 +1,5 @@
 import { AgentAvatar } from '../components/AgentAvatar'
-import { BackArrowIcon, MonitorIcon } from '../components/icons'
+import { BackArrowIcon, GearIcon, MonitorIcon } from '../components/icons'
 import { sessionToAgent, type AppSession } from './data'
 
 export type AppChatHeaderProps = {
@@ -12,6 +12,7 @@ export type AppChatHeaderProps = {
   onBack: () => void
   onToggleComputer: () => void
   onSkipIntro: () => void
+  onOpenProfile?: () => void
 }
 
 export function AppChatHeader({
@@ -24,6 +25,7 @@ export function AppChatHeader({
   onBack,
   onToggleComputer,
   onSkipIntro,
+  onOpenProfile,
 }: AppChatHeaderProps) {
   const agent = sessionToAgent(session, displayName)
 
@@ -63,6 +65,17 @@ export function AppChatHeader({
             type="button"
           >
             Skip intro
+          </button>
+        ) : null}
+        {onOpenProfile ? (
+          <button
+            aria-label="Open profile"
+            className="zbd-icon-button"
+            onClick={onOpenProfile}
+            title="Profile"
+            type="button"
+          >
+            <GearIcon size={16} />
           </button>
         ) : null}
         <button

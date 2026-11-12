@@ -23,6 +23,7 @@ import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/compon
 import { BotComputerLightbox, BotComputerPane } from '@/components/bot/bot-computer'
 import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
 import { BotOnboarding } from '@/components/bot/bot-onboarding'
+import { BotProfileDialog } from '@/components/bot/bot-profile-dialog'
 import { BotRoutineDialog } from '@/components/bot/bot-routine-dialog'
 import { BotSidebar } from '@/components/bot/bot-sidebar'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
@@ -154,6 +155,7 @@ export function BotWorkspace({
   const [createInitialName, setCreateInitialName] = useState('')
   const [computerOpen, setComputerOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [routineEditor, setRoutineEditor] = useState<{ routine: BotRoutine | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -625,6 +627,39 @@ export function BotWorkspace({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [openPalette])
 
+  const handleProfileSaved = useCallback((updated: BotSummary) => {
+    setBots((previous) => previous.map((bot) => bot.id === updated.id ? { ...bot, ...updated } : bot))
+    setDetails((previous) => {
+      const detail = previous[updated.id]
+      if (!detail) return previous
+      return {
+        ...previous,
+        [updated.id]: {
+          ...detail,
+          ...updated,
+          transcript: detail.transcript,
+          pendingConfirmations: detail.pendingConfirmations,
+          routines: detail.routines,
+        },
+      }
+    })
+  }, [])
+
+  const handleProfileDeleted = useCallback((botId: string) => {
+    setBots((previous) => {
+      const next = previous.filter((bot) => bot.id !== botId)
+      setActiveId((current) => current === botId ? (next[0]?.id ?? '') : current)
+      return next
+    })
+    setDetails((previous) => {
+      const next = { ...previous }
+      delete next[botId]
+      return next
+    })
+    setProfileOpen(false)
+    window.history.replaceState(null, '', `/app/${encodeURIComponent(workspaceSlug)}/bots`)
+  }, [workspaceSlug])
+
   const handleCreated = useCallback((bot: BotSummary) => {
     const runtimeReady = bot.runtimeStatus === 'ready'
     if (runtimeReady) skipWarmOnceRef.current.add(bot.id)
@@ -729,6 +764,7 @@ export function BotWorkspace({
                     displayName={activeBot.name}
                     introRunning={false}
                     onBack={() => undefined}
+                    onOpenProfile={() => setProfileOpen(true)}
                     onSkipIntro={() => undefined}
                     onToggleComputer={toggleComputer}
                     session={activeSession!}
@@ -845,6 +881,18 @@ export function BotWorkspace({
                   }}
                   query={paletteQuery}
                   sessions={paletteSessions}
+                />
+              ) : null}
+
+              {profileOpen ? (
+                <BotProfileDialog
+                  bot={activeBot}
+                  bots={bots}
+                  models={models}
+                  theme={activeTheme}
+                  onClose={() => setProfileOpen(false)}
+                  onDeleted={handleProfileDeleted}
+                  onSaved={handleProfileSaved}
                 />
               ) : null}
 

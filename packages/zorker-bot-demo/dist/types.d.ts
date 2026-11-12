@@ -60,6 +60,14 @@ export type SystemEntryData = {
         name: string;
         triggerDescription: string;
     } | {
+        type: 'routine-changed';
+        action: string;
+        name: string;
+    } | {
+        type: 'channel-changed';
+        action: 'connected' | 'disconnected';
+        name: string;
+    } | {
         type: 'memory-updated';
     };
     timestampMs: number;
@@ -75,7 +83,20 @@ export type ActivityEntry = {
         status: 'running' | 'done' | 'failed';
     };
 };
-export type TranscriptEntry = AgentMessageEntry | UserMessageEntry | ComputerEntry | SystemEntryData | ActivityEntry;
+export type ConfirmationEntry = {
+    kind: 'confirmation';
+    id: string;
+    timestampMs: number;
+    confirmation: {
+        id: string;
+        title: string;
+        message?: string;
+        options?: string[];
+        inputKind?: 'confirm' | 'select' | 'input' | 'editor';
+        status: 'pending' | 'answered';
+    };
+};
+export type TranscriptEntry = AgentMessageEntry | UserMessageEntry | ComputerEntry | SystemEntryData | ActivityEntry | ConfirmationEntry;
 export type ScreenView = 'login' | 'portal';
 export type ScriptedScreen = {
     view: ScreenView;

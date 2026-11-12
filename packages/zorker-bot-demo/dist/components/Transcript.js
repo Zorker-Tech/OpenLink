@@ -1,6 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { ActivityCard } from './ActivityCard';
 import { ComputerCard } from './ComputerCard';
+import { ConfirmationCard } from './ConfirmationCard';
 import { MessageBubble } from './MessageBubble';
 import { PendingRow } from './PendingRow';
 import { SystemEntry } from './SystemEntry';
@@ -15,6 +16,9 @@ export function Transcript({ entries, pending, screen, cardStatus, assetBase, tr
                     }
                     if (entry.kind === 'activity') {
                         return (_jsx("div", { className: "zbd-entry", children: _jsx(ActivityCard, { entry: entry }) }, entry.id));
+                    }
+                    if (entry.kind === 'confirmation') {
+                        return (_jsx("div", { className: "zbd-entry", children: _jsx(ConfirmationCard, { entry: entry }) }, entry.id));
                     }
                     return (_jsx("div", { className: "zbd-entry", children: _jsx(MessageBubble, { assetBase: assetBase, entry: entry, showTimestamp: entry.id === firstMessageId }) }, entry.id));
                 }), pending ? (_jsx("div", { className: "zbd-entry", children: _jsx(PendingRow, { assetBase: assetBase, pending: pending }) })) : null] }) }));
