@@ -3,6 +3,17 @@ import type { BotConfirmationRequest } from '@/lib/bot-confirmations'
 
 export type BotRuntimeStatus = 'pending' | 'provisioning' | 'ready' | 'failed'
 
+export interface BotRoutine {
+  id: string
+  name: string
+  prompt: string
+  triggerDescription: string
+  schedule: string
+  isEnabled: boolean
+  nextRunAt: number | null
+  lastRunAt: number | null
+}
+
 export interface BotSummary {
   id: string
   userId: string
@@ -32,4 +43,5 @@ export interface BotDetail extends BotSummary {
   transcript: BotTranscriptEntry[]
   runtimeReady: boolean
   pendingConfirmations: BotConfirmationRequest[]
+  routines: BotRoutine[]
 }

@@ -56,6 +56,45 @@ export interface WorkHostAvatar {
   etag: string | null
 }
 
+export interface WorkHostAutomationRun {
+  id: string
+  trigger: 'schedule' | 'manual' | 'event'
+  startedAt: number
+  finishedAt: number | null
+  status: 'running' | 'ok' | 'error'
+  detail?: string
+  event?: string
+  coalescedRunIds?: string[]
+}
+
+export interface WorkHostAutomation {
+  id: string
+  name: string
+  prompt: string
+  trigger?: {
+    type: 'cron'
+    schedule: string
+  }
+  schedule: string
+  triggerDescription: string
+  isEnabled: boolean
+  createdAt: number
+  lastRunAt: number | null
+  nextRunAt: number | null
+  runs: WorkHostAutomationRun[]
+  filePath: string
+}
+
+export interface WorkHostAutomationSpec {
+  name: string
+  prompt: string
+  trigger: {
+    type: 'cron'
+    schedule: string
+  }
+  isEnabled?: boolean
+}
+
 export function workHostConfig(): WorkHostConfig | null {
   const baseUrl = process.env.OPENLINK_WORK_HOST_URL?.replace(/\/+$/, '')
   const apiToken = process.env.OPENLINK_WORK_HOST_API_TOKEN
@@ -165,6 +204,61 @@ export async function getBotAgentTranscript(agentId: string): Promise<Record<str
     }
   }
   throw lastError
+}
+
+export async function getBotAgentAutomations(agentId: string): Promise<WorkHostAutomation[]> {
+  const result = await request<unknown>('getAgentAutomations', { id: agentId }, { timeoutMs: 20_000 })
+  return Array.isArray(result)
+    ? result.filter((entry): entry is WorkHostAutomation => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    : []
+}
+
+export async function createBotAgentAutomation(
+  agentId: string,
+  spec: WorkHostAutomationSpec,
+): Promise<WorkHostAutomation[]> {
+  return await request<WorkHostAutomation[]>('createAgentAutomation', { id: agentId, spec }, { timeoutMs: 30_000 })
+}
+
+export async function updateBotAgentAutomation(
+  agentId: string,
+  automationId: string,
+  spec: WorkHostAutomationSpec,
+): Promise<WorkHostAutomation[]> {
+  return await request<WorkHostAutomation[]>('updateAgentAutomation', {
+    id: agentId,
+    automationId,
+    spec,
+  }, { timeoutMs: 30_000 })
+}
+
+export async function setBotAgentAutomationEnabled(
+  agentId: string,
+  automationId: string,
+  isEnabled: boolean,
+): Promise<WorkHostAutomation[]> {
+  return await request<WorkHostAutomation[]>('setAgentAutomationEnabled', {
+    id: agentId,
+    automationId,
+    isEnabled,
+  }, { timeoutMs: 30_000 })
+}
+
+export async function deleteBotAgentAutomation(
+  agentId: string,
+  automationId: string,
+): Promise<WorkHostAutomation[]> {
+  return await request<WorkHostAutomation[]>('deleteAgentAutomation', {
+    id: agentId,
+    automationId,
+  }, { timeoutMs: 30_000 })
+}
+
+export async function runBotAgentAutomationNow(
+  agentId: string,
+  automationId: string,
+): Promise<void> {
+  await request('runAgentAutomationNow', { id: agentId, automationId }, { timeoutMs: 120_000 })
 }
 
 export async function appendBotAgentTranscriptEntries(

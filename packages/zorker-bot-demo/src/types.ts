@@ -62,6 +62,8 @@ export type SystemEntryData = {
     | { type: 'renamed'; name: string }
     | { type: 'received-context'; sources: { name: string }[] }
     | { type: 'created-routine'; name: string; triggerDescription: string }
+    | { type: 'routine-changed'; action: string; name: string }
+    | { type: 'channel-changed'; action: 'connected' | 'disconnected'; name: string }
     | { type: 'memory-updated' }
   timestampMs: number
 }

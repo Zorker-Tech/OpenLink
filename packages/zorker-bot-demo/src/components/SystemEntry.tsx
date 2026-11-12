@@ -38,5 +38,25 @@ export function SystemEntry({ entry, assetBase }: SystemEntryProps) {
     )
   }
 
+  if (entry.event.type === 'routine-changed') {
+    return (
+      <div className="zbd-system-line">
+        <span>{entry.event.action}</span>
+        <span className="zbd-system-routine">
+          <ClockIcon size={15} />
+          <span>{entry.event.name}</span>
+        </span>
+      </div>
+    )
+  }
+
+  if (entry.event.type === 'channel-changed') {
+    return (
+      <div className="zbd-system-line">
+        {entry.event.action === 'connected' ? 'Connected to' : 'Disconnected from'} {entry.event.name}
+      </div>
+    )
+  }
+
   return <div className="zbd-system-line">Memory updated</div>
 }
