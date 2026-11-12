@@ -54,6 +54,13 @@ function belongsToAgent(event: unknown, agentId: string): boolean {
     const agent = payloadRecord.agent;
     return agent !== null && typeof agent === "object" && !Array.isArray(agent) && (agent as Record<string, unknown>).id === agentId;
   }
+  if (channel === "tray") {
+    // A tray frame carries its owner inside the tray record, not at the
+    // payload root.
+    const tray = payloadRecord.tray;
+    return tray !== null && typeof tray === "object" && !Array.isArray(tray)
+      && (tray as Record<string, unknown>).agentId === agentId;
+  }
   return false;
 }
 
