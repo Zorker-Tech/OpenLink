@@ -3,7 +3,7 @@ import { BotRuntimeError, warmBotRuntime } from '@/lib/bot-runtime.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
-export const maxDuration = 900
+export const maxDuration = 1_800
 
 function errorResponse(code: string, status: number, retryable = false) {
   return Response.json({ error: { code, message: code, retryable } }, {
