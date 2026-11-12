@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 type BotCreateDialogProps = {
   workspaceSlug: string
   models: readonly ConfiguredModelOption[]
+  bots?: readonly BotSummary[]
   initialName: string
   theme: 'light' | 'dark'
   workHostReady?: boolean
@@ -42,6 +43,7 @@ function friendlyError(code: string): string {
     BOT_AVATAR_INVALID: 'The selected avatar could not be rendered.',
     BOT_AVATAR_TOO_LARGE: 'The avatar image is too large.',
     BOT_MODEL_REQUIRED: 'Choose an enabled model before creating the Bot.',
+    BOT_GROUP_MEMBER_REQUIRED: 'Choose at least one member for the group.',
     BOT_WORKSPACE_NOT_FOUND: 'This workspace is no longer available.',
     BOT_CREATE_FAILED: 'Work Host could not create the Bot.',
     BOT_RUNTIME_NOT_READY: 'The Bot computer could not be initialized.',
@@ -61,6 +63,7 @@ function friendlyError(code: string): string {
 export function BotCreateDialog({
   workspaceSlug,
   models,
+  bots = [],
   initialName,
   theme,
   workHostReady = true,
@@ -74,6 +77,8 @@ export function BotCreateDialog({
   const [shape, setShape] = useState(hashShape(seed))
   const [color, setColor] = useState(hashColor(seed))
   const [modelId, setModelId] = useState(defaultModel?.id ?? '')
+  const [isGroup, setIsGroup] = useState(false)
+  const [memberIds, setMemberIds] = useState<string[]>([])
   const [phase, setPhase] = useState<Phase>('editing')
   const [createdBot, setCreatedBot] = useState<BotSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +92,12 @@ export function BotCreateDialog({
   const selectedModel = models.find((model) => model.id === modelId) ?? null
   const ready = phase === 'ready'
   const locked = createdBot !== null
+  const memberCandidates = bots.filter((bot) => bot.kind === 'bot')
+  const toggleMember = (memberId: string) => {
+    setMemberIds((current) => current.includes(memberId)
+      ? current.filter((id) => id !== memberId)
+      : [...current, memberId].slice(0, 6))
+  }
 
   useEffect(() => {
     onCreatedRef.current = onCreated
@@ -183,11 +194,15 @@ export function BotCreateDialog({
       return
     }
     if (!createdBot && !trimmed) {
-      setError('Give your Bot a name.')
+      setError(isGroup ? 'Give your group a name.' : 'Give your Bot a name.')
       return
     }
-    if (!createdBot && !selectedModel) {
+    if (!createdBot && !isGroup && !selectedModel) {
       setError('Choose a model first.')
+      return
+    }
+    if (!createdBot && isGroup && memberIds.length === 0) {
+      setError('Choose at least one member for the group.')
       return
     }
     setError(null)
@@ -209,11 +224,15 @@ export function BotCreateDialog({
           body: JSON.stringify({
             workspaceSlug,
             name: trimmed,
-            description: 'A persistent Bot that works in its own isolated computer.',
+            description: isGroup
+              ? 'A group of Bots that answer together.'
+              : 'A persistent Bot that works in its own isolated computer.',
             avatarShape: shape,
             avatarColor: color,
             avatarPngBase64: png ? png.replace(/^data:image\/png;base64,/, '') : undefined,
-            model: { providerId: selectedModel!.providerId, modelId: selectedModel!.modelId },
+            ...(isGroup
+              ? { kind: 'group', memberIds }
+              : { model: { providerId: selectedModel!.providerId, modelId: selectedModel!.modelId } }),
           }),
         })
         const payload = await response.json().catch(() => null) as { bot?: BotSummary; error?: { message?: string } } | null
@@ -223,8 +242,11 @@ export function BotCreateDialog({
         bot = payload.bot
         rememberCreated(bot)
       }
-      bot = await warm(bot)
-      rememberCreated(bot)
+      // A group has no computer to warm: its members own the sandboxes.
+      if (!isGroup) {
+        bot = await warm(bot)
+        rememberCreated(bot)
+      }
       setPhase('ready')
       previewRef.current?.setState('finished')
       scheduleCreated(bot)
@@ -259,7 +281,7 @@ export function BotCreateDialog({
           >
             <ArrowLeft size={15} />
           </button>
-          <span className="zbd-app-palette-to">New Bot</span>
+          <span className="zbd-app-palette-to">{isGroup ? 'New group' : 'New Bot'}</span>
           <span className="zbd-app-create-step">{ready ? 'Ready' : phase === 'creating' ? 'Initializing' : 'Details'}</span>
         </div>
 
@@ -293,7 +315,11 @@ export function BotCreateDialog({
                 />
               )}
               <span className="zbd-app-create-hint">
-                {ready ? 'Bot initialized' : phase === 'creating' ? 'Initializing computer…' : 'Drag to rotate'}
+                {ready
+                  ? (isGroup ? 'Group ready' : 'Bot initialized')
+                  : phase === 'creating'
+                    ? (isGroup ? 'Creating group…' : 'Initializing computer…')
+                    : 'Drag to rotate'}
               </span>
               <div aria-hidden="true" className="zbd-app-create-hidden-complete">
                 <AgentAvatar
@@ -322,22 +348,67 @@ export function BotCreateDialog({
               </label>
 
               <div className="zbd-app-create-field">
-                <span>Model</span>
-                {models.length ? (
-                  <WorkModelSelector
-                    className="zbd-app-create-model"
+                <span>Type</span>
+                <div className="flex gap-2">
+                  <button
+                    aria-pressed={!isGroup}
+                    className="zbd-app-create-cancel"
                     disabled={phase !== 'editing' || locked}
-                    initialView="models"
-                    models={modelOptions(models)}
-                    onValueChange={(next) => setModelId(next.modelId)}
-                    value={{ modelId }}
-                  />
-                ) : (
-                  <a className="zbd-app-create-provider-link" href="/settings/ai-providers">
-                    Configure an AI provider <ArrowRight size={14} />
-                  </a>
-                )}
+                    onClick={() => setIsGroup(false)}
+                    type="button"
+                  >
+                    Bot
+                  </button>
+                  <button
+                    aria-pressed={isGroup}
+                    className="zbd-app-create-cancel"
+                    disabled={phase !== 'editing' || locked}
+                    onClick={() => setIsGroup(true)}
+                    type="button"
+                  >
+                    Group
+                  </button>
+                </div>
               </div>
+
+              {isGroup ? (
+                <div className="zbd-app-create-field">
+                  <span>Members</span>
+                  <div className="flex max-h-32 flex-col gap-1.5 overflow-y-auto">
+                    {memberCandidates.length ? memberCandidates.map((candidate) => (
+                      <label className="flex items-center gap-2 text-[12px] text-[var(--app-text)]" key={candidate.id}>
+                        <input
+                          checked={memberIds.includes(candidate.id)}
+                          disabled={phase !== 'editing' || locked}
+                          onChange={() => toggleMember(candidate.id)}
+                          type="checkbox"
+                        />
+                        <span className="truncate">{candidate.name}</span>
+                      </label>
+                    )) : (
+                      <span className="text-[12px] text-[var(--app-muted)]">Create a Bot before creating a group.</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="zbd-app-create-field">
+                  <span>Model</span>
+                  {models.length ? (
+                    <WorkModelSelector
+                      className="zbd-app-create-model"
+                      disabled={phase !== 'editing' || locked}
+                      initialView="models"
+                      models={modelOptions(models)}
+                      onValueChange={(next) => setModelId(next.modelId)}
+                      value={{ modelId }}
+                    />
+                  ) : (
+                    <a className="zbd-app-create-provider-link" href="/settings/ai-providers">
+                      Configure an AI provider <ArrowRight size={14} />
+                    </a>
+                  )}
+                </div>
+              )}
 
               <div className="zbd-app-create-field">
                 <span>Color</span>
@@ -415,12 +486,18 @@ export function BotCreateDialog({
           ) : null}
           <button
             className="zbd-app-create-submit"
-            disabled={phase !== 'editing' || !models.length || !workHostReady}
+            disabled={phase !== 'editing' || (!isGroup && !models.length) || (isGroup && memberIds.length === 0) || !workHostReady}
             onClick={() => void create()}
             type="button"
           >
             {phase === 'creating' ? <LoaderCircle className="size-4 animate-spin" /> : null}
-            {phase === 'creating' ? 'Initializing' : ready ? 'Opening Bot' : locked ? 'Retry initialization' : 'Create Bot'}
+            {phase === 'creating'
+              ? (isGroup ? 'Creating' : 'Initializing')
+              : ready
+                ? 'Opening'
+                : locked
+                  ? 'Retry initialization'
+                  : (isGroup ? 'Create group' : 'Create Bot')}
             {phase === 'editing' ? <ArrowRight className="size-4" /> : null}
           </button>
         </div>

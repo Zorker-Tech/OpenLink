@@ -851,6 +851,7 @@ export function BotWorkspace({
 
               {paletteOpen && paletteView === 'create' ? (
                 <BotCreateDialog
+                  bots={bots}
                   initialName={createInitialName}
                   models={models}
                   workHostReady={workHostReady}

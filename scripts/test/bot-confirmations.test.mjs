@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { pendingBotConfirmations } from '../../lib/bot-confirmations.ts'
+import { pendingBotConfirmations, pendingBotConfirmationsFromWorkHostEntries } from '../../lib/bot-confirmations.ts'
 import { BotEventAccumulator } from '../../lib/bot-transcript.ts'
 
 function confirmation(id, overrides = {}) {
@@ -50,6 +50,30 @@ test('unresolved Bot approvals survive replay while resolved requests do not', (
 test('malformed confirmation ids are not rendered or resolved', () => {
   const pending = pendingBotConfirmations([confirmation('../escape')])
   assert.deepEqual(pending, [])
+})
+
+test('Work-host question widgets stay pending until a resolution event', () => {
+  const question = {
+    id: 't1s0',
+    kind: 'send-message',
+    timestampMs: 1,
+    message: {
+      type: 'widget',
+      widget: { kind: 'bot-question', id: 'dialog-1', method: 'select', title: 'Pick one', prompt: 'Which target?', options: ['staging', 'prod'] },
+    },
+  }
+  assert.deepEqual(pendingBotConfirmationsFromWorkHostEntries([question]), [{
+    id: 'dialog-1',
+    title: 'Pick one',
+    message: 'Which target?',
+    options: ['staging', 'prod'],
+    inputKind: 'select',
+    confirmationKind: 'question',
+  }])
+  assert.deepEqual(pendingBotConfirmationsFromWorkHostEntries([
+    question,
+    { id: 'resolved-1', kind: 'event', event: { type: 'confirmation-resolved', extensionUiId: 'dialog-1' }, timestampMs: 2 },
+  ]), [])
 })
 
 test('the Bot stream surfaces confirmation boundaries without waiting for a reload', () => {
