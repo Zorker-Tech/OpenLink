@@ -293,6 +293,13 @@ async function recoverBotGroupAgent(
       memberAgentIds: members.map((member) => member.workAgentId),
       externalId: latest.id,
     })
+    await syncGroupAgentProfile({
+      id: created.agent.id,
+      name: latest.name,
+      description: latest.description,
+      avatarShape: latest.avatarShape,
+      avatarColor: latest.avatarColor,
+    })
     const { data, error } = await supabase
       .schema('openlink')
       .from('bots')
@@ -598,11 +605,35 @@ async function readGroupMemberBots(
   return members
 }
 
+/** Keep the Work-host group profile's avatar identity aligned with the row. */
+async function syncGroupAgentProfile(input: {
+  id: string
+  name: string
+  description: string
+  avatarShape: string
+  avatarColor: string
+}): Promise<void> {
+  try {
+    await updateBotAgent(input)
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) {
+      console.error(`[openlink-bots] group profile avatar sync failed for ${input.id}`, error)
+    }
+  }
+}
+
 async function updateGroupWorkHostIdentity(
   supabase: ServerSupabaseClient,
   userId: string,
   group: BotSummary,
-  input: { name: string; description: string; memberIds: string[]; avatarPngBase64: string | null },
+  input: {
+    name: string
+    description: string
+    memberIds: string[]
+    avatarShape: string
+    avatarColor: string
+    avatarPngBase64: string | null
+  },
 ): Promise<string> {
   const members = await readGroupMemberBots(supabase, userId, group.workspaceId, input.memberIds)
   const memberAgentIds = members.map((member) => member.workAgentId)
@@ -612,6 +643,8 @@ async function updateGroupWorkHostIdentity(
       id: agentId,
       name: input.name,
       description: input.description,
+      avatarShape: input.avatarShape,
+      avatarColor: input.avatarColor,
     })
     await setBotGroupMembers(agentId, memberAgentIds)
   } catch (error) {
@@ -623,6 +656,13 @@ async function updateGroupWorkHostIdentity(
       externalId: group.id,
     })
     agentId = created.agent.id
+    await syncGroupAgentProfile({
+      id: agentId,
+      name: input.name,
+      description: input.description,
+      avatarShape: input.avatarShape,
+      avatarColor: input.avatarColor,
+    })
   }
   if (input.avatarPngBase64) await setBotAgentAvatar(agentId, input.avatarPngBase64)
   return agentId
@@ -1054,6 +1094,13 @@ export async function createBotGroup(
       externalId: botId,
     })
     createdAgentId = created.agent.id
+    await syncGroupAgentProfile({
+      id: created.agent.id,
+      name,
+      description,
+      avatarShape,
+      avatarColor,
+    })
     if (avatarPngBase64) await setBotAgentAvatar(created.agent.id, avatarPngBase64)
     const { data, error } = await supabase
       .schema('openlink')
@@ -1125,6 +1172,8 @@ export async function updateBot(
       name,
       description,
       memberIds,
+      avatarShape,
+      avatarColor,
       avatarPngBase64,
     })
     const { data, error } = await supabase
