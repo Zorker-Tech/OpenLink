@@ -316,6 +316,109 @@ export async function deleteBotAgent(agentId: string): Promise<void> {
   await request('deleteAgent', { id: agentId }, { timeoutMs: 30_000 })
 }
 
+export interface WorkHostRuntimeConfiguration {
+  providerId: string
+  modelId: string
+  apiKey: string
+  baseUrl: string
+  revision: string
+}
+
+export interface WorkHostBotBox {
+  boxKey: string
+  sandboxId: string | null
+  desktopUrl: string
+  vncUrl: string
+}
+
+export interface WorkHostBotBoxStatus {
+  state: 'absent' | 'running'
+  boxKey?: string
+  sandboxId?: string | null
+  desktopUrl?: string
+  vncUrl?: string
+}
+
+/**
+ * Ensure the Bot's one OpenSandbox inside the Project VM. The Work-host owns
+ * the binding and keeps the worker credentials; only the desktop URL comes
+ * back to the BFF.
+ */
+export async function ensureBotBox(input: {
+  agentId: string
+  botId: string
+  projectId: string
+  userId: string
+  workspaceId: string
+  runtimeConfiguration: WorkHostRuntimeConfiguration
+}): Promise<WorkHostBotBox> {
+  const result = await request<WorkHostBotBox>('ensureBotBox', input, { timeoutMs: 300_000 })
+  if (typeof result?.desktopUrl !== 'string' || typeof result?.boxKey !== 'string') {
+    throw new WorkHostError('Work Host returned an incomplete Bot box', 502, 'ensureBotBox')
+  }
+  return result
+}
+
+export async function getBotBoxStatus(agentId: string): Promise<WorkHostBotBoxStatus> {
+  const result = await request<WorkHostBotBoxStatus>('getBotBoxStatus', { agentId }, { timeoutMs: 20_000 })
+  return result?.state === 'running' ? result : { state: 'absent' }
+}
+
+export async function releaseBotBox(agentId: string): Promise<void> {
+  await request('releaseBotBox', { agentId }, { timeoutMs: 30_000 })
+}
+
+export async function respondBotExtensionUi(input: {
+  agentId: string
+  id: string
+  confirmed?: boolean
+  value?: string
+  cancelled?: true
+}): Promise<void> {
+  await request('respondBotExtensionUi', input, { timeoutMs: 15_000 })
+}
+
+/**
+ * Accept a Bot turn and stream its Work-host frames. The response is NDJSON;
+ * the caller owns the reader. A client disconnect stops the projection, not
+ * the durable turn.
+ */
+export async function sendBotPromptStream(input: {
+  agentId: string
+  prompt: string
+  clientNonce?: string
+}): Promise<Response> {
+  const config = requiredConfig()
+  let response: Response
+  try {
+    response = await fetch(`${config.baseUrl}/api/bot/sendPrompt`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.apiToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/x-ndjson',
+      },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    })
+  } catch (error) {
+    throw new WorkHostError(
+      error instanceof Error ? error.message : 'Work Host Bot prompt failed',
+      503,
+      'sendBotPrompt',
+    )
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as unknown
+    const detail = payload && typeof payload === 'object' && 'error' in payload
+      ? String((payload as { error?: unknown }).error ?? '')
+      : ''
+    await response.body?.cancel().catch(() => undefined)
+    throw new WorkHostError(detail || `Work Host rejected sendBotPrompt`, response.status, 'sendBotPrompt')
+  }
+  return response
+}
+
 export async function getBotAgentAvatar(agentId: string, version?: string | null): Promise<WorkHostAvatar | null> {
   const config = requiredConfig()
   const url = new URL(`${config.baseUrl}/avatars/${encodeURIComponent(agentId)}`)

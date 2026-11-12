@@ -65,6 +65,12 @@ function isTerminal(event: unknown): boolean {
     return payload !== null && typeof payload === "object" && !Array.isArray(payload)
       && (payload as Record<string, unknown>).phase === "ended";
   }
+  if (record.channel === "transcript") {
+    const payload = record.payload;
+    return payload !== null && typeof payload === "object" && !Array.isArray(payload)
+      && (payload as Record<string, unknown>).type === "group-turn"
+      && (payload as Record<string, unknown>).phase === "ended";
+  }
   if (record.channel === "tray") {
     const payload = record.payload;
     if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return false;

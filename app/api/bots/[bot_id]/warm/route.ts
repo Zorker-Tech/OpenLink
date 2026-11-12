@@ -13,9 +13,10 @@ function errorResponse(code: string, status: number, retryable: boolean) {
 }
 
 /**
- * Idempotently materialise the Bot's Pi worker, Project VM/OpenSandbox and
- * session desktop. Onboarding calls this after the durable Bot row is created;
- * the workspace also calls it in the background when a Bot is selected.
+ * Idempotently materialise the Bot's one OpenSandbox inside the Project VM and
+ * its desktop. Work-host owns the binding and the Pi worker; this route never
+ * leases a Code session. Onboarding calls it after the durable Bot row is
+ * created; the workspace also calls it when a Bot is selected.
  */
 export async function POST(
   _request: Request,
@@ -36,7 +37,9 @@ export async function POST(
     return Response.json({
       ready: result.ready,
       agent: result.agent,
+      runtimeKey: bot.runtimeKey,
       runtimeSessionId: bot.runtimeSessionId,
+      desktopUrl: result.desktopUrl,
       runtimeStatus: 'ready' as const,
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

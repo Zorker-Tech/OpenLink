@@ -1,13 +1,17 @@
 import 'server-only'
 
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
-import { loadPiSessionSnapshot } from '@/lib/chat-session-persistence.server'
 import type { BotSummary } from '@/lib/bot-types'
+import {
+  ensureBotBox,
+  getBotBoxStatus,
+  releaseBotBox,
+  respondBotExtensionUi,
+  sendBotPromptStream,
+} from '@/lib/work-host-client.server'
 import { createClient } from '@/utils/supabase/server'
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
-
-const AGENT_HOST_TIMEOUT_MS = 300_000
 
 export class BotRuntimeError extends Error {
   constructor(
@@ -21,12 +25,6 @@ export class BotRuntimeError extends Error {
   }
 }
 
-function agentHostConfig(): { baseUrl: string; apiToken: string } | null {
-  const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/+$/, '')
-  const apiToken = process.env.OPENLINK_AGENT_API_TOKEN
-  return baseUrl && apiToken ? { baseUrl, apiToken } : null
-}
-
 function runtimeConfigurationError(error: unknown): BotRuntimeError {
   const code = error instanceof Error ? error.message : ''
   if (code === 'PROVIDER_CREDENTIAL_REKEY_REQUIRED') {
@@ -38,32 +36,38 @@ function runtimeConfigurationError(error: unknown): BotRuntimeError {
   return new BotRuntimeError('MODEL_CONFIGURATION_INVALID', 'MODEL_CONFIGURATION_INVALID', 400, false)
 }
 
-function safeUpstreamCode(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') return 'BOT_RUNTIME_UNAVAILABLE'
-  const error = (payload as { error?: unknown }).error
-  if (typeof error === 'string' && /^[A-Z0-9_]{3,80}$/.test(error)) return error
-  if (error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string') {
-    const code = (error as { code: string }).code
-    if (/^[A-Z0-9_]{3,80}$/.test(code)) return code
-  }
-  return 'BOT_RUNTIME_UNAVAILABLE'
+/**
+ * Work-host owns the Bot turn and its sandbox. This adapter keeps the
+ * application's error vocabulary stable while the Work-host error keeps its
+ * retryability: a 409 is a lifecycle conflict, a 5xx is retryable, and a 4xx
+ * is a request the caller must correct.
+ */
+function workHostRuntimeError(error: unknown): BotRuntimeError {
+  if (error instanceof BotRuntimeError) return error
+  const status = error !== null && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
+    ? (error as { status: number }).status
+    : 503
+  const code = status === 409
+    ? 'BOT_RUNTIME_BUSY'
+    : status === 400
+      ? 'BOT_RUNTIME_INVALID'
+      : status === 503
+        ? 'BOT_SUBSTRATE_UNAVAILABLE'
+        : 'BOT_RUNTIME_UNAVAILABLE'
+  return new BotRuntimeError(code, code, status >= 400 && status < 600 ? status : 503, status >= 500 || status === 409)
 }
 
 /**
- * Materialise the Bot's Pi worker and its Project VM/OpenSandbox session.
- *
- * The Agent Host lease is deliberately the same contract Code mode uses. It
- * creates the session Worker, prepares the per-session OpenSandbox and warms
- * the session desktop. The Bot page never talks to the Agent Host directly;
- * this server-side adapter keeps the service token and provider credentials in
- * the BFF trust boundary.
+ * Materialise the Bot's one OpenSandbox inside the Project VM and return its
+ * desktop. Work-host owns the binding; the BFF never sees the worker
+ * credentials and never addresses a Code chat session.
  */
 export async function warmBotRuntime(
   supabase: ServerSupabaseClient,
   userId: string,
   bot: BotSummary,
-): Promise<{ ready: true; agent: 'pi' }> {
-  if (!bot.runtimeSessionId) {
+): Promise<{ ready: true; agent: 'pi'; desktopUrl: string }> {
+  if (!bot.runtimeKey) {
     throw new BotRuntimeError('BOT_RUNTIME_NOT_READY', 'BOT_RUNTIME_NOT_READY', 409, false)
   }
   if (!bot.projectId) {
@@ -71,10 +75,6 @@ export async function warmBotRuntime(
   }
   if (!bot.providerId || !bot.modelId) {
     throw new BotRuntimeError('BOT_MODEL_REQUIRED', 'BOT_MODEL_REQUIRED', 400, false)
-  }
-  const config = agentHostConfig()
-  if (!config) {
-    throw new BotRuntimeError('AGENT_HOST_NOT_CONFIGURED', 'AGENT_HOST_NOT_CONFIGURED', 503, true)
   }
 
   let runtimeConfiguration
@@ -90,86 +90,80 @@ export async function warmBotRuntime(
     throw new BotRuntimeError('MODEL_CONFIGURATION_REQUIRED', 'MODEL_CONFIGURATION_REQUIRED', 400, false)
   }
 
-  let nativeSession
   try {
-    nativeSession = await loadPiSessionSnapshot(supabase, userId, bot.runtimeSessionId)
-  } catch {
-    throw new BotRuntimeError('PI_SESSION_READ_FAILED', 'PI_SESSION_READ_FAILED', 500, true)
-  }
-
-  let response: Response
-  try {
-    response = await fetch(`${config.baseUrl}/v1/agent/sessions/${encodeURIComponent(bot.runtimeSessionId)}/lease`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId,
-        workspaceId: bot.workspaceId,
-        projectId: bot.projectId,
-        sessionId: bot.runtimeSessionId,
-        runtimeConfiguration,
-        agent: 'pi',
-        accessMode: 'restricted',
-        ...(nativeSession ? { nativeSession } : {}),
-      }),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(AGENT_HOST_TIMEOUT_MS),
+    const box = await ensureBotBox({
+      agentId: bot.workAgentId,
+      botId: bot.id,
+      projectId: bot.projectId,
+      userId,
+      workspaceId: bot.workspaceId,
+      runtimeConfiguration,
     })
+    return { ready: true, agent: 'pi', desktopUrl: box.desktopUrl }
   } catch (error) {
-    throw new BotRuntimeError(
-      error instanceof Error ? error.message : 'BOT_RUNTIME_UNAVAILABLE',
-      'BOT_RUNTIME_UNAVAILABLE',
-      503,
-      true,
-    )
+    throw workHostRuntimeError(error)
   }
-
-  const payload = await response.json().catch(() => null) as { ok?: unknown; ready?: unknown; error?: unknown } | null
-  if (!response.ok) {
-    const code = safeUpstreamCode(payload)
-    throw new BotRuntimeError(code, code, response.status, response.status === 409 || response.status >= 500)
-  }
-  if (payload?.ready !== true && payload?.ok !== true) {
-    throw new BotRuntimeError('BOT_RUNTIME_UNAVAILABLE', 'BOT_RUNTIME_UNAVAILABLE', 502, true)
-  }
-  return { ready: true, agent: 'pi' }
 }
 
 /**
- * Release the Agent Host session that backs a Bot before its durable rows are
- * removed. Deletion is an application operation: an already-clean session or a
- * busy turn must not make the Bot undeletable.
+ * Release the Bot's sandbox and its Work-host binding. Deletion is an
+ * application operation: an already-released sandbox or a temporarily
+ * unreachable substrate must not make the Bot undeletable.
  */
 export async function releaseBotRuntime(bot: BotSummary): Promise<void> {
-  if (!bot.runtimeSessionId) return
-  const config = agentHostConfig()
-  if (!config) return
-
-  let response: Response
   try {
-    response = await fetch(`${config.baseUrl}/v1/agent/sessions/${encodeURIComponent(bot.runtimeSessionId)}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${config.apiToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId: bot.userId,
-        workspaceId: bot.workspaceId,
-        sessionId: bot.runtimeSessionId,
-      }),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(30_000),
-    })
+    await releaseBotBox(bot.workAgentId)
   } catch (error) {
-    console.error('[openlink-bots] runtime session release deferred', error)
-    return
+    console.error('[openlink-bots] Bot sandbox release deferred', error)
   }
-  await response.body?.cancel().catch(() => undefined)
-  if (response.ok || response.status === 404 || response.status === 409) return
-  console.error(`[openlink-bots] runtime session release failed (${response.status})`)
 }
 
+export async function getBotComputer(bot: BotSummary): Promise<{ desktopUrl: string } | null> {
+  try {
+    const status = await getBotBoxStatus(bot.workAgentId)
+    return status.state === 'running' && status.desktopUrl ? { desktopUrl: status.desktopUrl } : null
+  } catch (error) {
+    throw workHostRuntimeError(error)
+  }
+}
+
+export async function respondBotConfirmation(
+  bot: BotSummary,
+  input: { id: string; approved?: boolean; value?: string },
+): Promise<void> {
+  const response = input.approved === true
+    ? { confirmed: true as const }
+    : input.approved === false
+      ? { cancelled: true as const }
+      : { value: input.value ?? '' }
+  try {
+    await respondBotExtensionUi({
+      agentId: bot.workAgentId,
+      id: input.id,
+      ...response,
+    })
+  } catch (error) {
+    throw workHostRuntimeError(error)
+  }
+}
+
+/**
+ * Accept the turn in Work-host and return its frame stream. The durable
+ * acceptance happens before this returns; a later disconnect only stops the
+ * projection.
+ */
+export async function streamBotPrompt(
+  bot: BotSummary,
+  message: string,
+  clientNonce?: string,
+): Promise<Response> {
+  try {
+    return await sendBotPromptStream({
+      agentId: bot.workAgentId,
+      prompt: message,
+      ...(clientNonce === undefined ? {} : { clientNonce }),
+    })
+  } catch (error) {
+    throw workHostRuntimeError(error)
+  }
+}

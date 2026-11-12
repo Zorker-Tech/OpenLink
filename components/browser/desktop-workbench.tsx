@@ -152,7 +152,7 @@ function rfbFocus(target: HTMLElement | null) {
   target?.querySelector('canvas')?.focus({ preventScroll: true })
 }
 
-export function DesktopWorkbench({ chatSessionId }: { chatSessionId: string }) {
+export function DesktopWorkbench({ chatSessionId, botId }: { chatSessionId?: string; botId?: string }) {
   const t = useT()
   const [desktopUrl, setDesktopUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<DesktopStatus>('connecting')
@@ -173,13 +173,17 @@ export function DesktopWorkbench({ chatSessionId }: { chatSessionId: string }) {
     while (Date.now() < deadline) {
       if (signal?.aborted) return
       try {
-        const response = await fetch('/api/desktop/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatSessionId }),
-          cache: 'no-store',
-          signal,
-        })
+        if (!botId && !chatSessionId) throw new Error(t('桌面环境未就绪'))
+        const response = await fetch(
+          botId ? `/api/bots/${encodeURIComponent(botId)}/computer` : '/api/desktop/sessions',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(botId ? {} : { chatSessionId }),
+            cache: 'no-store',
+            signal,
+          },
+        )
         const payload = await response.json().catch(() => null) as DesktopSessionResponse | null
         if (response.ok && typeof payload?.desktopUrl === 'string') {
           setDesktopUrl(browserReachableGatewayUrl(payload.desktopUrl))
@@ -205,7 +209,7 @@ export function DesktopWorkbench({ chatSessionId }: { chatSessionId: string }) {
       setError(retryableMessage || t('桌面环境未就绪'))
       setStatus('failed')
     }
-  }, [chatSessionId, t])
+  }, [botId, chatSessionId, t])
 
   useEffect(() => {
     const controller = new AbortController()

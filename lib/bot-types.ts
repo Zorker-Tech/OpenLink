@@ -28,6 +28,15 @@ export interface BotSummary {
   userId: string
   workspaceId: string
   projectId: string | null
+  /**
+   * The stable Bot execution key (`bot-<botId>`). It is opaque to the shared
+   * substrate and is never a Code chat session.
+   */
+  runtimeKey: string
+  /**
+   * A legacy hidden Code session, kept only as migration input for Bots that
+   * predate the Work-host control plane. New Bots never set it.
+   */
   runtimeSessionId: string | null
   runtimeStatus: BotRuntimeStatus
   runtimeReadyAt: string | null

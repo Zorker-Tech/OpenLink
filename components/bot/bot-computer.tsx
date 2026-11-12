@@ -7,20 +7,20 @@ import { useEffect } from 'react'
 
 type BotComputerProps = {
   botName: string
-  chatSessionId: string
+  botId: string
   onClose: () => void
 }
 
 type BotComputerPaneProps = BotComputerProps & {
   routines: readonly BotRoutine[]
-  onEditRoutine: (routine: BotRoutine) => void
+  onEditRoutine: (routine: BotRoutine | null) => void
   onRunRoutine: (routine: BotRoutine) => void
   onToggleRoutine: (routine: BotRoutine, isEnabled: boolean) => void
 }
 
 export function BotComputerPane({
   botName,
-  chatSessionId,
+  botId,
   onClose,
   onEditRoutine,
   onRunRoutine,
@@ -46,7 +46,7 @@ export function BotComputerPane({
         </header>
         <div className="zbd-side-pane-scroll">
           <div className="h-[220px] overflow-hidden rounded-[10px] border border-[var(--app-border)] bg-[var(--app-surface)]">
-            <DesktopWorkbench chatSessionId={chatSessionId} />
+            <DesktopWorkbench botId={botId} />
           </div>
           <div className="zbd-side-screen-label">{botName}&apos;s screen</div>
           <div className="zbd-side-section-title">Routines</div>
@@ -83,7 +83,7 @@ export function BotComputerPane({
               </div>
             ))
           ) : (
-            <button className="zbd-app-routine-empty w-full" onClick={() => onEditRoutine({ id: '', name: '', prompt: '', triggerDescription: '', schedule: '', isEnabled: true, nextRunAt: null, lastRunAt: null })} type="button">
+            <button className="zbd-app-routine-empty w-full" onClick={() => onEditRoutine(null)} type="button">
               Nothing scheduled yet. Create a routine to have {botName} work on a schedule.
             </button>
           )}
@@ -93,7 +93,7 @@ export function BotComputerPane({
   )
 }
 
-export function BotComputerLightbox({ botName, chatSessionId, onClose }: BotComputerProps) {
+export function BotComputerLightbox({ botName, botId, onClose }: BotComputerProps) {
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -116,7 +116,7 @@ export function BotComputerLightbox({ botName, chatSessionId, onClose }: BotComp
         className="zbd-app-lightbox-panel"
         role="dialog"
       >
-        <DesktopWorkbench chatSessionId={chatSessionId} />
+        <DesktopWorkbench botId={botId} />
         <button
           aria-label="Close screen"
           className="zbd-screen-close"

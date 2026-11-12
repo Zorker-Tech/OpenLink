@@ -49,6 +49,57 @@ export function botConfirmationRequest(event: RequestedConfirmation): BotConfirm
   }
 }
 
+/**
+ * A Bot question card is a Work-host `send-message` widget. It stays pending
+ * until a later `event` entry records the answer, so reopening the Bot shows
+ * the same unresolved question without a second authority.
+ */
+export function pendingBotConfirmationsFromWorkHostEntries(
+  entries: readonly Record<string, unknown>[],
+): BotConfirmationRequest[] {
+  const pending = new Map<string, BotConfirmationRequest>()
+  for (const entry of entries) {
+    const kind = typeof entry.kind === 'string' ? entry.kind : ''
+    if (kind === 'send-message') {
+      if (entry.respondedValue != null || entry.widgetSkipped === true || entry.widgetDismissed === true) continue
+      const message = entry.message
+      if (message === null || typeof message !== 'object' || Array.isArray(message)) continue
+      const record = message as Record<string, unknown>
+      if (record.type !== 'widget') continue
+      const widget = record.widget
+      if (widget === null || typeof widget !== 'object' || Array.isArray(widget)) continue
+      const card = widget as Record<string, unknown>
+      if (card.kind !== 'bot-question') continue
+      const id = typeof card.id === 'string' ? card.id : ''
+      if (!BOT_CONFIRMATION_ID_PATTERN.test(id)) continue
+      const method = card.method === 'confirm' || card.method === 'select' || card.method === 'input' || card.method === 'editor'
+        ? card.method
+        : undefined
+      const title = boundedText(card.title, 300) || 'Confirmation needed'
+      const messageText = boundedText(card.prompt, 4_000)
+      const options = confirmationOptions(card.options)
+      pending.set(id, {
+        id,
+        title,
+        ...(messageText ? { message: messageText } : {}),
+        ...(options ? { options } : {}),
+        ...(method ? { inputKind: method } : {}),
+        confirmationKind: method === 'confirm' ? 'approval' : 'question',
+      })
+      continue
+    }
+    if (kind === 'event') {
+      const event = entry.event
+      if (event === null || typeof event !== 'object' || Array.isArray(event)) continue
+      const record = event as Record<string, unknown>
+      if (record.type === 'confirmation-resolved' && typeof record.extensionUiId === 'string') {
+        pending.delete(record.extensionUiId)
+      }
+    }
+  }
+  return [...pending.values()]
+}
+
 /** Replay the durable event log so a reopened Bot still shows unresolved approvals. */
 export function pendingBotConfirmations(events: readonly OpenLinkAgentEvent[]): BotConfirmationRequest[] {
   const pending = new Map<string, BotConfirmationRequest>()

@@ -3,29 +3,21 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { resolveConfiguredModelSelection } from '@/lib/ai-provider-configurations.server'
 import {
-  BotTranscriptReplaceLimitError,
-  WORK_HOST_TRANSCRIPT_REPLACE_LIMIT,
   chunkWorkHostEntries,
   fromDurableGroupEntry,
   normalizeWorkHostTranscript,
-  planBotTranscriptRecovery,
-  previewFromEntries,
-  toDurableGroupEntry,
   toWorkHostEntry,
   transcriptFromAgentEvents,
   type BotTranscriptEntry,
 } from '@/lib/bot-transcript'
 import { assertGroupMemberCandidate, isGroupBot, normalizeGroupMemberIds } from '@/lib/bot-groups'
 import { releaseBotRuntime } from '@/lib/bot-runtime.server'
-import {
-  decideBotProjectionRecovery,
-  isBotProjectionSession,
-  type BotProjectionProject,
-  type BotProjectionSession,
-} from '@/lib/bot-runtime-projection'
 import type { BotDetail, BotGroupMemberSummary, BotRoutine, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
-import { pendingBotConfirmations, type BotConfirmationRequest } from '@/lib/bot-confirmations'
-import { generateChatSessionId } from '@/lib/chat-sessions'
+import {
+  pendingBotConfirmations,
+  pendingBotConfirmationsFromWorkHostEntries,
+  type BotConfirmationRequest,
+} from '@/lib/bot-confirmations'
 import { listPersistedChatEvents, listPersistedConfirmationEvents } from '@/lib/chat-session-persistence.server'
 import { ensureDraftProject } from '@/lib/projects'
 import { getAccessibleWorkspace, getAccessibleWorkspaceById, type OpenLinkWorkspace } from '@/lib/workspaces'
@@ -40,7 +32,6 @@ import {
   getBotAgentAvatar,
   getBotAgentTranscript,
   isMissingWorkHostAgentError,
-  replaceBotAgentTranscriptEntries,
   runBotAgentAutomationNow,
   setBotAgentAvatar,
   setBotAgentAutomationEnabled,
@@ -101,6 +92,15 @@ export function isBotId(value: string): boolean {
   return SAFE_BOT_ID.test(value)
 }
 
+/**
+ * The stable execution key for a Bot. It is derived from the Bot's own
+ * identity, so it survives a Work-host data-root restore and never collides
+ * with a Code chat session.
+ */
+export function botRuntimeKey(botId: string): string {
+  return `bot-${botId}`
+}
+
 async function withBotProjectionLock<T>(botId: string, work: () => Promise<T>): Promise<T> {
   const previous = BOT_PROJECTION_RECOVERY_LOCKS.get(botId) ?? Promise.resolve()
   let release!: () => void
@@ -116,137 +116,14 @@ async function withBotProjectionLock<T>(botId: string, work: () => Promise<T>): 
   }
 }
 
-async function readBotProjection(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  bot: BotSummary,
-): Promise<{ session: BotProjectionSession | null; project: BotProjectionProject | null; projectReadFailed: boolean }> {
-  const [sessionResult, projectResult] = await Promise.all([
-    bot.runtimeSessionId
-      ? supabase
-        .schema('openlink')
-        .from('chat_sessions')
-        .select('id, user_id, workspace_id, project_id, surface')
-        .eq('id', bot.runtimeSessionId)
-        .eq('user_id', userId)
-        .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    bot.projectId
-      ? supabase
-        .schema('openlink')
-        .from('projects')
-        .select('id, workspace_id')
-        .eq('id', bot.projectId)
-        .eq('workspace_id', bot.workspaceId)
-        .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-  ])
-  if (sessionResult.error) throw sessionResult.error
-  if (projectResult.error) {
-    console.error(`[openlink-bots] project projection read failed for ${bot.id}`, projectResult.error)
-  }
-  return {
-    session: sessionResult.data as BotProjectionSession | null,
-    project: projectResult.error ? null : projectResult.data as BotProjectionProject | null,
-    projectReadFailed: Boolean(projectResult.error),
-  }
-}
-
-async function repairBotSessionProject(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  bot: BotSummary,
-  projectId: string,
-): Promise<boolean> {
-  if (!bot.runtimeSessionId) return false
-  const { data, error } = await supabase
-    .schema('openlink')
-    .from('chat_sessions')
-    .update({
-      project_id: projectId,
-      title: bot.name,
-      provider_id: bot.providerId,
-      model_id: bot.modelId,
-      agent: 'pi',
-      access_mode: 'restricted',
-      surface: 'bot',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', bot.runtimeSessionId)
-    .eq('user_id', userId)
-    .eq('workspace_id', bot.workspaceId)
-    .eq('surface', 'bot')
-    .select('id')
-    .maybeSingle()
-  if (error) throw error
-  return Boolean(data)
-}
-
 /**
- * Resolve the Bot's hidden execution session without repairing or creating
- * anything. Profile updates and teardown use this read-only guard so they can
- * never mutate an ordinary Code-mode session that happens to share the id.
- */
-async function readOwnedBotRuntimeSession(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  bot: BotSummary,
-): Promise<BotProjectionSession | null> {
-  if (!bot.runtimeSessionId) return null
-  const { data, error } = await supabase
-    .schema('openlink')
-    .from('chat_sessions')
-    .select('id, user_id, workspace_id, project_id, surface')
-    .eq('id', bot.runtimeSessionId)
-    .eq('user_id', userId)
-    .eq('workspace_id', bot.workspaceId)
-    .eq('surface', 'bot')
-    .maybeSingle()
-  if (error) throw error
-  return isBotProjectionSession(bot, data as BotProjectionSession | null)
-    ? data as BotProjectionSession
-    : null
-}
-
-async function createBotRuntimeSession(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  bot: BotSummary,
-  projectId: string,
-): Promise<string> {
-  const preferredId = bot.runtimeSessionId
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const runtimeSessionId = attempt === 0 && preferredId ? preferredId : generateChatSessionId()
-    const { error } = await supabase
-      .schema('openlink')
-      .from('chat_sessions')
-      .insert({
-        id: runtimeSessionId,
-        user_id: userId,
-        workspace_id: bot.workspaceId,
-        project_id: projectId,
-        provider_id: bot.providerId,
-        model_id: bot.modelId,
-        agent: 'pi',
-        title: bot.name,
-        initial_prompt: '',
-        access_mode: 'restricted',
-        surface: 'bot',
-      })
-    if (!error) return runtimeSessionId
-    if (error.code !== '23505') throw error
-  }
-  throw new Error('BOT_RUNTIME_SESSION_ID_CONFLICT')
-}
-
-/**
- * Rebuild a Bot's lost runtime projection from the durable Bot identity.
+ * Ensure the durable projection a Bot turn needs: a Work-host agent, a Project
+ * VM identity and a stable runtime key.
  *
- * `openlink.bots` owns identity, while the hidden Bot session and Project are
- * replaceable projections. Recovery never adopts a Code-mode session and never
- * mutates ordinary Code sessions: it either repairs the hidden Bot session in
- * place or creates a fresh `surface = 'bot'` session, then atomically updates
- * the Bot mapping.
+ * This is deliberately not a session repair. The Bot's execution identity is
+ * derived from its own row (`bot-<botId>`), so there is no hidden chat session
+ * to recreate, adopt or delete. A legacy `runtime_session_id` is read only by
+ * the transcript migration path.
  */
 export async function ensureBotRuntimeProjection(
   supabase: ServerSupabaseClient,
@@ -257,89 +134,66 @@ export async function ensureBotRuntimeProjection(
     const latest = await getBot(supabase, userId, bot.id)
     if (!latest) throw new BotInputError('BOT_NOT_FOUND')
     // A group is a Work-host identity and routing projection only. Its members
-    // own the isolated execution sessions, so a group must never acquire a
-    // Project or a hidden runtime session of its own.
+    // own the isolated execution sandboxes, so a group must never acquire a
+    // Project or a runtime key of its own.
     if (isGroupBot(latest)) return latest
 
-    const observation = await readBotProjection(supabase, userId, latest)
-    // A transient Project read failure is not evidence that the Project was
-    // lost. Do not replace a healthy Project because a restore is still
-    // settling; the caller retries the same idempotent operation.
-    if (observation.projectReadFailed) throw new Error('BOT_PROJECTION_READ_FAILED')
-    const decision = decideBotProjectionRecovery(latest, observation)
-    if (decision.action === 'reuse') return latest
+    // A lost Work-host agent store is recoverable from the durable Bot row.
+    // The transcript itself is reconciled by the detail read, which is the
+    // only place that needs the full history.
+    let authoritative = latest
+    try {
+      await getBotAgentTranscript(latest.workAgentId)
+    } catch (error) {
+      if (!isMissingWorkHostAgentError(error)) throw error
+      authoritative = await recreateBotAgent(supabase, userId, latest)
+    }
 
-    let projectId = latest.projectId
-    if (decision.recreateProject) {
-      const workspace = await getAccessibleWorkspaceById(supabase, latest.workspaceId)
-      if (!workspace || workspace.id !== latest.workspaceId) throw new BotInputError('BOT_WORKSPACE_NOT_FOUND')
+    let projectId = authoritative.projectId
+    if (projectId) {
+      const { data, error } = await supabase
+        .schema('openlink')
+        .from('projects')
+        .select('id, workspace_id')
+        .eq('id', projectId)
+        .eq('workspace_id', authoritative.workspaceId)
+        .maybeSingle()
+      // A transient Project read failure is not evidence that the Project was
+      // lost. Do not replace a healthy Project because a restore is still
+      // settling; the caller retries the same idempotent operation.
+      if (error) throw new Error('BOT_PROJECTION_READ_FAILED')
+      if (!data) projectId = null
+    }
+    if (!projectId) {
+      const workspace = await getAccessibleWorkspaceById(supabase, authoritative.workspaceId)
+      if (!workspace || workspace.id !== authoritative.workspaceId) throw new BotInputError('BOT_WORKSPACE_NOT_FOUND')
       const project = await ensureDraftProject(supabase, userId, workspace)
       projectId = project.id
     }
-    if (!projectId) throw new BotInputError('BOT_PROJECT_NOT_READY')
 
-    let createdSessionId: string | null = null
-    let runtimeSessionId = latest.runtimeSessionId
-    if (decision.recreateSession) {
-      runtimeSessionId = await createBotRuntimeSession(supabase, userId, latest, projectId)
-      createdSessionId = runtimeSessionId
-    } else if (decision.repairSession) {
-      const repaired = await repairBotSessionProject(supabase, userId, latest, projectId)
-      if (!repaired) {
-        // The session disappeared or changed ownership between observation and
-        // repair. Never fall back to updating it in place; create a fresh
-        // hidden Bot session instead.
-        runtimeSessionId = await createBotRuntimeSession(supabase, userId, latest, projectId)
-        createdSessionId = runtimeSessionId
-      }
-    }
-    if (!runtimeSessionId) throw new BotInputError('BOT_RUNTIME_NOT_READY')
-
+    const projectChanged = projectId !== authoritative.projectId
     const now = new Date().toISOString()
-    let update = supabase
+    const { data, error } = await supabase
       .schema('openlink')
       .from('bots')
       .update({
         project_id: projectId,
-        runtime_session_id: runtimeSessionId,
-        runtime_status: 'pending',
-        runtime_ready_at: null,
-        runtime_last_error: null,
+        runtime_status: projectChanged ? 'pending' : authoritative.runtimeStatus,
+        runtime_ready_at: projectChanged ? null : authoritative.runtimeReadyAt,
+        runtime_last_error: projectChanged ? null : authoritative.runtimeLastError,
         runtime_checked_at: now,
         updated_at: now,
       })
-      .eq('id', latest.id)
+      .eq('id', authoritative.id)
       .eq('user_id', userId)
-    update = latest.projectId ? update.eq('project_id', latest.projectId) : update.is('project_id', null)
-    update = latest.runtimeSessionId ? update.eq('runtime_session_id', latest.runtimeSessionId) : update.is('runtime_session_id', null)
-    const { data, error } = await update.select(BOT_SELECT).maybeSingle()
-    if (error) {
-      if (createdSessionId) {
-        await supabase
-          .schema('openlink')
-          .from('chat_sessions')
-          .delete()
-          .eq('id', createdSessionId)
-          .eq('user_id', userId)
-          .eq('surface', 'bot')
-      }
-      throw error
-    }
+      .select(BOT_SELECT)
+      .maybeSingle()
+    if (error) throw error
     if (!data) {
-      if (createdSessionId) {
-        await supabase
-          .schema('openlink')
-          .from('chat_sessions')
-          .delete()
-          .eq('id', createdSessionId)
-          .eq('user_id', userId)
-          .eq('surface', 'bot')
-      }
-      const raced = await getBot(supabase, userId, latest.id)
+      const raced = await getBot(supabase, userId, authoritative.id)
       if (!raced) throw new BotInputError('BOT_NOT_FOUND')
       return raced
     }
-    console.info(`[openlink-bots] recovered ${decision.action} projection for ${latest.id}`)
     return summary(data as BotRow)
   })
 }
@@ -444,24 +298,30 @@ async function appendToWorkHost(
   }
 }
 
-async function replaceWorkHostTranscript(
+/**
+ * Record that a Bot question was answered. The Work-host transcript is the
+ * durable source, so a reopened Bot does not show the same question again.
+ * The entry id is derived from the extension UI id, which makes the write
+ * idempotent across a retried answer.
+ */
+export async function appendBotConfirmationResolved(
   supabase: ServerSupabaseClient,
   userId: string,
   bot: BotSummary,
-  entries: readonly Record<string, unknown>[],
-): Promise<BotSummary> {
-  if (entries.length > WORK_HOST_TRANSCRIPT_REPLACE_LIMIT) {
-    throw new BotTranscriptReplaceLimitError(entries.length)
+  extensionUiId: string,
+): Promise<void> {
+  const entry = {
+    id: `confirmation-resolved-${extensionUiId}`,
+    kind: 'event',
+    event: { type: 'confirmation-resolved', extensionUiId },
+    timestampMs: Date.now(),
   }
-
   try {
-    await replaceBotAgentTranscriptEntries(bot.workAgentId, entries)
-    return bot
+    await appendBotAgentTranscriptEntries(bot.workAgentId, [entry])
   } catch (error) {
     if (!isMissingWorkHostAgentError(error)) throw error
     const recovered = await recreateBotAgent(supabase, userId, bot)
-    await replaceBotAgentTranscriptEntries(recovered.workAgentId, entries)
-    return recovered
+    await appendBotAgentTranscriptEntries(recovered.workAgentId, [entry])
   }
 }
 
@@ -591,6 +451,7 @@ function summary(row: BotRow, members: BotGroupMemberSummary[] = []): BotSummary
     userId: row.user_id,
     workspaceId: row.workspace_id,
     projectId: row.project_id,
+    runtimeKey: botRuntimeKey(row.id),
     runtimeSessionId: row.runtime_session_id,
     runtimeStatus: row.runtime_status,
     runtimeReadyAt: row.runtime_ready_at,
@@ -633,26 +494,6 @@ async function readDurableGroupTranscript(
     const entry = fromDurableGroupEntry(row.payload)
     return entry ? [entry] : []
   })
-}
-
-async function writeDurableGroupEntries(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  group: BotSummary,
-  entries: readonly BotTranscriptEntry[],
-): Promise<void> {
-  if (!entries.length) return
-  const rows = entries.map((entry) => ({
-    bot_id: group.id,
-    user_id: userId,
-    workspace_id: group.workspaceId,
-    ...toDurableGroupEntry(entry),
-  }))
-  const { error } = await supabase
-    .schema('openlink')
-    .from('bot_group_entries')
-    .upsert(rows, { onConflict: 'bot_id,entry_id', ignoreDuplicates: true })
-  if (error) throw error
 }
 
 async function readGroupMemberBots(
@@ -857,36 +698,6 @@ export async function getBot(
   return summary(row, members.get(row.id))
 }
 
-/**
- * Verify that a hidden execution session belongs to this exact Bot.
- *
- * The Bot row is the authority for the mapping: a session is Bot-authorized
- * only when its id matches `runtime_session_id`, it is tagged `surface = 'bot'`,
- * and both the Bot and session agree on user, workspace, and Project. This
- * deliberately rejects Code-mode sessions and mismatched mappings so a shared
- * endpoint cannot turn a session id into an authorization capability.
- */
-export function isBotRuntimeSessionForBot(
-  bot: BotSummary,
-  session: {
-    id: string
-    user_id: string
-    workspace_id: string
-    project_id: string
-    surface: string
-  } | null,
-): boolean {
-  return Boolean(
-    bot.runtimeSessionId
-      && session
-      && session.id === bot.runtimeSessionId
-      && session.surface === 'bot'
-      && session.user_id === bot.userId
-      && session.workspace_id === bot.workspaceId
-      && session.project_id === bot.projectId,
-  )
-}
-
 export async function getBotInWorkspace(
   supabase: ServerSupabaseClient,
   userId: string,
@@ -916,20 +727,36 @@ export async function getBotDetail(
 ): Promise<BotDetail> {
   if (isGroupBot(bot)) {
     let transcript: BotTranscriptEntry[] = []
+    let runtimeReady = bot.members.length > 0
     try {
-      transcript = await readDurableGroupTranscript(supabase, userId, bot)
+      // The group agent's Work-host transcript is the authority: member
+      // messages are posted into the group room with their author metadata.
+      transcript = normalizeWorkHostTranscript(await getBotAgentTranscript(bot.workAgentId))
     } catch (error) {
-      console.error(`[openlink-bots] group transcript read failed for ${bot.id}`, error)
+      if (!isMissingWorkHostAgentError(error)) {
+        console.error(`[openlink-bots] group transcript read failed for ${bot.id}`, error)
+      }
+      runtimeReady = false
+    }
+    if (!transcript.length) {
+      // Migration input: groups created before the Work-host group transcript
+      // existed kept their timeline in the application projection.
+      try {
+        transcript = await readDurableGroupTranscript(supabase, userId, bot)
+      } catch (error) {
+        console.error(`[openlink-bots] legacy group transcript read failed for ${bot.id}`, error)
+      }
     }
     return {
       ...bot,
       transcript,
-      runtimeReady: bot.members.length > 0,
+      runtimeReady,
       pendingConfirmations: [],
       routines: [],
     }
   }
   let transcript: BotTranscriptEntry[] = []
+  let rawEntries: Record<string, unknown>[] = []
   let authoritativeBot = await ensureBotRuntimeProjection(supabase, userId, bot)
   let readError: unknown = null
   let pendingConfirmations: BotConfirmationRequest[] = []
@@ -937,60 +764,42 @@ export async function getBotDetail(
   try {
     const read = await readBotTranscript(supabase, userId, authoritativeBot)
     authoritativeBot = read.bot
+    rawEntries = read.entries
     transcript = normalizeWorkHostTranscript(read.entries)
   } catch (error) {
     readError = error
     console.error(`[openlink-bots] transcript read failed for ${bot.id}`, error)
   }
-  if (authoritativeBot.runtimeSessionId) {
+  // Work-host is the transcript authority. A Bot that predates the Work-host
+  // control plane may still have a hidden Code session; that event log is
+  // migration input only. Read it once when the Work-host transcript is empty,
+  // then never again: new turns are written by Work-host.
+  if (!transcript.length && authoritativeBot.runtimeSessionId) {
+    try {
+      const events = await listPersistedChatEvents(supabase, userId, authoritativeBot.runtimeSessionId)
+      const migrated = transcriptFromAgentEvents(events)
+      if (migrated.length) {
+        transcript = migrated
+        await appendToWorkHost(supabase, userId, authoritativeBot, migrated.map(toWorkHostEntry))
+          .then((nextBot) => {
+            authoritativeBot = nextBot
+          })
+          .catch((error) => {
+            console.error(`[openlink-bots] legacy transcript migration failed for ${bot.id}`, error)
+          })
+      }
+    } catch (error) {
+      console.error(`[openlink-bots] legacy transcript read failed for ${bot.id}`, error)
+    }
+  }
+  pendingConfirmations = pendingBotConfirmationsFromWorkHostEntries(rawEntries)
+  if (!pendingConfirmations.length && !transcript.length && authoritativeBot.runtimeSessionId) {
     try {
       pendingConfirmations = pendingBotConfirmations(
         await listPersistedConfirmationEvents(supabase, userId, authoritativeBot.runtimeSessionId),
       )
     } catch (error) {
-      console.error(`[openlink-bots] confirmation read failed for ${bot.id}`, error)
-    }
-  }
-  // Work-host is the transcript authority, but its state is a local store. The
-  // durable Code-mode event log is the recovery source. Reconcile it on every
-  // read: a lost store rebuilds from scratch, a lost tail is appended, and an
-  // ordering gap is replaced atomically. Local-only entries are retained.
-  if (authoritativeBot.runtimeSessionId) {
-    try {
-      const events = await listPersistedChatEvents(supabase, userId, authoritativeBot.runtimeSessionId)
-      const recovered = transcriptFromAgentEvents(events)
-      const plan = planBotTranscriptRecovery(transcript, recovered)
-      transcript = plan.transcript
-      if (plan.action === 'replace' && plan.replaceLimitError) {
-        console.error(
-          `[openlink-bots] transcript recovery replacement exceeds Work-host limit for ${bot.id}; keeping the complete durable transcript`,
-          plan.replaceLimitError,
-        )
-      } else if (plan.action === 'replace') {
-        await replaceWorkHostTranscript(
-          supabase,
-          userId,
-          authoritativeBot,
-          plan.transcript.map(toWorkHostEntry),
-        ).then((nextBot) => {
-          authoritativeBot = nextBot
-        }).catch((error) => {
-          console.error(`[openlink-bots] transcript recovery mirror failed for ${bot.id}`, error)
-        })
-      } else if (plan.action === 'append') {
-        await appendToWorkHost(
-          supabase,
-          userId,
-          authoritativeBot,
-          plan.missing.map(toWorkHostEntry),
-        ).then((nextBot) => {
-          authoritativeBot = nextBot
-        }).catch((error) => {
-          console.error(`[openlink-bots] transcript recovery mirror failed for ${bot.id}`, error)
-        })
-      }
-    } catch (error) {
-      console.error(`[openlink-bots] transcript recovery failed for ${bot.id}`, error)
+      console.error(`[openlink-bots] legacy confirmation read failed for ${bot.id}`, error)
     }
   }
   if (readError && !transcript.length) throw readError
@@ -1004,7 +813,7 @@ export async function getBotDetail(
   return {
     ...authoritativeBot,
     transcript,
-    runtimeReady: authoritativeBot.runtimeStatus === 'ready' && Boolean(authoritativeBot.runtimeSessionId),
+    runtimeReady: authoritativeBot.runtimeStatus === 'ready',
     pendingConfirmations,
     routines,
   }
@@ -1061,7 +870,6 @@ export async function createBot(
   if (!selectedModel) throw new BotInputError('BOT_MODEL_REQUIRED')
   const project = await ensureDraftProject(supabase, userId, workspace)
   let createdAgentId: string | null = null
-  let createdSessionId: string | null = null
   try {
     const created = await createBotAgent({
       name,
@@ -1071,25 +879,9 @@ export async function createBot(
     })
     createdAgentId = created.agent.id
     if (avatarPngBase64) await setBotAgentAvatar(created.agent.id, avatarPngBase64)
-    const runtimeSessionId = generateChatSessionId()
-    const { error: sessionError } = await supabase
-      .schema('openlink')
-      .from('chat_sessions')
-      .insert({
-        id: runtimeSessionId,
-        user_id: userId,
-        workspace_id: workspace.id,
-        project_id: project.id,
-        provider_id: selectedModel.providerId,
-        model_id: selectedModel.modelId,
-        agent: 'pi',
-        title: name,
-        initial_prompt: '',
-        access_mode: 'restricted',
-        surface: 'bot',
-      })
-    if (sessionError) throw sessionError
-    createdSessionId = runtimeSessionId
+    // A new Bot has no Code session. Its execution identity is derived from
+    // its own row by `runtimeKey`, so there is no hidden chat row to create,
+    // migrate or clean up.
     const { data, error } = await supabase
       .schema('openlink')
       .from('bots')
@@ -1097,7 +889,7 @@ export async function createBot(
         user_id: userId,
         workspace_id: workspace.id,
         project_id: project.id,
-        runtime_session_id: runtimeSessionId,
+        runtime_session_id: null,
         runtime_status: 'pending',
         work_agent_id: created.agent.id,
         name,
@@ -1115,16 +907,6 @@ export async function createBot(
     if (error) throw error
     return summary(data as BotRow)
   } catch (error) {
-    if (createdSessionId) {
-      await supabase
-        .schema('openlink')
-        .from('chat_sessions')
-        .delete()
-        .eq('id', createdSessionId)
-        .eq('user_id', userId)
-        .eq('workspace_id', workspace.id)
-        .eq('surface', 'bot')
-    }
     if (createdAgentId) await deleteBotAgent(createdAgentId).catch(() => undefined)
     throw error
   }
@@ -1268,15 +1050,7 @@ export async function updateBot(
   if (!requestedModel) throw new BotInputError('BOT_MODEL_REQUIRED')
   const selectedModel = await resolveConfiguredModelSelection(supabase, userId, requestedModel)
   if (!selectedModel) throw new BotInputError('BOT_MODEL_REQUIRED')
-  let runtimeSession: BotProjectionSession | null = null
-  try {
-    runtimeSession = await readOwnedBotRuntimeSession(supabase, userId, bot)
-  } catch (error) {
-    // The Bot profile is durable application state and does not depend on the
-    // runtime projection. Leave the hidden session untouched when its
-    // ownership cannot be verified; the next detail/prompt read repairs it.
-    console.error(`[openlink-bots] runtime session ownership check failed for ${bot.id}`, error)
-  }
+  const modelChanged = selectedModel.providerId !== bot.providerId || selectedModel.modelId !== bot.modelId
   let agentId = bot.workAgentId
   try {
     await updateBotAgent({
@@ -1317,26 +1091,11 @@ export async function updateBot(
     .select(BOT_SELECT)
     .single()
   if (error) throw error
-  if (runtimeSession) {
-    const { error: sessionError } = await supabase
-      .schema('openlink')
-      .from('chat_sessions')
-      .update({
-        title: name,
-        provider_id: selectedModel.providerId,
-        model_id: selectedModel.modelId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', runtimeSession.id)
-      .eq('user_id', userId)
-      .eq('workspace_id', bot.workspaceId)
-      .eq('surface', 'bot')
-    if (sessionError) {
-      // The profile is already durable in both authorities. A projection write
-      // failure must not roll back a successful profile update; recovery will
-      // resynchronize the session from the Bot row.
-      console.error(`[openlink-bots] runtime session metadata update failed for ${bot.id}`, sessionError)
-    }
+  if (modelChanged) {
+    // The substrate's runtime identity includes the model. Release the old
+    // sandbox so the next ensure provisions the new identity; a failed release
+    // is safe because ensure replaces the workload by identity anyway.
+    await releaseBotRuntime(bot)
   }
   return summary(data as BotRow)
 }
@@ -1364,20 +1123,7 @@ export async function deleteBot(
     if (error) throw error
     return
   }
-  let runtimeSession: BotProjectionSession | null = null
-  try {
-    runtimeSession = await readOwnedBotRuntimeSession(supabase, userId, bot)
-  } catch (error) {
-    // A failed ownership read must not be treated as permission to release the
-    // stored session id. The Bot row can still be deleted without touching the
-    // runtime; a hidden-session orphan is safer than deleting Code state.
-    console.error(`[openlink-bots] runtime session ownership check failed for ${bot.id}`, error)
-  }
-  if (runtimeSession) {
-    await releaseBotRuntime({ ...bot, runtimeSessionId: runtimeSession.id }).catch((error) => {
-      console.error('[openlink-bots] runtime session release deferred', error)
-    })
-  }
+  await releaseBotRuntime(bot)
   try {
     await deleteBotAgent(bot.workAgentId)
   } catch (error) {
@@ -1396,17 +1142,20 @@ export async function deleteBot(
     .eq('id', bot.id)
     .eq('user_id', userId)
   if (error) throw error
-  if (runtimeSession) {
+  if (bot.runtimeSessionId) {
+    // Legacy migration cleanup only: a row that predates the Work-host control
+    // plane may still point at a hidden Bot session. The `surface = 'bot'`
+    // guard means an ordinary Code session can never be deleted here.
     const { error: sessionError } = await supabase
       .schema('openlink')
       .from('chat_sessions')
       .delete()
-      .eq('id', runtimeSession.id)
+      .eq('id', bot.runtimeSessionId)
       .eq('user_id', userId)
       .eq('workspace_id', bot.workspaceId)
       .eq('surface', 'bot')
     if (sessionError) {
-      console.error('[openlink-bots] runtime session cleanup failed', sessionError)
+      console.error('[openlink-bots] legacy runtime session cleanup failed', sessionError)
     }
   }
 }
@@ -1423,79 +1172,6 @@ export async function markBotViewed(
     .update({ last_viewed_at: new Date().toISOString() })
     .eq('id', botId)
     .eq('user_id', userId)
-}
-
-export async function appendBotEntries(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  bot: BotSummary,
-  entries: readonly BotTranscriptEntry[],
-): Promise<void> {
-  if (!entries.length) return
-  if (isGroupBot(bot)) {
-    await writeDurableGroupEntries(supabase, userId, bot, entries)
-    try {
-      await appendBotAgentTranscriptEntries(bot.workAgentId, entries.map(toWorkHostEntry))
-    } catch (error) {
-      console.error(`[openlink-bots] group transcript mirror failed for ${bot.id}`, error)
-    }
-    const preview = previewFromEntries(entries) || bot.lastEntryText
-    const { error } = await supabase
-      .schema('openlink')
-      .from('bots')
-      .update({
-        last_entry_text: preview.slice(0, 2000),
-        last_activity_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', bot.id)
-      .eq('user_id', userId)
-      .eq('kind', 'group')
-    if (error) throw error
-    return
-  }
-  const authoritativeBot = await appendToWorkHost(
-    supabase,
-    userId,
-    bot,
-    entries.map(toWorkHostEntry),
-  )
-  const preview = previewFromEntries(entries) || bot.lastEntryText
-  try {
-    const { error } = await supabase
-      .schema('openlink')
-      .from('bots')
-      .update({
-        ...(authoritativeBot.workAgentId === bot.workAgentId ? {} : { work_agent_id: authoritativeBot.workAgentId }),
-        last_entry_text: preview.slice(0, 2000),
-        last_activity_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', bot.id)
-      .eq('user_id', userId)
-    if (error) throw error
-  } catch (error) {
-    // The Work-host transcript is authoritative. A projection-update failure
-    // must not turn an already-durable message into a failed turn; the next
-    // detail read recomputes the sidebar preview from the transcript.
-    console.error(`[openlink-bots] projection update failed for ${bot.id}`, error)
-  }
-}
-
-export async function appendBotUserMessage(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  bot: BotSummary,
-  content: string,
-): Promise<BotTranscriptEntry> {
-  const entry: BotTranscriptEntry = {
-    kind: 'user-message',
-    id: `bot-user-${randomUUID()}`,
-    content,
-    timestampMs: Date.now(),
-  }
-  await appendBotEntries(supabase, userId, bot, [entry])
-  return entry
 }
 
 export async function getBotAvatar(bot: BotSummary): Promise<WorkHostAvatar | null> {
