@@ -134,6 +134,11 @@ substrate while keeping the control planes and their protocols separate.
   re-ensures the box before every prompt and before opening the computer. The
   ensure is idempotent: it reattaches the existing sandbox or recreates it
   under the same Bot key, then refreshes the binding.
+- The Work-host data root is the durable transcript authority and is included
+  in the self-hosted backup/restore set. A lost Work-host store is restored
+  from that backup; the BFF recreates the agent projection and, for a Bot that
+  predates this control plane, seeds the transcript from the legacy event log.
+  It never invents history for a Bot whose Work-host store is gone.
 - If Work-host is unavailable, Bot reads surface a retryable error and writes
   are rejected before durable acceptance. Deletion remains idempotent.
 
