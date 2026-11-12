@@ -9,7 +9,6 @@ import {
   type TranscriptEntry,
 } from '@zorker/bot-demo'
 import {
-  AppChatHeader,
   AppCommandPalette,
   AppComposer,
   AppTranscript,
@@ -17,10 +16,11 @@ import {
   type AppSession,
   type AppSidebarRow,
 } from '@zorker/bot-demo/app'
-import { resolveColor } from '@zorker/avatar'
+import { AgentAvatar, resolveColor } from '@zorker/avatar'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
 import { BotComputerLightbox, BotComputerPane } from '@/components/bot/bot-computer'
+import { BotDetailsPane } from '@/components/bot/bot-details-pane'
 import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
 import { BotOnboarding } from '@/components/bot/bot-onboarding'
 import { BotProfileDialog } from '@/components/bot/bot-profile-dialog'
@@ -163,6 +163,7 @@ export function BotWorkspace({
   const [paletteView, setPaletteView] = useState<'search' | 'create'>('search')
   const [createInitialName, setCreateInitialName] = useState('')
   const [computerOpen, setComputerOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [routineEditor, setRoutineEditor] = useState<{ routine: BotRoutine | null } | null>(null)
@@ -347,6 +348,7 @@ export function BotWorkspace({
     setError(null)
     setDraft('')
     setComputerOpen(false)
+    setDetailsOpen(false)
     setLightboxOpen(false)
     setProfileOpen(false)
     setRoutineEditor(null)
@@ -608,6 +610,7 @@ export function BotWorkspace({
 
   const openPalette = useCallback(() => {
     setComputerOpen(false)
+    setDetailsOpen(false)
     setLightboxOpen(false)
     setPaletteOpen(true)
     setPaletteView('search')
@@ -621,21 +624,19 @@ export function BotWorkspace({
     setPaletteQuery('')
   }, [])
 
-  const toggleComputer = useCallback(() => {
-    if (!activeBot || activeBot.kind === 'group') {
-      setError('This Bot has no isolated computer yet.')
-      return
-    }
-    setComputerOpen((open) => !open)
-    setLightboxOpen(false)
-  }, [activeBot])
-
   const openComputer = useCallback(() => {
     if (!activeBot || activeBot.kind === 'group') {
       setError('This Bot has no isolated computer yet.')
       return
     }
-    setLightboxOpen(true)
+    setDetailsOpen(false)
+    setComputerOpen(true)
+    setLightboxOpen(false)
+  }, [activeBot])
+
+  const toggleDetails = useCallback(() => {
+    if (!activeBot) return
+    setDetailsOpen((open) => !open)
     setComputerOpen(false)
   }, [activeBot])
 
@@ -801,20 +802,23 @@ export function BotWorkspace({
 
             <div className="bot-chat-root zbd-root relative flex min-h-0 min-w-0 flex-1" data-sidebar-collapsed={collapsed ? '' : undefined}>
               <section className="zbd-chat zbd-app-chat flex min-h-0 min-w-0 flex-1 flex-col">
-                <div className="zbd-chat-header-wrap">
-                  <AppChatHeader
-                    assetBase={ASSET_BASE}
-                    computerAvailable={activeBot.kind !== 'group'}
-                    computerOpen={computerOpen}
-                    displayName={activeBot.name}
-                    introRunning={false}
-                    onBack={() => undefined}
-                    onOpenProfile={() => setProfileOpen(true)}
-                    onSkipIntro={() => undefined}
-                    onToggleComputer={toggleComputer}
-                    session={activeSession!}
-                    showBack={false}
-                  />
+                <div className="zbd-chat-header-wrap flex items-center justify-center">
+                  <button
+                    aria-label={`Open ${activeBot.name} details`}
+                    className="flex h-8 max-w-[min(280px,calc(100%-24px))] items-center gap-2 rounded-full border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-elevated)_82%,transparent)] px-3 text-[12px] font-medium text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors hover:bg-[var(--app-hover)]"
+                    onClick={toggleDetails}
+                    type="button"
+                  >
+                    <AgentAvatar
+                      color={activeBot.avatarColor}
+                      renderer="complete"
+                      shape={activeBot.avatarShape}
+                      size={20}
+                      state="idle"
+                      theme={activeTheme}
+                    />
+                    <span className="truncate">{activeBot.name}</span>
+                  </button>
                 </div>
                 {loadingMap[activeId] && !activeDetail ? (
                   <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--app-muted)]">
@@ -874,7 +878,15 @@ export function BotWorkspace({
                 />
               </section>
 
-              {computerOpen && activeBot.kind !== 'group' ? (
+              {detailsOpen ? (
+                <BotDetailsPane
+                  bot={activeBot}
+                  theme={activeTheme}
+                  onClose={() => setDetailsOpen(false)}
+                  onEditProfile={() => setProfileOpen(true)}
+                  onOpenComputer={openComputer}
+                />
+              ) : computerOpen && activeBot.kind !== 'group' ? (
                 <BotComputerPane
                   botName={activeBot.name}
                   botId={activeBot.id}
