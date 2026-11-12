@@ -171,11 +171,17 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
     const content = text(message.content)
     if (!content) return null
     const reactions = reactionsOf(entry.reactions)
+    const author = entry.author && typeof entry.author === 'object' && !Array.isArray(entry.author)
+      ? entry.author as Record<string, unknown>
+      : null
+    const authorId = text(author?.id).trim()
+    const authorName = text(author?.name).trim()
     return {
       kind: 'agent-message',
       id,
       content,
       timestampMs: at,
+      ...(authorId && authorName ? { author: { id: authorId, name: authorName } } : {}),
       ...(reactions ? { reactions } : {}),
     }
   }
@@ -206,6 +212,7 @@ export function toWorkHostEntry(entry: BotTranscriptEntry): Record<string, unkno
       id,
       kind: 'send-message',
       message: { type: 'text', content: entry.content },
+      ...(entry.author ? { author: entry.author } : {}),
       timestampMs: at,
     }
   }
@@ -260,6 +267,74 @@ export function toWorkHostEntry(entry: BotTranscriptEntry): Record<string, unkno
       },
     },
     timestampMs: at,
+  }
+}
+
+/** Restore a group entry from its durable JSON projection. */
+export function fromDurableGroupEntry(payload: unknown): BotTranscriptEntry | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const record = payload as Record<string, unknown>
+  const kind = text(record.kind)
+  const id = safeId(record.id, '')
+  const timestampMs = timestamp(record.timestampMs)
+  if (!id) return null
+  if (kind === 'user-message') {
+    const content = text(record.content)
+    return content ? { kind, id, content, timestampMs } : null
+  }
+  if (kind === 'agent-message') {
+    const content = text(record.content)
+    if (!content) return null
+    const author = record.author && typeof record.author === 'object' && !Array.isArray(record.author)
+      ? record.author as Record<string, unknown>
+      : null
+    const authorId = text(author?.id).trim()
+    const authorName = text(author?.name).trim()
+    return {
+      kind,
+      id,
+      content,
+      timestampMs,
+      ...(authorId && authorName ? { author: { id: authorId, name: authorName } } : {}),
+    }
+  }
+  if (kind === 'activity') {
+    const value = record.activity && typeof record.activity === 'object' && !Array.isArray(record.activity)
+      ? record.activity as Record<string, unknown>
+      : null
+    const label = text(value?.label)
+    if (!label) return null
+    const status = value?.status === 'running' || value?.status === 'done' || value?.status === 'failed'
+      ? value.status
+      : 'done'
+    return activity(id, label, status, text(value?.detail) || undefined, text(value?.tool) || undefined, timestampMs)
+  }
+  if (kind === 'system') {
+    const event = record.event
+    if (!event || typeof event !== 'object' || Array.isArray(event)) return null
+    return { kind, id, timestampMs, event } as BotTranscriptEntry
+  }
+  return null
+}
+
+/** Serialize a group entry for the application-owned recovery table. */
+export function toDurableGroupEntry(entry: BotTranscriptEntry): {
+  entry_id: string
+  entry_kind: BotTranscriptEntry['kind']
+  author_id: string | null
+  author_name: string | null
+  content: string | null
+  payload: BotTranscriptEntry
+  occurred_at: string
+} {
+  return {
+    entry_id: entry.id,
+    entry_kind: entry.kind,
+    author_id: entry.kind === 'agent-message' ? entry.author?.id ?? null : null,
+    author_name: entry.kind === 'agent-message' ? entry.author?.name ?? null : null,
+    content: entry.kind === 'user-message' || entry.kind === 'agent-message' ? entry.content : null,
+    payload: entry,
+    occurred_at: new Date(entry.timestampMs).toISOString(),
   }
 }
 

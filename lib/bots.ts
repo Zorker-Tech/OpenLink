@@ -20,7 +20,7 @@ import {
   type BotProjectionProject,
   type BotProjectionSession,
 } from '@/lib/bot-runtime-projection'
-import type { BotDetail, BotRoutine, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
+import type { BotDetail, BotGroupMemberSummary, BotRoutine, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
 import { pendingBotConfirmations, type BotConfirmationRequest } from '@/lib/bot-confirmations'
 import { generateChatSessionId } from '@/lib/chat-sessions'
 import { listPersistedChatEvents, listPersistedConfirmationEvents } from '@/lib/chat-session-persistence.server'
@@ -67,6 +67,8 @@ interface BotRow {
   description: string
   avatar_shape: string
   avatar_color: string
+  kind: 'bot' | 'group'
+  member_ids: string[] | null
   provider_id: string | null
   model_id: string | null
   last_entry_text: string
@@ -76,7 +78,7 @@ interface BotRow {
   updated_at: string
 }
 
-const BOT_SELECT = 'id, user_id, workspace_id, project_id, runtime_session_id, runtime_status, runtime_ready_at, runtime_last_error, runtime_checked_at, work_agent_id, name, description, avatar_shape, avatar_color, provider_id, model_id, last_entry_text, last_activity_at, last_viewed_at, created_at, updated_at'
+const BOT_SELECT = 'id, user_id, workspace_id, project_id, runtime_session_id, runtime_status, runtime_ready_at, runtime_last_error, runtime_checked_at, work_agent_id, name, description, avatar_shape, avatar_color, kind, member_ids, provider_id, model_id, last_entry_text, last_activity_at, last_viewed_at, created_at, updated_at'
 const SAFE_BOT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SAFE_AVATAR_ID = /^[a-z0-9-]{1,32}$/
 const SAFE_MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/
@@ -574,7 +576,7 @@ export async function runBotRoutineNow(
   }
 }
 
-function summary(row: BotRow): BotSummary {
+function summary(row: BotRow, members: BotGroupMemberSummary[] = []): BotSummary {
   return {
     id: row.id,
     userId: row.user_id,
@@ -598,7 +600,67 @@ function summary(row: BotRow): BotSummary {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     unread: Date.parse(row.last_activity_at) > Date.parse(row.last_viewed_at),
+    kind: row.kind,
+    memberIds: row.member_ids ?? [],
+    members: row.kind === 'group' ? members : [],
   }
+}
+
+interface BotGroupMemberRow {
+  id: string
+  workspace_id: string
+  kind: 'bot' | 'group'
+  name: string
+  avatar_shape: string
+  avatar_color: string
+  updated_at: string
+}
+
+function groupMemberSummary(row: BotGroupMemberRow): BotGroupMemberSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    avatarShape: row.avatar_shape,
+    avatarColor: row.avatar_color,
+    updatedAt: row.updated_at,
+  }
+}
+
+/**
+ * Load every member of the given groups in one query, preserving the stored
+ * member order. A group may only contain ordinary Bots from the same
+ * workspace, so a stale or tampered row cannot leak another tenant's Bot or
+ * nest one group inside another.
+ */
+async function readGroupMembers(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  rows: readonly BotRow[],
+): Promise<Map<string, BotGroupMemberSummary[]>> {
+  const groupRows = rows.filter((row) => row.kind === 'group')
+  const memberIds = [...new Set(groupRows.flatMap((row) => row.member_ids ?? []))]
+  if (!memberIds.length) return new Map()
+  const { data, error } = await supabase
+    .schema('openlink')
+    .from('bots')
+    .select('id, workspace_id, kind, name, avatar_shape, avatar_color, updated_at')
+    .eq('user_id', userId)
+    .eq('workspace_id', rows.find((row) => row.kind === 'group')?.workspace_id ?? '')
+    .eq('kind', 'bot')
+    .in('id', memberIds)
+  if (error) throw error
+  const byId = new Map(
+    ((data ?? []) as BotGroupMemberRow[])
+      .filter((row) => row.kind === 'bot' && row.workspace_id === groupRows[0]?.workspace_id)
+      .map((row) => [row.id, groupMemberSummary(row)]),
+  )
+  return new Map(groupRows.map((row) => [
+    row.id,
+    (row.member_ids ?? []).flatMap((id) => {
+      const member = byId.get(id)
+      return member ? [member] : []
+    }),
+  ]))
 }
 
 function normalizeName(value: unknown): string {
@@ -662,7 +724,9 @@ export async function listBots(
     .eq('workspace_id', workspaceId)
     .order('updated_at', { ascending: false })
   if (error) throw error
-  return ((data ?? []) as BotRow[]).map(summary)
+  const rows = (data ?? []) as BotRow[]
+  const members = await readGroupMembers(supabase, userId, rows)
+  return rows.map((row) => summary(row, members.get(row.id)))
 }
 
 export async function getBot(
@@ -679,7 +743,10 @@ export async function getBot(
     .eq('user_id', userId)
     .maybeSingle()
   if (error) throw error
-  return data ? summary(data as BotRow) : null
+  if (!data) return null
+  const row = data as BotRow
+  const members = await readGroupMembers(supabase, userId, [row])
+  return summary(row, members.get(row.id))
 }
 
 /**
@@ -728,7 +795,10 @@ export async function getBotInWorkspace(
     .eq('workspace_id', workspaceId)
     .maybeSingle()
   if (error) throw error
-  return data ? summary(data as BotRow) : null
+  if (!data) return null
+  const row = data as BotRow
+  const members = await readGroupMembers(supabase, userId, [row])
+  return summary(row, members.get(row.id))
 }
 
 export async function getBotDetail(

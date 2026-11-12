@@ -50,6 +50,10 @@ export interface WorkHostCreateAgentResult {
   transcript: unknown[]
 }
 
+export interface WorkHostGroupCreateResult extends WorkHostCreateAgentResult {
+  agent: WorkHostAgent & { isGroup?: boolean; memberIds?: string[] }
+}
+
 export interface WorkHostAvatar {
   bytes: Uint8Array
   contentType: string
@@ -162,6 +166,30 @@ export async function createBotAgent(input: {
     origin: 'user',
     isIntroductionSuppressed: true,
   }, { timeoutMs: 60_000 })
+}
+
+export async function createBotGroup(input: {
+  name: string
+  description: string
+  memberAgentIds: readonly string[]
+  externalId?: string
+}): Promise<WorkHostGroupCreateResult> {
+  return await request<WorkHostGroupCreateResult>('createGroup', {
+    name: input.name,
+    description: input.description,
+    memberAgentIds: [...input.memberAgentIds],
+    ...(input.externalId ? { externalId: input.externalId } : {}),
+  }, { timeoutMs: 60_000 })
+}
+
+export async function setBotGroupMembers(
+  groupAgentId: string,
+  memberAgentIds: readonly string[],
+): Promise<(WorkHostAgent & { isGroup?: boolean; memberIds?: string[] }) | null> {
+  return await request('setGroupMembers', {
+    id: groupAgentId,
+    memberAgentIds: [...memberAgentIds],
+  }, { timeoutMs: 30_000 })
 }
 
 export async function updateBotAgent(input: {
