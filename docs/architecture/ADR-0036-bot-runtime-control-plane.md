@@ -83,6 +83,39 @@ substrate while keeping the control planes and their protocols separate.
    Prompt acceptance is idempotent by client nonce; retries are bounded and
    observable.
 
+## Implementation
+
+- **Bot runtime key.** A Bot's execution identity is `bot-<botId>`, derived
+  from the durable `openlink.bots` row. New Bots never create a
+  `chat_sessions` row. A legacy `runtime_session_id` is read only to seed the
+  Work-host transcript during migration.
+- **Substrate boundary.** The shared execution layer exposes
+  `POST /v1/substrate/bots/:key/ensure`, `POST /v1/substrate/bots/:key/desktop`
+  and `DELETE /v1/substrate/bots/:key`. These routes accept only an opaque Bot
+  key, never a Code session, and are authorized by a separate
+  `OPENLINK_SUBSTRATE_API_TOKEN`. The Code control-plane token is not given to
+  Work-host.
+- **Bot box provider.** Work-host's `BotBoxProvider` owns the Bot binding
+  (`bot-runtime.json` beside the agent store), ensures one OpenSandbox per Bot,
+  keeps worker credentials on the host, and returns only a desktop capability.
+  The binding is recoverable by calling `ensureBotBox` again; a corrupt or
+  missing file is treated as absent.
+- **Pi runner.** Work-host selects `PiBotRunner` for an agent with a Bot
+  binding. It uses the host's run queue, acceptance ledger and transcript
+  settlement, but executes the turn through the shared Pi worker's
+  `/v1/events` stream. Streamed text is an outline preview; the turn is
+  delivered as one `send-message` with the final assistant text. Pi dialogs
+  become durable `bot-question` widgets and are answered through
+  `respondBotExtensionUi`, which reaches the waiting worker directly.
+- **Bot prompt stream.** `POST /api/bot/sendPrompt` accepts the turn durably in
+  Work-host and streams only that Bot's transcript, outline, turn-lifecycle and
+  group-lifecycle frames. A client disconnect stops the projection, not the
+  turn.
+- **BFF projection.** The Bot page warms through `ensureBotBox`, reads its
+  computer through the Bot box status, prompts through the Bot stream, and
+  answers questions through the Bot extension command. It does not call the
+  Code lease, prompt handler or desktop endpoint.
+
 ## Failure and recovery
 
 - If the Project VM is unavailable, the Bot row and transcript remain valid.

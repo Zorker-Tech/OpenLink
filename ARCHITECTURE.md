@@ -15,8 +15,8 @@ boundaries:
 Browser
   → Next.js Web/BFF
       → ZOKERBASE (identity + authoritative application data)
-      → Work Host (Bot agents, profiles, avatars and transcripts)
-      → Agent Host → Project VM → OpenSandbox → Agent Worker/Pi
+      → Work Host (Bot control plane) → Bot substrate (one OpenSandbox per Bot)
+      → Agent Host (Code control plane) → Project VM → OpenSandbox → Agent Worker/Pi
                      ├─ T1: Ubuntu 24.04 LTS + native GNOME X11 desktop (default)
                      ├─ T2: Ubuntu 26.10 + native GNOME 51 Wayland desktop (preview)
                      └─ E1: Podman machine OS + per-chat container desktop
@@ -74,7 +74,9 @@ compatibility mode. Per-mode architecture and operations are indexed in
     and box lifecycle. A Bot runs in its own OpenSandbox inside the shared
     Ubuntu Project VM with the shared Pi worker and desktop primitives, but it
     does not share Code mode's session lease, event protocol, idle cleanup or
-    transcript authority. Code mode remains passive and request-scoped
+    transcript authority. The Bot substrate is addressed by a stable Bot
+    runtime key and a least-privilege substrate token; it never names a Code
+    session. Code mode remains passive and request-scoped
     ([ADR-0036](./docs/architecture/ADR-0036-bot-runtime-control-plane.md)).
 
 ## Repository boundaries

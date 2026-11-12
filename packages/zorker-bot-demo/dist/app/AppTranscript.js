@@ -2,6 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { ActivityCard } from '../components/ActivityCard';
 import { AgentAvatar } from '../components/AgentAvatar';
 import { ComputerCard } from '../components/ComputerCard';
+import { ConfirmationCard } from '../components/ConfirmationCard';
 import { MessageBubble } from '../components/MessageBubble';
 import { PendingRow } from '../components/PendingRow';
 import { SystemEntry } from '../components/SystemEntry';
@@ -31,6 +32,10 @@ export function AppTranscript({ entries, pending, screen, cardStatus, assetBase,
                     if (entry.kind === 'activity') {
                         previousTimestamp = entry.timestampMs;
                         return (_jsx("div", { className: "zbd-entry", children: _jsx(ActivityCard, { entry: entry }) }, entry.id));
+                    }
+                    if (entry.kind === 'confirmation') {
+                        previousTimestamp = entry.timestampMs;
+                        return (_jsx("div", { className: "zbd-entry", children: _jsx(ConfirmationCard, { entry: entry }) }, entry.id));
                     }
                     const showTimestamp = previousTimestamp === null ||
                         entry.timestampMs - previousTimestamp >= TIMESTAMP_GAP_MS;

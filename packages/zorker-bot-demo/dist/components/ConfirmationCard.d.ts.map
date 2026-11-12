@@ -1,0 +1,1 @@
+{"version":3,"file":"ConfirmationCard.d.ts","sourceRoot":"","sources":["../../src/components/ConfirmationCard.tsx"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,UAAU,CAAA;AAE/C,MAAM,MAAM,qBAAqB,GAAG;IAClC,KAAK,EAAE,OAAO,CAAC,eAAe,EAAE;QAAE,IAAI,EAAE,cAAc,CAAA;KAAE,CAAC,CAAA;CAC1D,CAAA;AAED;;;;GAIG;AACH,wBAAgB,gBAAgB,CAAC,EAAE,KAAK,EAAE,EAAE,qBAAqB,+BAiBhE"}

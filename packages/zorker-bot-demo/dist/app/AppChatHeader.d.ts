@@ -9,6 +9,7 @@ export type AppChatHeaderProps = {
     onBack: () => void;
     onToggleComputer: () => void;
     onSkipIntro: () => void;
+    onOpenProfile?: () => void;
 };
-export declare function AppChatHeader({ session, displayName, assetBase, computerOpen, showBack, introRunning, onBack, onToggleComputer, onSkipIntro, }: AppChatHeaderProps): import("react").JSX.Element;
+export declare function AppChatHeader({ session, displayName, assetBase, computerOpen, showBack, introRunning, onBack, onToggleComputer, onSkipIntro, onOpenProfile, }: AppChatHeaderProps): import("react").JSX.Element;
 //# sourceMappingURL=AppChatHeader.d.ts.map

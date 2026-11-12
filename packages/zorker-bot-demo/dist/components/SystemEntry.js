@@ -11,5 +11,11 @@ export function SystemEntry({ entry, assetBase }) {
     if (entry.event.type === 'created-routine') {
         return (_jsxs("div", { className: "zbd-system-line", children: [_jsx("span", { children: "Created routine" }), _jsxs("span", { className: "zbd-system-routine", children: [_jsx(ClockIcon, { size: 15 }), _jsx("span", { children: entry.event.name })] })] }));
     }
+    if (entry.event.type === 'routine-changed') {
+        return (_jsxs("div", { className: "zbd-system-line", children: [_jsx("span", { children: entry.event.action }), _jsxs("span", { className: "zbd-system-routine", children: [_jsx(ClockIcon, { size: 15 }), _jsx("span", { children: entry.event.name })] })] }));
+    }
+    if (entry.event.type === 'channel-changed') {
+        return (_jsxs("div", { className: "zbd-system-line", children: [entry.event.action === 'connected' ? 'Connected to' : 'Disconnected from', " ", entry.event.name] }));
+    }
     return _jsx("div", { className: "zbd-system-line", children: "Memory updated" });
 }
