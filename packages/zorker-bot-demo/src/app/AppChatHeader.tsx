@@ -13,6 +13,7 @@ export type AppChatHeaderProps = {
   onToggleComputer: () => void
   onSkipIntro: () => void
   onOpenProfile?: () => void
+  computerAvailable?: boolean
 }
 
 export function AppChatHeader({
@@ -26,6 +27,7 @@ export function AppChatHeader({
   onToggleComputer,
   onSkipIntro,
   onOpenProfile,
+  computerAvailable = true,
 }: AppChatHeaderProps) {
   const agent = sessionToAgent(session, displayName)
 
@@ -78,16 +80,18 @@ export function AppChatHeader({
             <GearIcon size={16} />
           </button>
         ) : null}
-        <button
-          aria-label={computerOpen ? 'Hide computer' : 'Open computer'}
-          aria-pressed={computerOpen}
-          className="zbd-icon-button"
-          onClick={onToggleComputer}
-          title={computerOpen ? 'Hide computer' : 'Open computer'}
-          type="button"
-        >
-          <MonitorIcon size={16} />
-        </button>
+        {computerAvailable ? (
+          <button
+            aria-label={computerOpen ? 'Hide computer' : 'Open computer'}
+            aria-pressed={computerOpen}
+            className="zbd-icon-button"
+            onClick={onToggleComputer}
+            title={computerOpen ? 'Hide computer' : 'Open computer'}
+            type="button"
+          >
+            <MonitorIcon size={16} />
+          </button>
+        ) : null}
       </div>
     </header>
   )
