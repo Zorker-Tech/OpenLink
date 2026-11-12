@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { botUpdatesFromWorkHostFrame } from '../../lib/bot-work-host-stream.ts'
-import { normalizeWorkHostTranscript, pendingConfirmationsFromTranscript } from '../../lib/bot-transcript.ts'
+import { normalizeWorkHostTranscript, pendingConfirmationsFromTranscript, transcriptFromAgentEvents } from '../../lib/bot-transcript.ts'
 
 test('a Work-host user message becomes a Bot timeline entry', () => {
   const updates = botUpdatesFromWorkHostFrame({
@@ -149,6 +149,38 @@ test('pending questions are derived from the normalized timeline', () => {
     },
     { id: 'resolved-1', kind: 'event', event: { type: 'confirmation-resolved', extensionUiId: 'q1' }, timestampMs: 2 },
   ])
+  assert.deepEqual(pendingConfirmationsFromTranscript(answered), [])
+})
+
+test('legacy confirmation events migrate as durable question cards', () => {
+  const requested = {
+    type: 'confirmation.requested',
+    id: 'event-1',
+    timestamp: '2026-01-01T00:00:00Z',
+    confirmationId: 'legacy-question',
+    title: 'Continue?',
+    message: 'Deploy now?',
+    inputKind: 'confirm',
+    confirmationKind: 'approval',
+  }
+  const pending = transcriptFromAgentEvents([requested])
+  assert.equal(pending.length, 1)
+  assert.equal(pending[0].kind, 'confirmation')
+  assert.equal(pending[0].confirmation.status, 'pending')
+  assert.deepEqual(pendingConfirmationsFromTranscript(pending).map((request) => request.id), ['legacy-question'])
+
+  const answered = transcriptFromAgentEvents([
+    requested,
+    {
+      type: 'confirmation.resolved',
+      id: 'event-2',
+      timestamp: '2026-01-01T00:00:01Z',
+      confirmationId: 'legacy-question',
+      approved: true,
+    },
+  ])
+  assert.equal(answered[0].kind, 'confirmation')
+  assert.equal(answered[0].confirmation.status, 'answered')
   assert.deepEqual(pendingConfirmationsFromTranscript(answered), [])
 })
 
