@@ -64,7 +64,11 @@ function belongsToAgent(event: unknown, agentId: string): boolean {
   return false;
 }
 
-function isTerminal(event: unknown, activeRequestId: string | null): boolean {
+function isTerminal(
+  event: unknown,
+  activeRequestId: string | null,
+  activeGroupEpoch: number | null,
+): boolean {
   if (event === null || typeof event !== "object" || Array.isArray(event)) return false;
   const record = event as Record<string, unknown>;
   if (record.channel === "bot-turn") {
@@ -79,9 +83,12 @@ function isTerminal(event: unknown, activeRequestId: string | null): boolean {
   }
   if (record.channel === "transcript") {
     const payload = record.payload;
-    return payload !== null && typeof payload === "object" && !Array.isArray(payload)
-      && (payload as Record<string, unknown>).type === "group-turn"
-      && (payload as Record<string, unknown>).phase === "ended";
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const turn = payload as Record<string, unknown>;
+    if (turn.type !== "group-turn" || turn.phase !== "ended") return false;
+    // A group turn carries its epoch; wait for the turn this stream started.
+    if (activeGroupEpoch === null) return false;
+    return typeof turn.epoch !== "number" || turn.epoch === activeGroupEpoch;
   }
   if (record.channel === "tray") {
     const payload = record.payload;
@@ -110,6 +117,7 @@ export async function handleBotPromptStream(
   // between the acceptance call and the first read of this stream.
   let terminal = false;
   let activeRequestId: string | null = null;
+  let activeGroupEpoch: number | null = null;
   const pending: string[] = [];
   let wake: (() => void) | null = null;
   const unsubscribe = dependencies.subscribe((event) => {
@@ -131,8 +139,23 @@ export async function handleBotPromptStream(
           }
         }
       }
+      if (record.channel === "transcript") {
+        const payload = record.payload;
+        if (payload !== null && typeof payload === "object" && !Array.isArray(payload)) {
+          const turn = payload as Record<string, unknown>;
+          if (turn.type === "group-turn") {
+            if (turn.phase === "started") {
+              activeGroupEpoch = typeof turn.epoch === "number" ? turn.epoch : -1;
+            }
+            if (turn.phase === "ended") {
+              if (activeGroupEpoch === null) return;
+              if (typeof turn.epoch === "number" && turn.epoch !== activeGroupEpoch) return;
+            }
+          }
+        }
+      }
     }
-    if (isTerminal(event, activeRequestId)) terminal = true;
+    if (isTerminal(event, activeRequestId, activeGroupEpoch)) terminal = true;
     pending.push(`${JSON.stringify(event)}\n`);
     wake?.();
   });

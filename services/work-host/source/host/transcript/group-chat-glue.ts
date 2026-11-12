@@ -269,6 +269,7 @@ export class GroupChatGlue {
         {
           type: "group-turn",
           phase,
+          epoch,
           timestampMs: Date.now(),
           ...(ok === undefined ? {} : { ok }),
         },
