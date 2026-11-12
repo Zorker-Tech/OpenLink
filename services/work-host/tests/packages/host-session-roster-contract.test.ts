@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 
 import { listAgents, summarizeAgentById, type RosterHost } from "../../source/host/extensions/session/session-roster.ts";
 import type { DbExtras } from "../../source/host/extensions/session/session-summaries.ts";
+import { GROUP_CONFIG_VERSION, writeSlateGroupConfig } from "../../source/host/groups/group-store.ts";
 
 function rosterDirectory() {
   const path = mkdtempSync(join(tmpdir(), "slate-session-roster-"));
@@ -111,6 +112,31 @@ describe("session roster behavior", () => {
 
       const deleting = rosterHost(fixture.path, { isAgentBeingDeleted: (id) => id === "agent-recovered" });
       assert.equal(await summarizeAgentById(deleting, "agent-recovered"), null);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  it("projects group identity and members from the authoritative group file", async () => {
+    const fixture = rosterDirectory();
+    const groupDir = join(fixture.path, "group-1");
+    mkdirSync(groupDir);
+    writeFileSync(join(groupDir, "store.db"), "store");
+    writeSlateGroupConfig(groupDir, {
+      version: GROUP_CONFIG_VERSION,
+      memberIds: ["agent-1", "agent-2"],
+    });
+    try {
+      const host = rosterHost(fixture.path, {
+        loadCachedExtras: async (id) => extras(id, 200),
+      });
+      const [listed] = await listAgents(host);
+      assert.equal(listed?.isGroup, true);
+      assert.deepEqual(listed?.memberIds, ["agent-1", "agent-2"]);
+
+      const single = await summarizeAgentById(host, "group-1");
+      assert.equal(single?.isGroup, true);
+      assert.deepEqual(single?.memberIds, ["agent-1", "agent-2"]);
     } finally {
       fixture.dispose();
     }

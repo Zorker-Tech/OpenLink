@@ -1,5 +1,7 @@
 import { readdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import { errorLogTag } from "../../../shared/errors/summary.ts";
+import { readSlateGroupConfig } from "../../groups/group-store.ts";
 import { getAgentDbPath, statIfExists } from "./session-paths.ts";
 import { buildSummary, minimalAgentSummary } from "./session-summaries.ts";
 import { reportSessionDiagnostic } from "./session-diagnostics.ts";
@@ -9,6 +11,11 @@ type AgentSummary = Record<string, unknown>;
 
 function activeAgentOptions(activeAgentId?: string): { readonly activeAgentId?: string } {
   return activeAgentId == null ? {} : { activeAgentId };
+}
+
+function groupOptions(dbPath: string): { readonly isGroup: true; readonly memberIds: string[] } | {} {
+  const group = readSlateGroupConfig(dirname(dbPath));
+  return group == null ? {} : { isGroup: true, memberIds: group.memberIds };
 }
 
 async function recoverMissingAgent(host: SessionRosterHost, dirName: string, activeAgentId?: string): Promise<AgentSummary | null> {
@@ -36,6 +43,7 @@ async function readAgentSummary(host: SessionRosterHost, dirName: string, active
       dirName,
       dbStats,
       ...activeAgentOptions(activeAgentId),
+      ...groupOptions(dbPath),
       includeBlank: false,
       agentHasMemory: (directory) => host.memory.agentHasContent(directory),
     });
@@ -49,6 +57,7 @@ async function readAgentSummary(host: SessionRosterHost, dirName: string, active
         dirName,
         dbStats,
         ...activeAgentOptions(activeAgentId),
+        ...groupOptions(dbPath),
         includeBlank: true,
         agentHasMemory: (directory) => host.memory.agentHasContent(directory),
       });
