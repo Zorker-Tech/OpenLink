@@ -6,7 +6,7 @@ import { BotRuntimeError, streamBotPrompt, warmBotRuntime } from '@/lib/bot-runt
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
-export const maxDuration = 1_800
+export const maxDuration = 3_600
 
 const encoder = new TextEncoder()
 
