@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { botUpdatesFromWorkHostFrame } from '../../lib/bot-work-host-stream.ts'
-import { normalizeWorkHostTranscript } from '../../lib/bot-transcript.ts'
+import { normalizeWorkHostTranscript, pendingConfirmationsFromTranscript } from '../../lib/bot-transcript.ts'
 
 test('a Work-host user message becomes a Bot timeline entry', () => {
   const updates = botUpdatesFromWorkHostFrame({
@@ -124,6 +124,32 @@ test('a resolved question is answered on reload', () => {
   ])
   assert.equal(transcript[0].kind, 'confirmation')
   assert.equal(transcript[0].confirmation.status, 'answered')
+})
+
+test('pending questions are derived from the normalized timeline', () => {
+  const pending = normalizeWorkHostTranscript([{
+    id: 't1s0',
+    kind: 'send-message',
+    timestampMs: 1,
+    message: { type: 'widget', widget: { kind: 'bot-question', id: 'q1', title: 'Pick', method: 'select', options: ['a', 'b'] } },
+  }])
+  assert.deepEqual(pendingConfirmationsFromTranscript(pending), [{
+    id: 'q1',
+    title: 'Pick',
+    options: ['a', 'b'],
+    inputKind: 'select',
+    confirmationKind: 'question',
+  }])
+  const answered = normalizeWorkHostTranscript([
+    {
+      id: 't1s0',
+      kind: 'send-message',
+      timestampMs: 1,
+      message: { type: 'widget', widget: { kind: 'bot-question', id: 'q1', title: 'Pick' } },
+    },
+    { id: 'resolved-1', kind: 'event', event: { type: 'confirmation-resolved', extensionUiId: 'q1' }, timestampMs: 2 },
+  ])
+  assert.deepEqual(pendingConfirmationsFromTranscript(answered), [])
 })
 
 test('a tray error is surfaced and closes the projection', () => {

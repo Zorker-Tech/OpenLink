@@ -229,6 +229,28 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
   return activity(id, type || 'Message', 'done', undefined, type, at)
 }
 
+/**
+ * The questions still waiting for an answer in a normalized timeline. This
+ * covers both Work-host entries and entries seeded by the legacy migration,
+ * and it honours the resolved marker applied by normalization.
+ */
+export function pendingConfirmationsFromTranscript(
+  entries: readonly BotTranscriptEntry[],
+): BotConfirmationRequest[] {
+  return entries.flatMap((entry) => {
+    if (entry.kind !== 'confirmation' || entry.confirmation.status !== 'pending') return []
+    const { id, title, message, options, inputKind } = entry.confirmation
+    return [{
+      id,
+      title,
+      ...(message ? { message } : {}),
+      ...(options ? { options } : {}),
+      ...(inputKind ? { inputKind } : {}),
+      confirmationKind: inputKind === 'confirm' ? 'approval' as const : 'question' as const,
+    }]
+  })
+}
+
 export function normalizeWorkHostTranscript(entries: readonly Record<string, unknown>[]): BotTranscriptEntry[] {
   // A resolved question is a later event entry, so the card's status is a
   // projection of the whole transcript, not of the widget entry alone.
