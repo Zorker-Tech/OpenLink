@@ -94,7 +94,14 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
       return [{ type: 'pending', pending: { label: payload.label.trim().slice(0, 200), showLabel: true } }]
     }
     if (phase === 'awaiting-input') return [{ type: 'pending', pending: null }]
-    if (phase === 'ended') return [{ type: 'pending', pending: null }, { type: 'done' }]
+    if (phase === 'ended') {
+      const updates: BotStreamUpdate[] = [{ type: 'pending', pending: null }]
+      if (payload.ok === false && typeof payload.error === 'string' && payload.error.trim()) {
+        updates.push({ type: 'error', message: payload.error.trim().slice(0, 2000) })
+      }
+      updates.push({ type: 'done' })
+      return updates
+    }
     return []
   }
 

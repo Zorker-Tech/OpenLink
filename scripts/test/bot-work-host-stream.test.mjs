@@ -82,6 +82,11 @@ test('turn and group lifecycles drive the pending state and terminate the stream
     { type: 'pending', pending: null },
     { type: 'done' },
   ])
+  assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'bot-turn', payload: { agentId: 'agent-1', phase: 'ended', ok: false, error: 'provider unavailable' } }), [
+    { type: 'pending', pending: null },
+    { type: 'error', message: 'provider unavailable' },
+    { type: 'done' },
+  ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'transcript', payload: { agentId: 'group-1', type: 'group-turn', phase: 'started' } }), [
     { type: 'pending', pending: { label: 'Working', showLabel: true } },
   ])
