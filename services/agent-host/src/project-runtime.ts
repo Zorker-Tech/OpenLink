@@ -2564,23 +2564,49 @@ export class ProjectRuntimeManager {
       }
 
       const used = await this.readUsedProjectPorts(projectId)
-      for (let offset = 0; offset < this.projectPortRangeSize; offset += 1) {
-        const openSandbox = this.projectPortBase + offset + this.opensandboxPortOffset
-        const browserHost = openSandbox - this.opensandboxPortOffset + this.browserPortOffset
-        const codeServer = openSandbox - this.opensandboxPortOffset + this.codeServerPortOffset
-        const supabaseGateway = openSandbox - this.opensandboxPortOffset + this.supabaseGatewayPortOffset
-        const supabaseDatabase = openSandbox - this.opensandboxPortOffset + this.supabaseDatabasePortOffset
-        const supabasePooler = openSandbox - this.opensandboxPortOffset + this.supabasePoolerPortOffset
-        const desktop = openSandbox - this.opensandboxPortOffset + this.desktopPortOffset
-        const sshPort = browserHost + 101
-        const candidates = [openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop, sshPort]
-        if (candidates.some((candidate) => !Number.isSafeInteger(candidate) || candidate < 1_024 || candidate > 65_000 || used.has(candidate))) continue
-        if (new Set(candidates).size !== candidates.length) continue
-        const allocation: ProjectRuntimeServicePorts = { opensandbox: openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop }
-        if (!await this.areHostPortsAvailable(allocation)) continue
-        await this.persistProjectPorts(projectId, allocation)
-        this.portAllocations.set(projectId, allocation)
-        return allocation
+      // A host can reserve large blocks inside the preferred window (WSL and
+      // container runtimes commonly reserve a few thousand ephemeral ports).
+      // The service offsets span several windows, so one reserved band can make
+      // every block in the preferred window unusable. Fall through to other
+      // safe windows before declaring the project port space exhausted.
+      const highestOffset = Math.max(
+        this.opensandboxPortOffset,
+        this.browserPortOffset + 101,
+        this.codeServerPortOffset,
+        this.supabaseGatewayPortOffset,
+        this.supabaseDatabasePortOffset,
+        this.supabasePoolerPortOffset,
+        this.desktopPortOffset,
+      )
+      const bases = [...new Set([
+        this.projectPortBase,
+        50_000,
+        45_000,
+        40_000,
+        35_000,
+        30_000,
+        25_000,
+        20_000,
+      ])].filter((base) => base >= 1_024 && base + this.projectPortRangeSize - 1 + highestOffset <= 65_000)
+      for (const base of bases) {
+        for (let offset = 0; offset < this.projectPortRangeSize; offset += 1) {
+          const openSandbox = base + offset + this.opensandboxPortOffset
+          const browserHost = openSandbox - this.opensandboxPortOffset + this.browserPortOffset
+          const codeServer = openSandbox - this.opensandboxPortOffset + this.codeServerPortOffset
+          const supabaseGateway = openSandbox - this.opensandboxPortOffset + this.supabaseGatewayPortOffset
+          const supabaseDatabase = openSandbox - this.opensandboxPortOffset + this.supabaseDatabasePortOffset
+          const supabasePooler = openSandbox - this.opensandboxPortOffset + this.supabasePoolerPortOffset
+          const desktop = openSandbox - this.opensandboxPortOffset + this.desktopPortOffset
+          const sshPort = browserHost + 101
+          const candidates = [openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop, sshPort]
+          if (candidates.some((candidate) => !Number.isSafeInteger(candidate) || candidate < 1_024 || candidate > 65_000 || used.has(candidate))) continue
+          if (new Set(candidates).size !== candidates.length) continue
+          const allocation: ProjectRuntimeServicePorts = { opensandbox: openSandbox, browserHost, codeServer, supabaseGateway, supabaseDatabase, supabasePooler, desktop }
+          if (!await this.areHostPortsAvailable(allocation)) continue
+          await this.persistProjectPorts(projectId, allocation)
+          this.portAllocations.set(projectId, allocation)
+          return allocation
+        }
       }
       throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project runtime port range is exhausted', { retryable: true })
     } finally {

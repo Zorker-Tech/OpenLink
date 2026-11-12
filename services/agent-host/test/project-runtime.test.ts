@@ -1007,3 +1007,48 @@ test('cleans a Project VM when session storage preparation fails', async () => {
     await rm(stateRoot, { recursive: true, force: true })
   }
 })
+
+test('falls back to another port window when the host reserves the preferred one', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-runtime-'))
+  const allocations: Array<{ projectId: string; ports: { opensandbox: number; browserHost: number; codeServer: number } }> = []
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine: projectSupabaseRunInMachine,
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const vmManager = new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' })
+  const serviceDriver = {
+    supportsEgress: true,
+    ensureServices: async (input: ProjectRuntimeServiceInput) => { allocations.push({ projectId: input.projectId, ports: input.ports }) },
+    stopServices: async () => undefined,
+    removeServices: async () => undefined,
+  }
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager,
+    machineDriver,
+    serviceDriver,
+    opensandboxImage: 'openlink/opensandbox-server:dev',
+    browserHostImage: 'openlink/browser-host:dev',
+    execdImage: 'openlink/opensandbox-execd:dev',
+    egressImage: 'openlink/opensandbox-egress:dev',
+    agentWorkerImage: 'openlink/agent-worker:dev',
+    projectPortRangeSize: 2,
+    // Simulate a host runtime that reserves the entire preferred window,
+    // including the derived SSH and secondary service ports.
+    hostPortAvailable: async (port) => port < 57_000 || port > 64_000,
+  })
+  const projectId = '5b6c2f0e-3d14-4a8a-9f60-7c2b1d4e8a93'
+  try {
+    await runtime.ensure(projectId, 'thin')
+    assert.equal(allocations.length, 1)
+    assert.equal(allocations[0]?.ports.opensandbox, 50_000)
+    assert.equal(allocations[0]?.ports.browserHost, 51_000)
+    assert.equal(allocations[0]?.ports.codeServer, 52_000)
+    await runtime.close()
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
