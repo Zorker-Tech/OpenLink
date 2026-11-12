@@ -38,7 +38,6 @@ export async function POST(
       ready: result.ready,
       agent: result.agent,
       runtimeKey: bot.runtimeKey,
-      runtimeSessionId: bot.runtimeSessionId,
       desktopUrl: result.desktopUrl,
       runtimeStatus: 'ready' as const,
     }, { headers: { 'Cache-Control': 'no-store' } })

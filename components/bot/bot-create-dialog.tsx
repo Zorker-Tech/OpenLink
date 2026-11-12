@@ -173,7 +173,6 @@ export function BotCreateDialog({
     })
     const payload = await response.json().catch(() => null) as {
       ready?: unknown
-      runtimeSessionId?: unknown
       error?: { message?: string }
     } | null
     if (!response.ok || payload?.ready !== true) {
@@ -181,7 +180,6 @@ export function BotCreateDialog({
     }
     return {
       ...bot,
-      runtimeSessionId: typeof payload.runtimeSessionId === 'string' ? payload.runtimeSessionId : bot.runtimeSessionId,
       runtimeStatus: 'ready' as const,
       runtimeReadyAt: new Date().toISOString(),
       runtimeLastError: null,
