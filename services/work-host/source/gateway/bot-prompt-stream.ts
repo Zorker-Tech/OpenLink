@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { readBody } from "./gateway-server-http.ts";
 import type { GatewayServerDeps } from "./gateway-server-contracts.ts";
 
-const IDLE_END_MS = 10 * 60_000;
+const IDLE_END_MS = 20 * 60_000;
 const TOTAL_END_MS = 60 * 60_000;
 const HEARTBEAT_MS = 15_000;
 const FORWARDED_CHANNELS = new Set(["transcript", "outline", "bot-turn", "tray", "agent-upserted"]);

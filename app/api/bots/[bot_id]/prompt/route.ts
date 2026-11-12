@@ -140,6 +140,17 @@ export async function POST(
         }
       }
 
+      // The Bot turn can be silent while a tool runs. An SSE comment keeps
+      // the browser/proxy connection alive without inventing timeline data.
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(': ping\n\n'))
+        } catch {
+          // The stream is already closing.
+        }
+      }, 15_000)
+      heartbeat.unref?.()
+
       try {
         while (true) {
           const { done, value } = await reader.read()
@@ -162,6 +173,7 @@ export async function POST(
         controller.enqueue(frame({ type: 'error', message: 'BOT_RUNTIME_STREAM_FAILED' }))
         controller.enqueue(frame({ type: 'done' }))
       } finally {
+        clearInterval(heartbeat)
         try { reader.releaseLock() } catch {}
         controller.close()
       }
