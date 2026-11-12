@@ -80,7 +80,27 @@ export type ActivityEntry = {
   }
 }
 
-export type TranscriptEntry = AgentMessageEntry | UserMessageEntry | ComputerEntry | SystemEntryData | ActivityEntry
+export type ConfirmationEntry = {
+  kind: 'confirmation'
+  id: string
+  timestampMs: number
+  confirmation: {
+    id: string
+    title: string
+    message?: string
+    options?: string[]
+    inputKind?: 'confirm' | 'select' | 'input' | 'editor'
+    status: 'pending' | 'answered'
+  }
+}
+
+export type TranscriptEntry =
+  | AgentMessageEntry
+  | UserMessageEntry
+  | ComputerEntry
+  | SystemEntryData
+  | ActivityEntry
+  | ConfirmationEntry
 
 export type ScreenView = 'login' | 'portal'
 

@@ -6,7 +6,7 @@ export type BotActivityStatus = 'running' | 'done' | 'failed'
 
 export type BotTranscriptEntry = Extract<
   TranscriptEntry,
-  { kind: 'user-message' | 'agent-message' | 'activity' | 'system' }
+  { kind: 'user-message' | 'agent-message' | 'activity' | 'system' | 'confirmation' }
 >
 
 export type BotStreamUpdate =
@@ -191,13 +191,62 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
     return { kind: 'agent-message', id, content: `[${label}]`, timestampMs: at }
   }
 
-  return activity(id, type === 'widget' ? text(message.prompt) || 'Question' : type || 'Message', 'done', undefined, type, at)
+  if (type === 'widget') {
+    const widget = message.widget && typeof message.widget === 'object' && !Array.isArray(message.widget)
+      ? message.widget as Record<string, unknown>
+      : null
+    if (widget?.kind === 'bot-question') {
+      const confirmationId = text(widget.id).trim()
+      if (!confirmationId) return null
+      const method = widget.method === 'confirm' || widget.method === 'select' || widget.method === 'input' || widget.method === 'editor'
+        ? widget.method
+        : undefined
+      const options = Array.isArray(widget.options)
+        ? widget.options.flatMap((option) => {
+            const value = text(option).trim()
+            return value ? [value] : []
+          }).slice(0, 24)
+        : []
+      return {
+        kind: 'confirmation',
+        id,
+        timestampMs: at,
+        confirmation: {
+          id: confirmationId,
+          title: text(widget.title).trim() || 'Confirmation needed',
+          ...(text(widget.prompt).trim() ? { message: text(widget.prompt).trim().slice(0, 4_000) } : {}),
+          ...(options.length ? { options } : {}),
+          ...(method ? { inputKind: method } : {}),
+          status: entry.respondedValue != null ? 'answered' : 'pending',
+        },
+      }
+    }
+    return activity(id, text(message.prompt) || 'Question', 'done', undefined, 'widget', at)
+  }
+
+  return activity(id, type || 'Message', 'done', undefined, type, at)
 }
 
 export function normalizeWorkHostTranscript(entries: readonly Record<string, unknown>[]): BotTranscriptEntry[] {
+  // A resolved question is a later event entry, so the card's status is a
+  // projection of the whole transcript, not of the widget entry alone.
+  const resolved = new Set<string>()
+  for (const entry of entries) {
+    if (entry.kind !== 'event') continue
+    const event = entry.event && typeof entry.event === 'object' && !Array.isArray(entry.event)
+      ? entry.event as Record<string, unknown>
+      : null
+    if (event?.type === 'confirmation-resolved' && typeof event.extensionUiId === 'string') {
+      resolved.add(event.extensionUiId)
+    }
+  }
   return entries.flatMap((entry) => {
     const normalized = normalizeWorkHostEntry(entry)
-    return normalized ? [normalized] : []
+    if (!normalized) return []
+    if (normalized.kind === 'confirmation' && resolved.has(normalized.confirmation.id)) {
+      return [{ ...normalized, confirmation: { ...normalized.confirmation, status: 'answered' as const } }]
+    }
+    return [normalized]
   })
 }
 
@@ -253,6 +302,24 @@ export function toWorkHostEntry(entry: BotTranscriptEntry): Record<string, unkno
       }
     }
     return { id, kind: 'event', event: { type: 'memory-updated' }, timestampMs: at }
+  }
+  if (entry.kind === 'confirmation') {
+    return {
+      id,
+      kind: 'send-message',
+      message: {
+        type: 'widget',
+        widget: {
+          kind: 'bot-question',
+          id: entry.confirmation.id,
+          title: entry.confirmation.title,
+          ...(entry.confirmation.message ? { prompt: entry.confirmation.message } : {}),
+          ...(entry.confirmation.options ? { options: entry.confirmation.options } : {}),
+          ...(entry.confirmation.inputKind ? { method: entry.confirmation.inputKind } : {}),
+        },
+      },
+      timestampMs: at,
+    }
   }
   return {
     id,

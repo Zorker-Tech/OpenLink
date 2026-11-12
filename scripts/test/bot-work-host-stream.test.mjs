@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { botUpdatesFromWorkHostFrame } from '../../lib/bot-work-host-stream.ts'
+import { normalizeWorkHostTranscript } from '../../lib/bot-transcript.ts'
 
 test('a Work-host user message becomes a Bot timeline entry', () => {
   const updates = botUpdatesFromWorkHostFrame({
@@ -37,7 +38,14 @@ test('a Pi question widget is both a timeline entry and an actionable confirmati
   })
   assert.equal(updates.length, 2)
   assert.equal(updates[0].type, 'entry')
-  assert.equal(updates[0].entry.kind, 'activity')
+  assert.equal(updates[0].entry.kind, 'confirmation')
+  assert.deepEqual(updates[0].entry.confirmation, {
+    id: 'dialog-1',
+    title: 'Continue?',
+    message: 'Deploy now?',
+    inputKind: 'confirm',
+    status: 'pending',
+  })
   assert.deepEqual(updates[1], {
     type: 'confirmation',
     request: {
@@ -81,6 +89,35 @@ test('turn and group lifecycles drive the pending state and terminate the stream
     { type: 'pending', pending: null },
     { type: 'done' },
   ])
+})
+
+test('a resolved question and a live status line are projected', () => {
+  assert.deepEqual(botUpdatesFromWorkHostFrame({
+    channel: 'transcript',
+    payload: {
+      type: 'appended',
+      agentId: 'agent-1',
+      entry: { id: 'resolved-1', kind: 'event', timestampMs: 3, event: { type: 'confirmation-resolved', extensionUiId: 'dialog-1' } },
+    },
+  }), [{ type: 'confirmation-resolved', id: 'dialog-1' }])
+  assert.deepEqual(botUpdatesFromWorkHostFrame({
+    channel: 'bot-turn',
+    payload: { agentId: 'agent-1', phase: 'status', label: 'Checking the deploy' },
+  }), [{ type: 'pending', pending: { label: 'Checking the deploy', showLabel: true } }])
+})
+
+test('a resolved question is answered on reload', () => {
+  const transcript = normalizeWorkHostTranscript([
+    {
+      id: 't1s0',
+      kind: 'send-message',
+      timestampMs: 1,
+      message: { type: 'widget', widget: { kind: 'bot-question', id: 'q1', title: 'Continue?' } },
+    },
+    { id: 'resolved-1', kind: 'event', event: { type: 'confirmation-resolved', extensionUiId: 'q1' }, timestampMs: 2 },
+  ])
+  assert.equal(transcript[0].kind, 'confirmation')
+  assert.equal(transcript[0].confirmation.status, 'answered')
 })
 
 test('a tray error is surfaced and closes the projection', () => {

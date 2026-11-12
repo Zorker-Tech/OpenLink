@@ -246,6 +246,27 @@ function emitExtensionUiCard(
   emitGateway: (payload: Record<string, unknown>) => void,
 ): void {
   const method = typeof event.method === "string" ? event.method : "";
+  if (method === "notify") {
+    // A user-facing notice is durable: it becomes an activity card in the
+    // Bot timeline, not a transient status line.
+    const label = typeof event.message === "string" ? event.message.trim().slice(0, 2000) : "";
+    if (label.length > 0) {
+      emit({
+        type: "send-message",
+        message: { type: "bot-activity", activity: { label, status: "done", tool: "notice" } },
+        timestampMs: now(),
+        ...(typeof ackToken === "string" ? { ackToken } : {}),
+      });
+    }
+    return;
+  }
+  if (method === "setStatus") {
+    // A status line is live progress, not history. It drives the pending beat
+    // and is never written to the transcript.
+    const label = typeof event.statusText === "string" ? event.statusText.trim().slice(0, 200) : "";
+    if (label.length > 0) emitGateway({ phase: "status", label });
+    return;
+  }
   const id = typeof event.id === "string" ? event.id : "";
   if (!DIALOG_METHODS.has(method) || id.length === 0) return;
   const title = typeof event.title === "string" ? event.title : undefined;

@@ -8,6 +8,7 @@ import type {
 import { ActivityCard } from '../components/ActivityCard'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { ComputerCard } from '../components/ComputerCard'
+import { ConfirmationCard } from '../components/ConfirmationCard'
 import { MessageBubble } from '../components/MessageBubble'
 import { PendingRow } from '../components/PendingRow'
 import { SystemEntry } from '../components/SystemEntry'
@@ -102,6 +103,15 @@ export function AppTranscript({
             return (
               <div className="zbd-entry" key={entry.id}>
                 <ActivityCard entry={entry} />
+              </div>
+            )
+          }
+
+          if (entry.kind === 'confirmation') {
+            previousTimestamp = entry.timestampMs
+            return (
+              <div className="zbd-entry" key={entry.id}>
+                <ConfirmationCard entry={entry} />
               </div>
             )
           }
