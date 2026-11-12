@@ -10,7 +10,7 @@ import { WorkModelSelector, type WorkModelOption } from '@/components/work-model
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { BotSummary } from '@/lib/bot-types'
 import { Check, LoaderCircle, Trash2 } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 type BotProfileDialogProps = {
   bot: BotSummary
@@ -61,7 +61,9 @@ export function BotProfileDialog({
   const [description, setDescription] = useState(bot.description)
   const [shape, setShape] = useState(bot.avatarShape)
   const [color, setColor] = useState(bot.avatarColor)
-  const [modelId, setModelId] = useState(bot.modelId ?? '')
+  const isGroup = bot.kind === 'group'
+  const initialModelId = bot.providerId && bot.modelId ? `${bot.providerId}/${bot.modelId}` : ''
+  const [modelId, setModelId] = useState(initialModelId || models[0]?.id || '')
   const [memberIds, setMemberIds] = useState<string[]>(bot.memberIds)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -69,7 +71,25 @@ export function BotProfileDialog({
   const [error, setError] = useState<string | null>(null)
   const completeRef = useRef<AgentAvatarHandle>(null)
   const hiddenCompleteRef = useRef<AgentAvatarHandle>(null)
-  const isGroup = bot.kind === 'group'
+  const modelChoices = useMemo(() => {
+    const choices = [...models]
+    // A Bot can outlive a provider configuration edit. Keep its current model
+    // selectable so changing the name or avatar does not require re-picking a
+    // model that is no longer in the enabled catalog.
+    if (!isGroup && bot.providerId && bot.modelId && !choices.some((model) => model.providerId === bot.providerId && model.modelId === bot.modelId)) {
+      choices.unshift({
+        id: initialModelId,
+        providerId: bot.providerId,
+        providerName: bot.providerId,
+        modelId: bot.modelId,
+        name: bot.modelId,
+        logo: bot.providerId,
+        isDefault: false,
+      })
+    }
+    return choices
+  }, [bot.modelId, bot.providerId, initialModelId, isGroup, models])
+  const selectedModelOption = modelChoices.find((model) => model.id === modelId) ?? null
   const candidates = bots.filter((candidate) => candidate.kind === 'bot' && candidate.id !== bot.id)
 
   const save = useCallback(async () => {
@@ -92,7 +112,11 @@ export function BotProfileDialog({
           avatarShape: shape,
           avatarColor: color,
           ...(png ? { avatarPngBase64: png.replace(/^data:image\/png;base64,/, '') } : {}),
-          ...(isGroup ? { memberIds } : { model: modelId }),
+          ...(isGroup
+            ? { memberIds }
+            : selectedModelOption
+              ? { model: { providerId: selectedModelOption.providerId, modelId: selectedModelOption.modelId } }
+              : {}),
         }),
         cache: 'no-store',
       })
@@ -110,7 +134,7 @@ export function BotProfileDialog({
     } finally {
       setSaving(false)
     }
-  }, [bot.id, color, description, isGroup, memberIds, modelId, name, onClose, onSaved, saving, shape])
+  }, [bot.id, color, description, isGroup, memberIds, name, onClose, onSaved, saving, selectedModelOption, shape])
 
   const remove = useCallback(async () => {
     if (deleting) return
@@ -145,7 +169,7 @@ export function BotProfileDialog({
   }
 
   return (
-    <div className="zbd-app-palette-scrim" role="presentation">
+    <div className="zbd-app-palette-layer" role="presentation">
       <button aria-label="Close profile" className="zbd-app-palette-scrim" onClick={onClose} type="button" />
       <div
         aria-label={`${bot.name} profile`}
@@ -223,11 +247,11 @@ export function BotProfileDialog({
               ) : (
                 <div className="zbd-app-create-field">
                   <span>Model</span>
-                  {models.length ? (
+                  {modelChoices.length ? (
                     <WorkModelSelector
                       className="zbd-app-create-model"
                       initialView="models"
-                      models={modelOptions(models)}
+                      models={modelOptions(modelChoices)}
                       onValueChange={(next) => setModelId(next.modelId)}
                       value={{ modelId }}
                     />
@@ -307,7 +331,7 @@ export function BotProfileDialog({
           </button>
           <button
             className="zbd-app-create-submit"
-            disabled={saving || deleting || !name.trim() || (isGroup && memberIds.length === 0)}
+            disabled={saving || deleting || !name.trim() || (isGroup ? memberIds.length === 0 : !selectedModelOption)}
             onClick={() => void save()}
             type="button"
           >
