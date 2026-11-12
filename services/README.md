@@ -53,12 +53,14 @@ Work client plus `host`, `gateway`, and `box-exec` entrypoints. The root
 lifecycle starts it as a supervised loopback process; the Next.js application
 must not import its privileged runtime source directly.
 
-Work Host owns Bot agent profiles, avatars and transcripts. Each
-`openlink.bots` row maps one Work-host agent to one hidden `surface = 'bot'`
-chat session. Bot execution and the Bot computer remain Code-mode resources:
-the same Ubuntu Project VM, per-session OpenSandbox, Pi worker and session
-desktop. The BFF bridge and recovery contract are documented in
-[ADR-0035](../docs/architecture/ADR-0035-bot-work-host-integration.md).
+Work Host owns the Bot control plane: agent profiles, avatars, transcripts,
+run queues, automations, groups and box lifecycle. Each `openlink.bots` row
+maps one Work-host agent to one Bot runtime identity. A Bot runs in its own
+OpenSandbox inside the shared Ubuntu Project VM with the shared Pi worker and
+desktop primitives, but it does not share Code mode's Agent Host lease, event
+protocol, idle cleanup or transcript authority. Code mode remains passive and
+request-scoped. The boundary and recovery contract are documented in
+[ADR-0036](../docs/architecture/ADR-0036-bot-runtime-control-plane.md).
 
 Civilization stays as a separate upstream service at `services/civilization`.
 Agent Host starts its Stage74 Orion memory service through the small

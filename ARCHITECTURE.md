@@ -69,11 +69,13 @@ compatibility mode. Per-mode architecture and operations are indexed in
     provided by WSL2 runs a native Project VM; WSL itself is not the Project VM.
     macOS and Windows use E1 until native T1 drivers are accepted. T2 requires
     the same QEMU/KVM host plus a virtio-gpu device and is a preview channel.
-15. **Bot domain state and Bot execution have separate owners.** Work Host owns
-    Bot agent profiles, avatars and transcripts. A Bot's computer is the same
-    Project VM / per-session OpenSandbox / Pi worker / session desktop used by
-    Code mode, addressed by the Bot's hidden `surface = 'bot'` chat session
-    ([ADR-0035](./docs/architecture/ADR-0035-bot-work-host-integration.md)).
+15. **Bot control and Code control are separate planes over one substrate.**
+    Work Host owns Bot profiles, transcripts, run queues, automations, groups
+    and box lifecycle. A Bot runs in its own OpenSandbox inside the shared
+    Ubuntu Project VM with the shared Pi worker and desktop primitives, but it
+    does not share Code mode's session lease, event protocol, idle cleanup or
+    transcript authority. Code mode remains passive and request-scoped
+    ([ADR-0036](./docs/architecture/ADR-0036-bot-runtime-control-plane.md)).
 
 ## Repository boundaries
 
