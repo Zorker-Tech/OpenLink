@@ -119,6 +119,7 @@ export class GroupChatGlue {
     name: string;
     description?: string;
     memberIds: string[];
+    externalId?: string;
   }): Promise<any> {
     const allAgents = await this.tm.sessionStore.listAgents();
     const existing = new Set<string>(allAgents.map((agent: any) => agent.id));
@@ -138,10 +139,17 @@ export class GroupChatGlue {
       );
     }
 
-    const duplicate = allAgents.find(
-      (agent: any) =>
-        agent.isGroup && isSameMemberSet(agent.memberIds, memberIds),
-    );
+    const externalId = turnRequest.externalId?.trim() || undefined;
+    const duplicate = externalId == null
+      ? allAgents.find(
+          (agent: any) =>
+            agent.isGroup && isSameMemberSet(agent.memberIds, memberIds),
+        )
+      : allAgents.find(
+          (agent: any) =>
+            agent.isGroup &&
+            readSlateGroupConfig(this.tm.sessionStore.getAgentDir(agent.id))?.externalId === externalId,
+        );
     if (duplicate != null) {
       const transcript = await this.tm.switchAgent(duplicate.id);
       const stamp = this.tm.roster.reserveSnapshotStamp();
@@ -162,6 +170,7 @@ export class GroupChatGlue {
     writeSlateGroupConfig(this.tm.sessionStore.getAgentDir(created.agent.id), {
       version: GROUP_CONFIG_VERSION,
       memberIds,
+      ...(externalId === undefined ? {} : { externalId }),
     });
     this.tm.productAnalytics.trackEvent("slate.group.created", {
       group_id: created.agent.id,
@@ -207,6 +216,8 @@ export class GroupChatGlue {
       writeSlateGroupConfig(dir, {
         version: GROUP_CONFIG_VERSION,
         memberIds: cleaned,
+        ...(current.remoteMembers === undefined ? {} : { remoteMembers: current.remoteMembers }),
+        ...(current.externalId === undefined ? {} : { externalId: current.externalId }),
       });
       await this.tm.roster.emitAgents();
     }
