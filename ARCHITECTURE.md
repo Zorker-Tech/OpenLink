@@ -15,6 +15,7 @@ boundaries:
 Browser
   → Next.js Web/BFF
       → ZOKERBASE (identity + authoritative application data)
+      → Work Host (Bot agents, profiles, avatars and transcripts)
       → Agent Host → Project VM → OpenSandbox → Agent Worker/Pi
                      ├─ T1: Ubuntu 24.04 LTS + native GNOME X11 desktop (default)
                      ├─ T2: Ubuntu 26.10 + native GNOME 51 Wayland desktop (preview)
@@ -68,6 +69,11 @@ compatibility mode. Per-mode architecture and operations are indexed in
     provided by WSL2 runs a native Project VM; WSL itself is not the Project VM.
     macOS and Windows use E1 until native T1 drivers are accepted. T2 requires
     the same QEMU/KVM host plus a virtio-gpu device and is a preview channel.
+15. **Bot domain state and Bot execution have separate owners.** Work Host owns
+    Bot agent profiles, avatars and transcripts. A Bot's computer is the same
+    Project VM / per-session OpenSandbox / Pi worker / session desktop used by
+    Code mode, addressed by the Bot's hidden `surface = 'bot'` chat session
+    ([ADR-0035](./docs/architecture/ADR-0035-bot-work-host-integration.md)).
 
 ## Repository boundaries
 
@@ -76,7 +82,7 @@ compatibility mode. Per-mode architecture and operations are indexed in
   owns a loopback gateway and Cloud/self-hosted connection profiles, and never
   embeds backend credentials, a second BFF, or a managed local runtime.
 - Owned privileged services: `services/agent-*`, `services/browser-host`,
-  `services/knowledge-service`.
+  `services/knowledge-service`, `services/work-host`.
 - Vendored runtime source: `services/pi`, `opensandbox`, `sandbox-runtime`,
   `code-server`, `linux`, `zero`, plus the sparse `backend/` snapshot.
 - Authoritative schema: `zorkerbase/migrations/`.
