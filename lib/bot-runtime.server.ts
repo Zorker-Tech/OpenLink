@@ -46,6 +46,12 @@ function workHostRuntimeError(error: unknown): BotRuntimeError {
   const status = error !== null && typeof error === 'object' && typeof (error as { status?: unknown }).status === 'number'
     ? (error as { status: number }).status
     : 503
+  // The Work-host token is a server credential. A 401/403 from it is a
+  // deployment misconfiguration, not the browser user's authentication
+  // failure; never forward it as a session-level auth error.
+  if (status === 401 || status === 403) {
+    return new BotRuntimeError('BOT_RUNTIME_UNAVAILABLE', 'BOT_RUNTIME_UNAVAILABLE', 503, true)
+  }
   const code = status === 409
     ? 'BOT_RUNTIME_BUSY'
     : status === 400
