@@ -51,13 +51,26 @@ current host implementation when selecting capabilities for an application.
 
 ## OpenLink Bot bridge
 
-OpenLink runs this host as a supervised, loopback-only service and treats it as the Bot domain
-authority for agent profiles, avatars and transcripts. The application database keeps a workspace
-scoped `openlink.bots` projection; each row maps one Bot to one Work-host agent and one hidden
-Code-mode chat session. The Code-mode Agent Host remains the execution authority: Pi runs in a
-per-session OpenSandbox inside the Ubuntu Project VM, and the same chat session owns the desktop.
+OpenLink runs this host as a supervised, loopback-only service and treats it as the Bot control
+plane: agent profiles, avatars, transcripts, run scheduling, automations, groups and Bot recovery.
+The application database keeps a workspace-scoped `openlink.bots` projection; each row maps one Bot
+to one Work-host agent and one stable Bot runtime key (`bot-<botId>`). The key is opaque and is not a
+chat session.
 
-The bridge uses four additive gateway commands:
+Bot execution uses the shared substrate without sharing the Code control plane. Work-host asks the
+substrate for exactly one OpenSandbox per Bot key inside the Ubuntu Project VM, runs turns through
+the shared Pi worker inside that sandbox, and owns the Bot's run queue, transcript settlement,
+automations and group orchestration. It never calls the Code session lease, the Code prompt stream,
+the Code event handler or the Code idle reaper.
+
+The bridge uses these additive gateway commands:
+
+- `ensureBotBox` / `getBotBoxStatus` / `releaseBotBox` provision, read and release the Bot's
+  sandbox and desktop. The substrate token is separate from the Code control-plane token.
+- `POST /api/bot/sendPrompt` durably accepts a Bot turn and streams only that Bot's transcript,
+  outline and turn-lifecycle frames. A client disconnect stops the projection, not the turn.
+- `respondBotExtensionUi` answers a Pi dialog that is waiting inside the Bot worker.
+- `createBackgroundAgent` creates a non-kickstarted agent with the Bot's profile and avatar inputs.
 
 - `createBackgroundAgent` creates a non-kickstarted agent with the Bot's profile and avatar inputs.
 - `appendAgentTranscriptEntries` mirrors durable Bot timeline entries into the agent store. It accepts

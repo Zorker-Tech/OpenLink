@@ -160,6 +160,10 @@ const COMMAND_NAMES = [
   "listRoutedMcpTools",
   "executeRoutedMcpTool",
   "listBoxMcpServers",
+  "ensureBotBox",
+  "getBotBoxStatus",
+  "releaseBotBox",
+  "respondBotExtensionUi",
 ] as const;
 
 type GatewayCommandName = (typeof COMMAND_NAMES)[number];

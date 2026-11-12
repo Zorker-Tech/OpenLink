@@ -28,6 +28,7 @@ import {
   type GatewayServerDeps,
 } from "./gateway-server-contracts.ts";
 import { handleAvatarImage, handleBridgeRequests, handleBridgeResponses, handleEvents } from "./gateway-server-routes.ts";
+import { handleBotPromptStream } from "./bot-prompt-stream.ts";
 
 export {
   DISABLE_SSE_GZIP_ENV,
@@ -84,9 +85,10 @@ export async function handleRequest(
   const localResponses = request.method === "POST" && url.pathname === GATEWAY_LOCAL_EXEC_RESPONSES_PATH;
   const webAuthnRequests = request.method === "GET" && url.pathname === GATEWAY_WEBAUTHN_REQUESTS_PATH;
   const webAuthnResponses = request.method === "POST" && url.pathname === GATEWAY_WEBAUTHN_RESPONSES_PATH;
+  const botPrompt = request.method === "POST" && url.pathname === `${SLATE_GATEWAY.paths.api}/bot/sendPrompt`;
   const command = request.method === "POST" && url.pathname.startsWith(`${SLATE_GATEWAY.paths.api}/`);
 
-  if (!(eventStream || prepareUpgrade || avatar || localRequests || localResponses || webAuthnRequests || webAuthnResponses || command)) {
+  if (!(eventStream || prepareUpgrade || avatar || localRequests || localResponses || webAuthnRequests || webAuthnResponses || botPrompt || command)) {
     return respondError(response, 404, `not found: ${request.method} ${url.pathname}`);
   }
   if ((localRequests || localResponses) && dependencies.authToken == null) {
@@ -119,6 +121,7 @@ export async function handleRequest(
   }
   if (eventStream) return handleEvents(dependencies, request, response, parseSubscribedChannels(url));
   if (avatar) return handleAvatarImage(dependencies, request, response, url);
+  if (botPrompt) return handleBotPromptStream(dependencies, request, response);
 
   const method = url.pathname.slice(SLATE_GATEWAY.paths.api.length + 1);
   return routeCommand(dependencies, method, await readBody(request), response, request);

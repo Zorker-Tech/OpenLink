@@ -90,7 +90,7 @@ function sharedRoomIdOf(record: Record<string, unknown>): string | undefined {
 }
 
 /** The embedding product's id for this group, when it has one. */
-function externalIdOf(record: Record<string, unknown>): string | undefined {
+function externalIdOf(record: { readonly externalId?: unknown }): string | undefined {
   const value = record.externalId;
   return typeof value === "string" && value.length > 0 && value.length <= 128 ? value : undefined;
 }

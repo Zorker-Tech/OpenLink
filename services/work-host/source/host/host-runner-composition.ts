@@ -236,6 +236,12 @@ export interface HostRunnerCompositionDependencies<Runner extends ProductionSess
       onSiteVisit(visit: any, record: any): void;
     },
   ): unknown;
+  /**
+   * The Bot binding for an agent, when the agent is Bot-backed. The runner
+   * composition uses its presence to select the Pi-backed Bot runner; a
+   * missing binding keeps the ordinary Work-agent runner.
+   */
+  readonly botRuntimeProvider?: (agentId: string) => unknown;
   readonly mirrorPoolFactory?: () => TranscriptMirrorOffloadPool;
 }
 
@@ -531,6 +537,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
   function createRunner(session: HostRunnerSession, hooks: HostRunnerHooks, overrides: HostRunnerOverrides = {}): Runner {
     const scope = deriveHostRunnerScope(overrides);
     const isSharedRoomTurn = scope.sharedRoomTurn;
+    const botRuntime = deps.botRuntimeProvider?.(session.id);
     const localExec = extensions.api("local-exec");
     const attachments = extensions.api("attachments");
     const memory = extensions.api("memory");
@@ -900,6 +907,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         !Boolean(looseMethod(experiments, "checkFeatureGate")?.("slate_shared_room_box_tools_kill_switch")) &&
         sharedRoomBoxToolsAreEnabled(process.env.SLATE_SHARED_ROOM_BOX_TOOLS),
       getAgentId: () => session.id,
+      ...(botRuntime === undefined ? {} : { botRuntime, isBotRunner: true }),
       agentProfileProvider: hooks.agentProfileProvider,
       connectorManifests: CONNECTOR_MANIFESTS,
       ingestAttachment: hooks.ingestAttachment,

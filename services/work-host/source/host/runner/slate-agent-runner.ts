@@ -131,6 +131,12 @@ export interface SlateAgentRunnerOptions<T = unknown> {
   readonly readVideoAttachmentBytes?: (filePath: string) => Promise<Uint8Array | null>;
   readonly readMediaDimensions?: (filePath: string) => Promise<AgentMediaDimensions | null>;
   readonly isSubagent?: boolean;
+  /**
+   * A Bot runner executes in a Bot sandbox through the Pi worker. Its delivery
+   * and recovery contract is the Bot timeline, not the Work-agent reply
+   * nudges, so the host must not synthesise extra turns for it.
+   */
+  readonly isBotRunner?: boolean;
   readonly isSharedRoomTurn?: boolean;
   readonly isSharedRoomBoxToolsEnabled?: () => boolean;
   readonly subagentType?: string;
@@ -250,6 +256,7 @@ export class SlateAgentRunner<T = unknown> {
   #onPendingWakeDisarmed: ((event: unknown) => void) | undefined;
 
   readonly isSubagentRunner: boolean;
+  readonly isBotRunner: boolean;
   readonly isSharedRoomRunner: boolean;
   readonly isSharedRoomBoxToolsEnabled: (() => boolean) | undefined;
   readonly subagentType: string | undefined;
@@ -268,6 +275,7 @@ export class SlateAgentRunner<T = unknown> {
     this.#state = options.initialState ?? emptyConversationState();
     this.#blobStore = options.blobStore ?? this.#fallbackBlobStore;
     this.isSubagentRunner = options.isSubagent ?? false;
+    this.isBotRunner = options.isBotRunner ?? false;
     this.isSharedRoomRunner = options.isSharedRoomTurn ?? false;
     this.isSharedRoomBoxToolsEnabled = options.isSharedRoomBoxToolsEnabled;
     this.subagentType = options.subagentType;

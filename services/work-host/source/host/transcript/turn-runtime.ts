@@ -441,6 +441,10 @@ export class TurnRuntime {
           this.tm.upgradeResume.markAgentResumePending(session, "turn");
         else if (
           !turnResult.aborted &&
+          // A Bot turn is settled by its own runner. Synthesising Work-agent
+          // reply nudges here would start turns the Bot never asked for and
+          // would duplicate the Bot's delivered message.
+          (agentRunner as { isBotRunner?: boolean }).isBotRunner !== true &&
           epoch === this.tm.sendPipeline.currentTurnEpoch(session)
         ) {
           const settledReply = await this.ensureUserReply(

@@ -4,7 +4,7 @@ export type RunnerUpdate =
   | { readonly type: "text-delta"; readonly text: string }
   | { readonly type: "thinking-delta"; readonly text: string }
   | { readonly type: "tool-call"; readonly id: string; readonly name?: string; readonly status?: string; readonly summary?: string; readonly args?: string }
-  | { readonly type: "send-message"; readonly message: Readonly<Record<string, unknown>> & { readonly type: string }; readonly timestampMs: number }
+  | { readonly type: "send-message"; readonly message: Readonly<Record<string, unknown>> & { readonly type: string }; readonly timestampMs: number; readonly ackToken?: string }
   | { readonly type: "turn-ended"; readonly usage?: unknown }
   | { readonly type: "react-to-message"; readonly messageAddress: string; readonly emoji: string }
   | { readonly type: "request-id"; readonly requestId: string }
