@@ -8,7 +8,7 @@ export type SessionWorkspaceView = 'mobile' | 'browser' | 'desktop' | 'code' | '
 export type SessionBrowserSurface = 'native-preview' | 'chromium-stream'
 
 export interface SessionUiState {
-  version: 1
+  version: 2
   openWorkspaceTabs: SessionWorkspaceTab[]
   workspaceView: SessionWorkspaceView
   dataSurface: 'panel' | 'studio'
@@ -22,9 +22,9 @@ export interface SessionUiState {
 }
 
 export const DEFAULT_SESSION_UI_STATE: SessionUiState = {
-  version: 1,
-  openWorkspaceTabs: ['preview'],
-  workspaceView: 'browser',
+  version: 2,
+  openWorkspaceTabs: ['desktop'],
+  workspaceView: 'desktop',
   dataSurface: 'panel',
   browserSurface: 'native-preview',
   browserAddress: '',
@@ -54,12 +54,23 @@ export function sanitizeSessionUiState(value: unknown): SessionUiState {
   const tabs = Array.isArray(raw.openWorkspaceTabs)
     ? raw.openWorkspaceTabs.filter((tab): tab is SessionWorkspaceTab => typeof tab === 'string' && TABS.has(tab as SessionWorkspaceTab))
     : []
+  const storedView = typeof raw.workspaceView === 'string' && VIEWS.has(raw.workspaceView as SessionWorkspaceView)
+    ? raw.workspaceView as SessionWorkspaceView
+    : null
+  // Earlier builds opened Preview by default. Move that untouched default to
+  // Desktop once; sessions that deliberately chose another tab are preserved.
+  const migrateLegacyDefault = raw.version !== 2
+    && tabs.length === 1
+    && tabs[0] === 'preview'
+    && (storedView === 'browser' || storedView === 'mobile')
   return {
-    version: 1,
-    openWorkspaceTabs: tabs.length ? [...new Set(tabs)] : [...DEFAULT_SESSION_UI_STATE.openWorkspaceTabs],
-    workspaceView: typeof raw.workspaceView === 'string' && VIEWS.has(raw.workspaceView as SessionWorkspaceView)
-      ? raw.workspaceView as SessionWorkspaceView
-      : DEFAULT_SESSION_UI_STATE.workspaceView,
+    version: 2,
+    openWorkspaceTabs: migrateLegacyDefault
+      ? ['desktop']
+      : tabs.length ? [...new Set(tabs)] : [...DEFAULT_SESSION_UI_STATE.openWorkspaceTabs],
+    workspaceView: migrateLegacyDefault
+      ? 'desktop'
+      : storedView ?? DEFAULT_SESSION_UI_STATE.workspaceView,
     dataSurface: raw.dataSurface === 'studio' ? 'studio' : 'panel',
     browserSurface: typeof raw.browserSurface === 'string' && SURFACES.has(raw.browserSurface as SessionBrowserSurface)
       ? raw.browserSurface as SessionBrowserSurface
@@ -88,7 +99,7 @@ export function loadSessionUiState(sessionId: string): SessionUiState {
 export function saveSessionUiState(sessionId: string, state: SessionUiState): void {
   if (typeof window === 'undefined') return
   try {
-    window.sessionStorage.setItem(storageKey(sessionId), JSON.stringify({ ...state, version: 1 }))
+    window.sessionStorage.setItem(storageKey(sessionId), JSON.stringify({ ...state, version: 2 }))
   } catch {
     // Storage can be unavailable in private/hardened browsing modes. Runtime
     // behavior must not depend on persistence succeeding.
@@ -111,7 +122,7 @@ export function useSessionUiState(sessionId: string) {
   const update = useCallback((patch: Partial<Omit<SessionUiState, 'version'>>) => {
     if (!hydrated.current) return
     setState((current) => {
-      const next = { ...current, ...patch, version: 1 as const }
+      const next = { ...current, ...patch, version: 2 as const }
       saveSessionUiState(sessionId, next)
       return next
     })

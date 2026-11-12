@@ -1431,12 +1431,12 @@ export function ChatWorkspace({
   const [systemLight, setSystemLight] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
   const [panelMotionContentWidth, setPanelMotionContentWidth] = useState<number | null>(null)
-  const [openWorkspaceTabs, setOpenWorkspaceTabs] = useState<WorkspaceTabId[]>(['preview'])
+  const [openWorkspaceTabs, setOpenWorkspaceTabs] = useState<WorkspaceTabId[]>(['desktop'])
   const [previewHasPendingChanges, setPreviewHasPendingChanges] = useState(false)
   const previewPendingChangesConfirmationRef = useRef<(() => boolean) | null>(null)
   // The browser canvas is the primary workspace. The device control is an
   // explicit opt-in for the constrained mobile viewport.
-  const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'desktop' | 'code' | 'data'>('browser')
+  const [workspaceView, setWorkspaceView] = useState<'mobile' | 'browser' | 'desktop' | 'code' | 'data'>('desktop')
   // The data region hosts either the native project panel or a full-area
   // upstream Supabase Studio session; Local mode exposes the toggle capsule.
   const [dataSurface, setDataSurface] = useState<'panel' | 'studio'>('panel')
