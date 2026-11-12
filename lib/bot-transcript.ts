@@ -884,6 +884,37 @@ export function transcriptFromAgentEvents(events: readonly OpenLinkAgentEvent[])
       })
       continue
     }
+    if (event.type === 'confirmation.requested') {
+      const request = botConfirmationRequest(event)
+      if (request) {
+        const id = `bot-confirmation-${safeId(request.id, 'confirmation')}`
+        entries.set(id, {
+          kind: 'confirmation',
+          id,
+          timestampMs: Date.parse(event.timestamp) || Date.now(),
+          confirmation: {
+            id: request.id,
+            title: request.title,
+            ...(request.message ? { message: request.message } : {}),
+            ...(request.options ? { options: request.options } : {}),
+            ...(request.inputKind ? { inputKind: request.inputKind } : {}),
+            status: 'pending',
+          },
+        })
+      }
+      continue
+    }
+    if (event.type === 'confirmation.resolved') {
+      const id = `bot-confirmation-${safeId(event.confirmationId, 'confirmation')}`
+      const existing = entries.get(id)
+      if (existing?.kind === 'confirmation') {
+        entries.set(id, {
+          ...existing,
+          confirmation: { ...existing.confirmation, status: 'answered' },
+        })
+      }
+      continue
+    }
     const result = accumulator.consume(event)
     for (const entry of result.persisted) entries.set(entry.id, entry)
   }
