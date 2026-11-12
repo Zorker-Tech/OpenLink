@@ -1,4 +1,4 @@
-import { ensureBotRuntimeProjection, getBot } from '@/lib/bots'
+import { ensureBotRuntimeProjection, getBot, updateBotRuntimeState } from '@/lib/bots'
 import { BotRuntimeError, warmBotRuntime } from '@/lib/bot-runtime.server'
 import { createClient } from '@/utils/supabase/server'
 
@@ -41,6 +41,11 @@ export async function POST(
     // Always ensure before handing out a desktop: this resumes a paused
     // sandbox and refreshes a binding that a restart made stale.
     const warmed = await warmBotRuntime(supabase, user.id, bot)
+    // A successful desktop ensure is also proof the Bot runtime is ready; keep
+    // the projection aligned so the composer does not stay disabled.
+    await updateBotRuntimeState(supabase, user.id, bot.id, { status: 'ready' }).catch((stateError) => {
+      console.error('[openlink-bots] Bot runtime state could not be recorded after computer ensure', stateError)
+    })
     return Response.json({ desktopUrl: warmed.desktopUrl }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     if (error instanceof BotRuntimeError) return errorResponse(error.code, error.status, error.retryable)
