@@ -95,6 +95,7 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
   let settled = false;
   let aborted = false;
   let failure: string | undefined;
+  let assistantError: string | undefined;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let totalTimer: ReturnType<typeof setTimeout> | undefined;
   const emittedToolStates = new Set<string>();
@@ -185,8 +186,13 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
           const messageUsage = usageOf(message);
           if (messageUsage !== undefined) usage = messageUsage;
           const record = recordOf(message);
-          if (record !== null && typeof record.errorMessage === "string" && record.errorMessage.trim()) {
-            failure = record.errorMessage.trim().slice(0, 2000);
+          if (record !== null && record.role === "assistant") {
+            // The last assistant message is the authority: a later successful
+            // retry clears an earlier provider error, and a final error fails
+            // the turn even if Pi still emits `agent_settled`.
+            assistantError = typeof record.errorMessage === "string" && record.errorMessage.trim()
+              ? record.errorMessage.trim().slice(0, 2000)
+              : undefined;
           }
           continue;
         }
@@ -237,8 +243,8 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
     emitGateway({ phase: "ended", aborted: true });
     return { done: true };
   }
-  if (!settled) {
-    const error = failure ?? "BOT_WORKER_STREAM_ENDED";
+  if (!settled || assistantError !== undefined) {
+    const error = assistantError ?? failure ?? "BOT_WORKER_STREAM_ENDED";
     emitGateway({ phase: "ended", ok: false, error });
     throw new Error(error);
   }
