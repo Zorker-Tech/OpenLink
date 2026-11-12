@@ -451,8 +451,10 @@ export function BotOnboarding({
     }, 220 + playMs * 0.34))
     flightTimersRef.current.push(window.setTimeout(() => {
       incomingHandleRef.current?.setExpression(thirdState)
-      outgoingHandleRef.current?.setExpression('squinted')
     }, 220 + playMs * 0.68))
+    flightTimersRef.current.push(window.setTimeout(() => {
+      outgoingHandleRef.current?.setExpression('squinted')
+    }, 420))
     flightTimersRef.current.push(window.setTimeout(() => {
       // Commit the new form while the overlay still covers the stage so the
       // real 3D form is already morphed when the crossfade reveals it.
