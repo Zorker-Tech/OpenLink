@@ -19,7 +19,7 @@ import {
 import { AgentAvatar, resolveColor } from '@zorker/avatar'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
-import { BotComputerLightbox, BotComputerPane } from '@/components/bot/bot-computer'
+import { BotWorkspaceView } from '@/components/bot/bot-workspace-view'
 import { BotDetailsPane } from '@/components/bot/bot-details-pane'
 import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
 import { BotOnboarding } from '@/components/bot/bot-onboarding'
@@ -164,7 +164,6 @@ export function BotWorkspace({
   const [createInitialName, setCreateInitialName] = useState('')
   const [computerOpen, setComputerOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const [lightboxOpen, setLightboxOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [routineEditor, setRoutineEditor] = useState<{ routine: BotRoutine | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -349,7 +348,6 @@ export function BotWorkspace({
     setDraft('')
     setComputerOpen(false)
     setDetailsOpen(false)
-    setLightboxOpen(false)
     setProfileOpen(false)
     setRoutineEditor(null)
     setPaletteOpen(false)
@@ -410,41 +408,6 @@ export function BotWorkspace({
     applyRoutines(activeBot.id, await readRoutines(response))
     setRoutineEditor(null)
   }, [activeBot, applyRoutines, readRoutines, routineEditor])
-
-  const toggleRoutine = useCallback(async (routine: BotRoutine, isEnabled: boolean) => {
-    if (!activeBot) return
-    try {
-      const response = await fetch(
-        `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isEnabled }),
-          cache: 'no-store',
-        },
-      )
-      applyRoutines(activeBot.id, await readRoutines(response))
-    } catch (toggleError) {
-      setError(toggleError instanceof Error ? friendlyRuntimeError(toggleError.message) : 'The routine could not be updated.')
-    }
-  }, [activeBot, applyRoutines, readRoutines])
-
-  const runRoutine = useCallback(async (routine: BotRoutine) => {
-    if (!activeBot) return
-    try {
-      const response = await fetch(
-        `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}/run`,
-        { method: 'POST', cache: 'no-store' },
-      )
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
-        throw new Error(payload?.error?.message || 'BOT_ROUTINE_RUN_FAILED')
-      }
-      void loadBot(activeBot.id, true)
-    } catch (runError) {
-      setError(runError instanceof Error ? friendlyRuntimeError(runError.message) : 'The routine could not run.')
-    }
-  }, [activeBot, loadBot])
 
   const applyUpdate = useCallback((botId: string, update: BotStreamUpdate) => {
     if (update.type === 'pending') {
@@ -611,7 +574,6 @@ export function BotWorkspace({
   const openPalette = useCallback(() => {
     setComputerOpen(false)
     setDetailsOpen(false)
-    setLightboxOpen(false)
     setPaletteOpen(true)
     setPaletteView('search')
     setCreateInitialName('')
@@ -631,7 +593,6 @@ export function BotWorkspace({
     }
     setDetailsOpen(false)
     setComputerOpen(true)
-    setLightboxOpen(false)
   }, [activeBot])
 
   const toggleDetails = useCallback(() => {
@@ -805,8 +766,9 @@ export function BotWorkspace({
                 <div className="zbd-chat-header-wrap flex items-center justify-center">
                   <button
                     aria-label={`Open ${activeBot.name} details`}
-                    className="flex h-8 max-w-[min(280px,calc(100%-24px))] items-center gap-2 rounded-full border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-elevated)_82%,transparent)] px-3 text-[12px] font-medium text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors hover:bg-[var(--app-hover)]"
+                    className="flex h-8 max-w-[min(280px,calc(100%-24px))] items-center gap-2 rounded-full border border-[var(--app-border)] px-3 text-[12px] font-medium text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors"
                     onClick={toggleDetails}
+                    style={{ background: 'color-mix(in srgb, var(--app-elevated) 82%, transparent)' }}
                     type="button"
                   >
                     <AgentAvatar
@@ -850,7 +812,7 @@ export function BotWorkspace({
                       displayName={activeBot.name}
                       entries={activeTranscript as TranscriptEntry[]}
                       key={activeId}
-                      onFinishComputer={() => setLightboxOpen(false)}
+                      onFinishComputer={() => undefined}
                       onOpenComputer={openComputer}
                       onSuggestion={useSuggestion}
                       onTakeOver={openComputer}
@@ -887,22 +849,10 @@ export function BotWorkspace({
                   onOpenComputer={openComputer}
                 />
               ) : computerOpen && activeBot.kind !== 'group' ? (
-                <BotComputerPane
-                  botName={activeBot.name}
+                <BotWorkspaceView
                   botId={activeBot.id}
-                  routines={activeDetail?.routines ?? []}
-                  onEditRoutine={(routine) => setRoutineEditor({ routine })}
+                  botName={activeBot.name}
                   onClose={() => setComputerOpen(false)}
-                  onRunRoutine={(routine) => void runRoutine(routine)}
-                  onToggleRoutine={(routine, isEnabled) => void toggleRoutine(routine, isEnabled)}
-                />
-              ) : null}
-
-              {lightboxOpen && activeBot.kind !== 'group' ? (
-                <BotComputerLightbox
-                  botName={activeBot.name}
-                  botId={activeBot.id}
-                  onClose={() => setLightboxOpen(false)}
                 />
               ) : null}
 
