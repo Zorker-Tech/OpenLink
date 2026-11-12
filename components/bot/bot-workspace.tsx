@@ -23,12 +23,13 @@ import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/compon
 import { BotComputerLightbox, BotComputerPane } from '@/components/bot/bot-computer'
 import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
 import { BotOnboarding } from '@/components/bot/bot-onboarding'
+import { BotRoutineDialog } from '@/components/bot/bot-routine-dialog'
 import { BotSidebar } from '@/components/bot/bot-sidebar'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import { PageTransition } from '@/components/ui/page-transition'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
-import type { BotDetail, BotSummary } from '@/lib/bot-types'
+import type { BotDetail, BotRoutine, BotSummary } from '@/lib/bot-types'
 import {
   previewFromEntries,
   type BotStreamUpdate,
@@ -59,7 +60,7 @@ function botAvatarUrl(bot: BotSummary): string {
   return `/api/bots/${encodeURIComponent(bot.id)}/avatar?v=${encodeURIComponent(bot.updatedAt)}`
 }
 
-function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[]): AppSession {
+function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[], routines: readonly BotRoutine[] = []): AppSession {
   return {
     id: bot.id,
     name: bot.name,
@@ -72,7 +73,11 @@ function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[]): AppSes
     lastActivityMs: Date.parse(bot.lastActivityAt) || Date.now(),
     lastEntryText: bot.lastEntryText,
     transcript,
-    routines: [],
+    routines: routines.map((routine) => ({
+      id: routine.id,
+      name: routine.name,
+      triggerDescription: routine.triggerDescription || routine.schedule,
+    })),
     screenKind: 'desktop',
   }
 }
@@ -148,6 +153,7 @@ export function BotWorkspace({
   const [createInitialName, setCreateInitialName] = useState('')
   const [computerOpen, setComputerOpen] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [routineEditor, setRoutineEditor] = useState<{ routine: BotRoutine | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const activeBot = bots.find((bot) => bot.id === activeId) ?? null
@@ -156,14 +162,14 @@ export function BotWorkspace({
   const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
   const activePending = pendingMap[activeId] ?? null
   const activeWarming = activeId ? warmingMap[activeId] === true : false
-  const activeSession = activeBot ? botToSession(activeBot, activeTranscript) : null
+  const activeSession = activeBot ? botToSession(activeBot, activeTranscript, activeDetail?.routines) : null
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
 
   const rows: AppSidebarRow[] = useMemo(() => bots.map((bot) => {
     const transcript = details[bot.id]?.transcript ?? []
     const preview = bot.lastEntryText || (transcript.length ? previewFromEntries(transcript) : '')
     return {
-      session: botToSession(bot, transcript),
+      session: botToSession(bot, transcript, details[bot.id]?.routines),
       name: bot.name,
       preview: preview || 'No messages yet',
       time: formatSidebarTime(Date.parse(bot.lastActivityAt) || Date.now(), Date.now()),
@@ -311,12 +317,100 @@ export function BotWorkspace({
     setDraft('')
     setComputerOpen(false)
     setLightboxOpen(false)
+    setRoutineEditor(null)
     setPaletteOpen(false)
     setPaletteView('search')
     setPaletteQuery('')
     markViewed(botId)
     void loadBot(botId, true)
   }, [loadBot, markViewed])
+
+  const applyRoutines = useCallback((botId: string, routines: BotRoutine[]) => {
+    setDetails((previous) => {
+      const detail = previous[botId]
+      return detail ? { ...previous, [botId]: { ...detail, routines } } : previous
+    })
+  }, [])
+
+  const readRoutines = useCallback(async (response: Response): Promise<BotRoutine[]> => {
+    const payload = await response.json().catch(() => null) as {
+      routines?: BotRoutine[]
+      error?: { message?: string }
+    } | null
+    if (!response.ok || !Array.isArray(payload?.routines)) {
+      throw new Error(friendlyRuntimeError(payload?.error?.message || 'BOT_ROUTINE_WRITE_FAILED'))
+    }
+    return payload.routines
+  }, [])
+
+  const saveRoutine = useCallback(async (spec: {
+    name: string
+    prompt: string
+    schedule: string
+    isEnabled: boolean
+  }) => {
+    if (!activeBot) return
+    const routine = routineEditor?.routine ?? null
+    const response = await fetch(
+      routine
+        ? `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`
+        : `/api/bots/${encodeURIComponent(activeBot.id)}/routines`,
+      {
+        method: routine ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(spec),
+        cache: 'no-store',
+      },
+    )
+    applyRoutines(activeBot.id, await readRoutines(response))
+    setRoutineEditor(null)
+  }, [activeBot, applyRoutines, readRoutines, routineEditor])
+
+  const deleteRoutine = useCallback(async () => {
+    const routine = routineEditor?.routine
+    if (!activeBot || !routine) return
+    const response = await fetch(
+      `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`,
+      { method: 'DELETE', cache: 'no-store' },
+    )
+    applyRoutines(activeBot.id, await readRoutines(response))
+    setRoutineEditor(null)
+  }, [activeBot, applyRoutines, readRoutines, routineEditor])
+
+  const toggleRoutine = useCallback(async (routine: BotRoutine, isEnabled: boolean) => {
+    if (!activeBot) return
+    try {
+      const response = await fetch(
+        `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isEnabled }),
+          cache: 'no-store',
+        },
+      )
+      applyRoutines(activeBot.id, await readRoutines(response))
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? friendlyRuntimeError(toggleError.message) : 'The routine could not be updated.')
+    }
+  }, [activeBot, applyRoutines, readRoutines])
+
+  const runRoutine = useCallback(async (routine: BotRoutine) => {
+    if (!activeBot) return
+    try {
+      const response = await fetch(
+        `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}/run`,
+        { method: 'POST', cache: 'no-store' },
+      )
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
+        throw new Error(payload?.error?.message || 'BOT_ROUTINE_RUN_FAILED')
+      }
+      void loadBot(activeBot.id, true)
+    } catch (runError) {
+      setError(runError instanceof Error ? friendlyRuntimeError(runError.message) : 'The routine could not run.')
+    }
+  }, [activeBot, loadBot])
 
   const applyUpdate = useCallback((botId: string, update: BotStreamUpdate) => {
     if (update.type === 'pending') {
@@ -537,6 +631,7 @@ export function BotWorkspace({
         runtimeReady,
         runtimeStatus: bot.runtimeStatus ?? 'pending',
         pendingConfirmations: [],
+        routines: [],
       },
     }))
     setActiveId(bot.id)
@@ -683,11 +778,11 @@ export function BotWorkspace({
                   disabled={sending || activeWarming || !activeDetail?.runtimeReady}
                   displayName={activeBot.name}
                   onChange={setDraft}
-                  onCreateRoutine={() => undefined}
+                  onCreateRoutine={() => setRoutineEditor({ routine: null })}
                   onSend={() => {
                     void sendMessage()
                   }}
-                  showRoutine={false}
+                  showRoutine
                   value={draft}
                 />
               </section>
@@ -696,7 +791,11 @@ export function BotWorkspace({
                 <BotComputerPane
                   botName={activeBot.name}
                   chatSessionId={activeBot.runtimeSessionId}
+                  routines={activeDetail?.routines ?? []}
+                  onEditRoutine={(routine) => setRoutineEditor({ routine })}
                   onClose={() => setComputerOpen(false)}
+                  onRunRoutine={(routine) => void runRoutine(routine)}
+                  onToggleRoutine={(routine, isEnabled) => void toggleRoutine(routine, isEnabled)}
                 />
               ) : null}
 
@@ -740,6 +839,16 @@ export function BotWorkspace({
                   }}
                   query={paletteQuery}
                   sessions={paletteSessions}
+                />
+              ) : null}
+
+              {routineEditor ? (
+                <BotRoutineDialog
+                  botName={activeBot.name}
+                  onClose={() => setRoutineEditor(null)}
+                  onDelete={routineEditor.routine ? deleteRoutine : undefined}
+                  onSave={saveRoutine}
+                  routine={routineEditor.routine}
                 />
               ) : null}
             </div>

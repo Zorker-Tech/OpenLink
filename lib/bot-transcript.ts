@@ -6,7 +6,7 @@ export type BotActivityStatus = 'running' | 'done' | 'failed'
 
 export type BotTranscriptEntry = Extract<
   TranscriptEntry,
-  { kind: 'user-message' | 'agent-message' | 'activity' }
+  { kind: 'user-message' | 'agent-message' | 'activity' | 'system' }
 >
 
 export type BotStreamUpdate =
@@ -104,6 +104,44 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
     return activity(id, label, 'done', undefined, 'notice', at)
   }
 
+  if (kind === 'event') {
+    const event = entry.event && typeof entry.event === 'object' && !Array.isArray(entry.event)
+      ? entry.event as Record<string, unknown>
+      : null
+    if (!event) return null
+    const type = text(event.type)
+    if (type === 'name-changed') {
+      const name = text(event.to).trim()
+      return name ? { kind: 'system', id, timestampMs: at, event: { type: 'renamed', name } } : null
+    }
+    if (type === 'channel-connected' || type === 'channel-disconnected') {
+      const name = text(event.label).trim()
+      return name
+        ? {
+            kind: 'system',
+            id,
+            timestampMs: at,
+            event: { type: 'channel-changed', action: type === 'channel-connected' ? 'connected' : 'disconnected', name },
+          }
+        : null
+    }
+    if (type === 'automation-changed') {
+      const name = text(event.automationName).trim()
+      const action = text(event.action).trim()
+      if (!name || !action) return null
+      if (action === 'created') {
+        return { kind: 'system', id, timestampMs: at, event: { type: 'created-routine', name, triggerDescription: '' } }
+      }
+      return {
+        kind: 'system',
+        id,
+        timestampMs: at,
+        event: { type: 'routine-changed', name, action: action.charAt(0).toUpperCase() + action.slice(1) },
+      }
+    }
+    return activity(id, text(event.type) || 'Updated this conversation', 'done', undefined, 'event', at)
+  }
+
   if (kind !== 'send-message') return null
   const message = entry.message && typeof entry.message === 'object' && !Array.isArray(entry.message)
     ? entry.message as Record<string, unknown>
@@ -170,6 +208,44 @@ export function toWorkHostEntry(entry: BotTranscriptEntry): Record<string, unkno
       message: { type: 'text', content: entry.content },
       timestampMs: at,
     }
+  }
+  if (entry.kind === 'system') {
+    const event = entry.event
+    if (event.type === 'renamed') {
+      return { id, kind: 'event', event: { type: 'name-changed', to: event.name }, timestampMs: at }
+    }
+    if (event.type === 'created-routine') {
+      return {
+        id,
+        kind: 'event',
+        event: { type: 'automation-changed', action: 'created', automationName: event.name },
+        timestampMs: at,
+      }
+    }
+    if (event.type === 'routine-changed') {
+      return {
+        id,
+        kind: 'event',
+        event: {
+          type: 'automation-changed',
+          action: event.action.toLowerCase(),
+          automationName: event.name,
+        },
+        timestampMs: at,
+      }
+    }
+    if (event.type === 'channel-changed') {
+      return {
+        id,
+        kind: 'event',
+        event: {
+          type: event.action === 'connected' ? 'channel-connected' : 'channel-disconnected',
+          label: event.name,
+        },
+        timestampMs: at,
+      }
+    }
+    return { id, kind: 'event', event: { type: 'memory-updated' }, timestampMs: at }
   }
   return {
     id,

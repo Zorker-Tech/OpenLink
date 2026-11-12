@@ -20,7 +20,7 @@ import {
   type BotProjectionProject,
   type BotProjectionSession,
 } from '@/lib/bot-runtime-projection'
-import type { BotDetail, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
+import type { BotDetail, BotRoutine, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
 import { pendingBotConfirmations, type BotConfirmationRequest } from '@/lib/bot-confirmations'
 import { generateChatSessionId } from '@/lib/chat-sessions'
 import { listPersistedChatEvents, listPersistedConfirmationEvents } from '@/lib/chat-session-persistence.server'
@@ -29,14 +29,22 @@ import { getAccessibleWorkspace, getAccessibleWorkspaceById, type OpenLinkWorksp
 import {
   appendBotAgentTranscriptEntries,
   createBotAgent,
+  createBotAgentAutomation,
   deleteBotAgent,
+  deleteBotAgentAutomation,
+  getBotAgentAutomations,
   getBotAgentAvatar,
   getBotAgentTranscript,
   isMissingWorkHostAgentError,
   replaceBotAgentTranscriptEntries,
+  runBotAgentAutomationNow,
   setBotAgentAvatar,
+  setBotAgentAutomationEnabled,
   updateBotAgent,
+  updateBotAgentAutomation,
   type WorkHostAvatar,
+  type WorkHostAutomation,
+  type WorkHostAutomationSpec,
 } from '@/lib/work-host-client.server'
 import { createClient } from '@/utils/supabase/server'
 
@@ -446,6 +454,126 @@ async function replaceWorkHostTranscript(
   }
 }
 
+function routineFromWorkHost(automation: WorkHostAutomation): BotRoutine | null {
+  if (typeof automation.id !== 'string' || typeof automation.name !== 'string') return null
+  return {
+    id: automation.id,
+    name: automation.name,
+    prompt: typeof automation.prompt === 'string' ? automation.prompt : '',
+    triggerDescription: typeof automation.triggerDescription === 'string' ? automation.triggerDescription : '',
+    schedule: typeof automation.schedule === 'string' ? automation.schedule : '',
+    isEnabled: automation.isEnabled === true,
+    nextRunAt: typeof automation.nextRunAt === 'number' ? automation.nextRunAt : null,
+    lastRunAt: typeof automation.lastRunAt === 'number' ? automation.lastRunAt : null,
+  }
+}
+
+function routinesFromWorkHost(automations: readonly WorkHostAutomation[]): BotRoutine[] {
+  return automations.flatMap((automation) => {
+    const routine = routineFromWorkHost(automation)
+    return routine ? [routine] : []
+  })
+}
+
+async function readBotAutomations(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+): Promise<{ bot: BotSummary; routines: BotRoutine[] }> {
+  try {
+    return { bot, routines: routinesFromWorkHost(await getBotAgentAutomations(bot.workAgentId)) }
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) throw error
+    const recovered = await recreateBotAgent(supabase, userId, bot)
+    return { bot: recovered, routines: routinesFromWorkHost(await getBotAgentAutomations(recovered.workAgentId)) }
+  }
+}
+
+export async function listBotRoutines(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+): Promise<BotRoutine[]> {
+  return (await readBotAutomations(supabase, userId, bot)).routines
+}
+
+export async function createBotRoutine(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+  spec: WorkHostAutomationSpec,
+): Promise<BotRoutine[]> {
+  try {
+    return routinesFromWorkHost(await createBotAgentAutomation(bot.workAgentId, spec))
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) throw error
+    const recovered = await recreateBotAgent(supabase, userId, bot)
+    return routinesFromWorkHost(await createBotAgentAutomation(recovered.workAgentId, spec))
+  }
+}
+
+export async function updateBotRoutine(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+  automationId: string,
+  spec: WorkHostAutomationSpec,
+): Promise<BotRoutine[]> {
+  try {
+    return routinesFromWorkHost(await updateBotAgentAutomation(bot.workAgentId, automationId, spec))
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) throw error
+    const recovered = await recreateBotAgent(supabase, userId, bot)
+    return routinesFromWorkHost(await updateBotAgentAutomation(recovered.workAgentId, automationId, spec))
+  }
+}
+
+export async function setBotRoutineEnabled(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+  automationId: string,
+  isEnabled: boolean,
+): Promise<BotRoutine[]> {
+  try {
+    return routinesFromWorkHost(await setBotAgentAutomationEnabled(bot.workAgentId, automationId, isEnabled))
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) throw error
+    const recovered = await recreateBotAgent(supabase, userId, bot)
+    return routinesFromWorkHost(await setBotAgentAutomationEnabled(recovered.workAgentId, automationId, isEnabled))
+  }
+}
+
+export async function deleteBotRoutine(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+  automationId: string,
+): Promise<BotRoutine[]> {
+  try {
+    return routinesFromWorkHost(await deleteBotAgentAutomation(bot.workAgentId, automationId))
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) throw error
+    const recovered = await recreateBotAgent(supabase, userId, bot)
+    return routinesFromWorkHost(await deleteBotAgentAutomation(recovered.workAgentId, automationId))
+  }
+}
+
+export async function runBotRoutineNow(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+  automationId: string,
+): Promise<void> {
+  try {
+    await runBotAgentAutomationNow(bot.workAgentId, automationId)
+  } catch (error) {
+    if (!isMissingWorkHostAgentError(error)) throw error
+    const recovered = await recreateBotAgent(supabase, userId, bot)
+    await runBotAgentAutomationNow(recovered.workAgentId, automationId)
+  }
+}
+
 function summary(row: BotRow): BotSummary {
   return {
     id: row.id,
@@ -612,6 +740,7 @@ export async function getBotDetail(
   let authoritativeBot = await ensureBotRuntimeProjection(supabase, userId, bot)
   let readError: unknown = null
   let pendingConfirmations: BotConfirmationRequest[] = []
+  let routines: BotRoutine[] = []
   try {
     const read = await readBotTranscript(supabase, userId, authoritativeBot)
     authoritativeBot = read.bot
@@ -672,11 +801,19 @@ export async function getBotDetail(
     }
   }
   if (readError && !transcript.length) throw readError
+  try {
+    const read = await readBotAutomations(supabase, userId, authoritativeBot)
+    authoritativeBot = read.bot
+    routines = read.routines
+  } catch (error) {
+    console.error(`[openlink-bots] routines read failed for ${bot.id}`, error)
+  }
   return {
     ...authoritativeBot,
     transcript,
     runtimeReady: authoritativeBot.runtimeStatus === 'ready' && Boolean(authoritativeBot.runtimeSessionId),
     pendingConfirmations,
+    routines,
   }
 }
 
