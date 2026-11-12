@@ -90,9 +90,10 @@ const substrate = createServer((request, response) => {
       const body = await readJson(request)
       assert(typeof body.projectId === 'string', 'substrate ensure did not receive a projectId')
       assert(body.runtimeConfiguration?.providerId === 'deepseek', 'substrate ensure did not receive the runtime configuration')
+      const boxKey = decodeURIComponent(url.pathname.split('/')[4] ?? '')
       return json(response, 200, {
         ok: true,
-        boxKey: `bot-${botId}`,
+        boxKey,
         sandboxId: 'sandbox-smoke',
         workerUrl: substrateUrl,
         workerHeaders: { 'X-OpenLink-Agent-Worker-Token': 'worker-token' },
@@ -105,7 +106,7 @@ const substrate = createServer((request, response) => {
     }
     if (request.method === 'POST' && url.pathname === '/v1/events') {
       const body = await readJson(request)
-      assert(body.message === 'hello Bot', 'Pi worker received a different prompt')
+      assert(typeof body.message === 'string' && body.message.length > 0, 'Pi worker received an empty prompt')
       response.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' })
       response.write(`${JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: assistantText } })}\n`)
       response.write(`${JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: assistantText }], usage: { input: 2, output: 5 } } })}\n`)
@@ -197,6 +198,61 @@ try {
     'the Bot stream did not end the turn',
   )
 
+  // A group has no sandbox of its own: each member runs in its own Bot box.
+  const second = await request(baseUrl, 'createBackgroundAgent', {
+    name: 'Bot Smoke Agent Two',
+    description: 'Second group member',
+    avatarShape: 'blob',
+    avatarColor: 'blue',
+    origin: 'user',
+    isIntroductionSuppressed: true,
+  })
+  const secondAgentId = second?.agent?.id
+  assert(typeof secondAgentId === 'string' && secondAgentId.length > 0, 'the second group member was not created')
+  await request(baseUrl, 'ensureBotBox', {
+    agentId: secondAgentId,
+    botId: '22222222-2222-4222-8222-222222222222',
+    projectId,
+    userId: 'smoke-user',
+    workspaceId: 'smoke-workspace',
+    runtimeConfiguration: {
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      apiKey: 'smoke-key',
+      baseUrl: 'https://api.deepseek.com',
+      revision: 'smoke-revision',
+    },
+  })
+  const group = await request(baseUrl, 'createGroup', {
+    name: 'Smoke Group',
+    description: 'Group control-plane verification',
+    memberAgentIds: [agentId, secondAgentId],
+    externalId: '33333333-3333-4333-8333-333333333333',
+  })
+  const groupAgentId = group?.agent?.id
+  assert(typeof groupAgentId === 'string' && groupAgentId.length > 0, 'createGroup did not return a group agent')
+  const groupStream = await fetch(`${baseUrl}/api/bot/sendPrompt`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${gatewayToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId: groupAgentId, prompt: 'hello group' }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  const groupStreamText = await groupStream.text()
+  assert(groupStream.ok, `group prompt stream failed with HTTP ${groupStream.status}: ${groupStreamText.slice(0, 2000)}`)
+  const groupFrames = groupStreamText.split('\n').filter(Boolean).map((line) => JSON.parse(line))
+  assert(
+    groupFrames.some((frame) => frame.channel === 'transcript'
+      && frame.payload?.type === 'group-turn'
+      && frame.payload?.phase === 'ended'),
+    'the group stream did not end the group turn',
+  )
+  assert(
+    groupFrames.some((frame) => frame.channel === 'transcript'
+      && frame.payload?.entry?.kind === 'send-message'
+      && frame.payload.entry.message?.content === assistantText),
+    'the group stream did not deliver a member message',
+  )
+
   const status = await request(baseUrl, 'getBotBoxStatus', { agentId })
   assert(status?.state === 'running', 'getBotBoxStatus did not report a running box')
   const released = await request(baseUrl, 'releaseBotBox', { agentId })
@@ -204,7 +260,7 @@ try {
   const afterRelease = await request(baseUrl, 'getBotBoxStatus', { agentId })
   assert(afterRelease?.state === 'absent', 'getBotBoxStatus still reports a released box')
 
-  process.stdout.write('ok   OpenLink Bot control plane: binding, Pi turn, transcript stream and release\n')
+  process.stdout.write('ok   OpenLink Bot control plane: binding, Pi turn, group turn, transcript stream and release\n')
 } catch (error) {
   process.stderr.write(`FAIL OpenLink Bot control plane: ${error instanceof Error ? error.message : String(error)}\n`)
   if (output.trim()) process.stderr.write(`${output.trim()}\n`)
