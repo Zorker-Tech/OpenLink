@@ -310,7 +310,10 @@ export function BotWorkspace({
         const preview = previewFromEntries(detail.transcript)
         if (!preview || preview === bot.lastEntryText) return bot
         changed = true
-        return { ...bot, lastEntryText: preview, lastActivityAt: new Date().toISOString() }
+        const newest = detail.transcript.reduce((latest, entry) => Math.max(latest, entry.timestampMs), 0)
+        const previousActivity = Date.parse(bot.lastActivityAt)
+        const activityAt = new Date(Number.isFinite(previousActivity) ? Math.max(previousActivity, newest) : newest).toISOString()
+        return { ...bot, lastEntryText: preview, lastActivityAt: activityAt }
       })
       return changed ? next : previous
     })
