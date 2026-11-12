@@ -130,6 +130,10 @@ substrate while keeping the control planes and their protocols separate.
 - If Work-host restarts, the gateway stream reconnects from the last durable
   cursor and the transcript remains the recovery source. A partially delivered
   assistant message is reconciled from the settled turn, not duplicated.
+- If a Bot binding is stale after a substrate or Work-host restart, the BFF
+  re-ensures the box before every prompt and before opening the computer. The
+  ensure is idempotent: it reattaches the existing sandbox or recreates it
+  under the same Bot key, then refreshes the binding.
 - If Work-host is unavailable, Bot reads surface a retryable error and writes
   are rejected before durable acceptance. Deletion remains idempotent.
 

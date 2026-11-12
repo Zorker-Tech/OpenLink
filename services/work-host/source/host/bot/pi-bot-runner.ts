@@ -225,6 +225,15 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
       timestampMs: now(),
       ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
     });
+  } else {
+    // A tool-only turn still needs a durable completion marker. It is an
+    // activity card, not an invented assistant reply.
+    emit({
+      type: "send-message",
+      message: { type: "bot-activity", activity: { label: "Finished", status: "done", tool: "status" } },
+      timestampMs: now(),
+      ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
+    });
   }
   if (usage !== undefined) emit({ type: "turn-ended", usage });
   emitGateway({ phase: "ended", ok: true });

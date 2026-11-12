@@ -1,5 +1,5 @@
 import { ensureBotRuntimeProjection, getBot } from '@/lib/bots'
-import { BotRuntimeError, getBotComputer, warmBotRuntime } from '@/lib/bot-runtime.server'
+import { BotRuntimeError, warmBotRuntime } from '@/lib/bot-runtime.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -38,8 +38,8 @@ export async function POST(
   }
 
   try {
-    const existing = await getBotComputer(bot)
-    if (existing) return Response.json(existing, { headers: { 'Cache-Control': 'no-store' } })
+    // Always ensure before handing out a desktop: this resumes a paused
+    // sandbox and refreshes a binding that a restart made stale.
     const warmed = await warmBotRuntime(supabase, user.id, bot)
     return Response.json({ desktopUrl: warmed.desktopUrl }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

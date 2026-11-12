@@ -4,7 +4,6 @@ import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-conf
 import type { BotSummary } from '@/lib/bot-types'
 import {
   ensureBotBox,
-  getBotBoxStatus,
   releaseBotBox,
   respondBotExtensionUi,
   sendBotPromptStream,
@@ -115,15 +114,6 @@ export async function releaseBotRuntime(bot: BotSummary): Promise<void> {
     await releaseBotBox(bot.workAgentId)
   } catch (error) {
     console.error('[openlink-bots] Bot sandbox release deferred', error)
-  }
-}
-
-export async function getBotComputer(bot: BotSummary): Promise<{ desktopUrl: string } | null> {
-  try {
-    const status = await getBotBoxStatus(bot.workAgentId)
-    return status.state === 'running' && status.desktopUrl ? { desktopUrl: status.desktopUrl } : null
-  } catch (error) {
-    throw workHostRuntimeError(error)
   }
 }
 
