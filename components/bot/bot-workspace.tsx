@@ -530,6 +530,11 @@ export function BotWorkspace({
         ...previous,
         [botId]: {
           ...detail,
+          transcript: detail.transcript.map((entry) => (
+            entry.kind === 'confirmation' && entry.confirmation.id === confirmationId
+              ? { ...entry, confirmation: { ...entry.confirmation, status: 'answered' as const } }
+              : entry
+          )),
           pendingConfirmations: detail.pendingConfirmations.filter((request) => request.id !== confirmationId),
         },
       }
