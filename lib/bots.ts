@@ -7,6 +7,7 @@ import {
   fromDurableGroupEntry,
   normalizeWorkHostTranscript,
   pendingConfirmationsFromTranscript,
+  previewFromEntries,
   toWorkHostEntry,
   transcriptFromAgentEvents,
   type BotTranscriptEntry,
@@ -527,6 +528,42 @@ export async function runBotRoutineNow(
   }
 }
 
+/**
+ * The sidebar preview is a projection of the Work-host transcript. Refresh it
+ * on a detail read so a reload does not show a stale line after a turn that
+ * was written by the Bot control plane.
+ */
+async function syncBotPreview(
+  supabase: ServerSupabaseClient,
+  userId: string,
+  bot: BotSummary,
+  transcript: readonly BotTranscriptEntry[],
+): Promise<string | null> {
+  const preview = previewFromEntries(transcript)
+  if (!preview || preview === bot.lastEntryText) return preview || null
+  const last = transcript[transcript.length - 1]
+  const currentActivity = Date.parse(bot.lastActivityAt)
+  const activityAt = last === undefined
+    ? new Date().toISOString()
+    : new Date(Number.isFinite(currentActivity) ? Math.max(currentActivity, last.timestampMs) : last.timestampMs).toISOString()
+  try {
+    const { error } = await supabase
+      .schema('openlink')
+      .from('bots')
+      .update({
+        last_entry_text: preview.slice(0, 2000),
+        last_activity_at: activityAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bot.id)
+      .eq('user_id', userId)
+    if (error) console.error(`[openlink-bots] preview projection update failed for ${bot.id}`, error)
+  } catch (error) {
+    console.error(`[openlink-bots] preview projection update failed for ${bot.id}`, error)
+  }
+  return preview
+}
+
 function summary(row: BotRow, members: BotGroupMemberSummary[] = []): BotSummary {
   return {
     id: row.id,
@@ -870,8 +907,10 @@ export async function getBotDetail(
         console.error(`[openlink-bots] legacy group transcript read failed for ${bot.id}`, error)
       }
     }
+    const preview = await syncBotPreview(supabase, userId, authoritative, transcript)
     return {
       ...authoritative,
+      ...(preview ? { lastEntryText: preview } : {}),
       transcript,
       runtimeReady,
       pendingConfirmations: [],
@@ -959,8 +998,10 @@ export async function getBotDetail(
   } catch (error) {
     console.error(`[openlink-bots] routines read failed for ${bot.id}`, error)
   }
+  const preview = await syncBotPreview(supabase, userId, authoritativeBot, transcript)
   return {
     ...authoritativeBot,
+    ...(preview ? { lastEntryText: preview } : {}),
     transcript,
     runtimeReady: authoritativeBot.runtimeStatus === 'ready',
     pendingConfirmations,
