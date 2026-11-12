@@ -97,6 +97,12 @@ export interface PromptHttpServerConfig {
   /** Pause the desktop VM after this long without any desktop client. */
   desktopIdleTtlMs?: number
   maxSessions?: number
+  /**
+   * Bot sandboxes are persistent and belong to the Bot control plane. They
+   * have their own capacity so a busy Code workspace cannot starve Bots and a
+   * large Bot roster cannot exhaust Code sessions.
+   */
+  botMaxSessions?: number
   projectVmManager?: ProjectVmManager
   projectRuntimeManager?: ProjectRuntimeController
   requireProjectRuntime?: boolean
@@ -1027,8 +1033,18 @@ export async function startPromptHttpServer(
         if (sessions.get(existingKey) === existing) sessions.delete(existingKey)
         releaseDesktopState(request.sessionId)
       }
-      if (config.maxSessions !== undefined && sessions.size + creatingSessions >= config.maxSessions) {
-        throw new AgentHostError('SESSION_BUSY', 'This runtime has reached its concurrent session limit', { retryable: true })
+      const botEntryCount = [...sessions.values()].filter((entry) => entry.persistent === true).length
+      const isBotEntry = isBotSubstrateKey(request.sessionId)
+      const capacity = isBotEntry ? (config.botMaxSessions ?? 64) : config.maxSessions
+      const occupied = (isBotEntry ? botEntryCount : sessions.size - botEntryCount) + creatingSessions
+      if (capacity !== undefined && occupied >= capacity) {
+        throw new AgentHostError(
+          'SESSION_BUSY',
+          isBotEntry
+            ? 'The Bot sandbox limit has been reached'
+            : 'This runtime has reached its concurrent session limit',
+          { retryable: true },
+        )
       }
       creatingSessions += 1
       try {
