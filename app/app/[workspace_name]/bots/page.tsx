@@ -47,9 +47,12 @@ export default async function WorkspaceBotsPage({
     getWorkHostHealth(),
   ])
   const nickname = (profile as { nickname?: string } | null)?.nickname ?? workspace.name
+  const workHostReady = isWorkHostConfigured() && workHostHealth?.ok === true
   const selected = bots.find((bot) => bot.id === requestedBotId) ?? bots[0] ?? null
   let initialBot: BotDetail | null = null
-  if (selected) {
+  // Do not make the page wait on a Work-host transcript read when its health
+  // check already failed; the client loads the detail and shows the real error.
+  if (selected && workHostReady) {
     try {
       initialBot = await getBotDetail(supabase, user.id, selected)
     } catch (error) {
@@ -74,7 +77,7 @@ export default async function WorkspaceBotsPage({
       organizations={organizations}
       personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}
       workspaceSlug={workspace.slug}
-      workHostReady={isWorkHostConfigured() && workHostHealth?.ok === true}
+      workHostReady={workHostReady}
     />
   )
 }
