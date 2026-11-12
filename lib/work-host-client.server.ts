@@ -352,7 +352,10 @@ export async function ensureBotBox(input: {
   workspaceId: string
   runtimeConfiguration: WorkHostRuntimeConfiguration
 }): Promise<WorkHostBotBox> {
-  const result = await request<WorkHostBotBox>('ensureBotBox', input, { timeoutMs: 300_000 })
+  // A cold Project VM may have to boot before the Bot worker is ready. The
+  // substrate ensure is bounded but deliberately longer than a warm chat
+  // lease; the route's maxDuration leaves room for the full provisioning.
+  const result = await request<WorkHostBotBox>('ensureBotBox', input, { timeoutMs: 600_000 })
   if (typeof result?.desktopUrl !== 'string' || typeof result?.boxKey !== 'string') {
     throw new WorkHostError('Work Host returned an incomplete Bot box', 502, 'ensureBotBox')
   }
