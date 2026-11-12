@@ -44,6 +44,7 @@ test('production plan uses only sealed artifacts and loopback host services', as
     OPENLINK_BROWSER_API_TOKEN: 'browser-api-secret',
     OPENLINK_BROWSER_TOKEN_SECRET: 'browser-token-secret',
     OPENLINK_AGENT_API_TOKEN: 'agent-api-secret',
+    OPENLINK_SUBSTRATE_API_TOKEN: 'substrate-api-secret',
     OPENLINK_DESKTOP_AGENT_API_TOKEN: 'desktop-api-secret',
     OPENLINK_WORK_HOST_API_TOKEN: 'work-host-api-secret',
     OPEN_SANDBOX_API_KEY: 'sandbox-api-secret',
@@ -81,6 +82,7 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.equal(processes['browser-host'].POSTGRES_PASSWORD, undefined)
   assert.equal(processes['browser-host'].OPENLINK_AGENT_API_TOKEN, undefined)
   assert.equal(processes['agent-host'].OPENLINK_AGENT_API_TOKEN, 'agent-api-secret')
+  assert.equal(processes['agent-host'].OPENLINK_SUBSTRATE_API_TOKEN, 'substrate-api-secret')
   assert.equal(processes['agent-host'].OPENLINK_SUPABASE_SERVICE_ROLE_KEY, 'database-service-secret')
   assert.equal(processes['agent-host'].OPENLINK_BROWSER_TOKEN_SECRET, undefined)
   assert.equal(processes['knowledge-service'].OPENLINK_KNOWLEDGE_ZOKERBASE_SERVICE_KEY, 'knowledge-database-secret')
@@ -90,6 +92,8 @@ test('production plan uses only sealed artifacts and loopback host services', as
   assert.equal(processes['work-host'].SLATE_GATEWAY_TOKEN, 'work-host-api-secret')
   assert.equal(processes['work-host'].OPENLINK_WORK_HOST_API_TOKEN, undefined)
   assert.equal(processes['work-host'].OPENLINK_AGENT_API_TOKEN, undefined)
+  assert.equal(processes['work-host'].OPENLINK_SUBSTRATE_API_TOKEN, 'substrate-api-secret')
+  assert.equal(processes['work-host'].OPENLINK_AGENT_HOST_URL, 'http://127.0.0.1:43121')
   assert.equal(processes.web.OPENLINK_AGENT_API_TOKEN, 'agent-api-secret')
   assert.equal(processes.web.OPENLINK_WORK_HOST_API_TOKEN, 'work-host-api-secret')
   assert.equal(processes.web.OPENLINK_BROWSER_TOKEN_SECRET, undefined)

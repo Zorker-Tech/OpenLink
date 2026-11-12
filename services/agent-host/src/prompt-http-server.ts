@@ -18,6 +18,8 @@ import { handleProjectMemoryMcpRequest, type CivilizationMemoryServiceConfig, ty
 import { isPreviewTargetId } from './preview-target-id.js'
 
 export interface PromptRuntimeSession {
+  /** The durable workload identity, when the backend exposes one. */
+  readonly sandboxId?: string
   control?(input: { action: string; text?: string }): Promise<unknown>
   prompt(message: string, signal?: AbortSignal, attachments?: PromptAttachment[]): Promise<Response>
   /** Pause an idle Worker while retaining its sandbox state for fast resume. */
@@ -32,6 +34,8 @@ export interface PromptRuntimeSession {
   resources?(request?: AgentResourceRequest): Promise<unknown>
   /** Start or reconnect the session's private noVNC endpoint on demand. */
   desktopEndpoint?(): Promise<DesktopEndpoint>
+  /** The in-sandbox Pi worker endpoint and the headers it authenticates with. */
+  workerEndpoint?(): Promise<{ url: string; headers: Record<string, string> }>
   /** Report whether the desktop is installing, booting, running or paused. */
   desktopStatus?(): Promise<DesktopRuntimeStatus>
   /** Pause the installed desktop VM (QMP stop) while retaining its memory state. */
@@ -78,6 +82,11 @@ export interface PromptHttpServerConfig {
   host: string
   port: number
   apiToken: string
+  /**
+   * Least-privilege token for the Bot execution substrate. It authorizes only
+   * the Bot-scoped sandbox routes, never the Code session control plane.
+   */
+  substrateApiToken?: string
   storageRoot: string
   transport: string
   sessionIdleTtlMs: number
@@ -257,6 +266,12 @@ interface SessionEntry {
   paused?: boolean
   userPaused?: boolean
   browserSessionId?: string
+  /**
+   * A Bot-owned workload is not an idle chat. Its lifecycle is decided by the
+   * Bot control plane, so the Code session reaper must never pause or release
+   * it based on browser activity.
+   */
+  persistent?: boolean
 }
 
 function isMissingSandboxFailure(error: unknown): boolean {
@@ -615,6 +630,31 @@ function parseLeaseBody(value: unknown) {
     : undefined
   if (body.accessMode !== undefined && !accessMode) throw new AgentHostError('INVALID_BODY', 'accessMode is invalid')
   return { userId, workspaceId, sessionId, projectId, runtimeConfiguration, nativeSession, browserSessionId, agent, accessMode }
+}
+
+/** A Bot key is opaque to this service and never names a Code chat session. */
+const BOT_SUBSTRATE_KEY = /^bot-[A-Za-z0-9][A-Za-z0-9_-]{0,120}$/
+
+function isBotSubstrateKey(value: string): boolean {
+  return BOT_SUBSTRATE_KEY.test(value)
+}
+
+function parseBotSubstrateBody(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AgentHostError('INVALID_BODY', 'Bot substrate body is invalid')
+  const body = value as Record<string, unknown>
+  const userId = safeIdentity(body.userId, 'userId')
+  const workspaceId = safeIdentity(body.workspaceId, 'workspaceId')
+  const projectId = typeof body.projectId === 'string' ? body.projectId : ''
+  if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+  const runtimeConfiguration = parseRuntimeConfiguration(body.runtimeConfiguration)
+  const nativeSession = body.nativeSession === undefined ? undefined : parseNativeSession(body.nativeSession)
+  const agent: 'pi' | 'codex' | undefined = body.agent === 'codex' || body.agent === 'pi' ? body.agent : undefined
+  if (body.agent !== undefined && !agent) throw new AgentHostError('INVALID_BODY', 'agent is invalid')
+  const accessMode: 'restricted' | 'ask' | 'open' | undefined = body.accessMode === 'restricted' || body.accessMode === 'ask' || body.accessMode === 'open'
+    ? body.accessMode
+    : undefined
+  if (body.accessMode !== undefined && !accessMode) throw new AgentHostError('INVALID_BODY', 'accessMode is invalid')
+  return { userId, workspaceId, projectId, runtimeConfiguration, nativeSession, agent, accessMode }
 }
 
 function parseExtensionUiResponse(value: unknown): AgentExtensionUiResponse {
@@ -1567,6 +1607,145 @@ export async function startPromptHttpServer(
     json(response, 200, { ok: true, active })
   }
 
+  /**
+   * The Bot execution substrate: one OpenSandbox per Bot identity, inside the
+   * same Project VM the Code plane uses. The key is opaque, no Code chat
+   * session is created, and the entry is exempt from the Code idle reaper.
+   */
+  async function ensureBotSubstrateEntry(input: {
+    botKey: string
+    userId: string
+    workspaceId: string
+    projectId: string
+    runtimeConfiguration: AgentProviderRuntimeConfiguration
+    nativeSession?: AgentNativeSessionSnapshot
+    agent?: 'pi' | 'codex'
+    accessMode?: 'restricted' | 'ask' | 'open'
+  }): Promise<{ entry: SessionEntry; created: boolean }> {
+    const prepared = await prepareSessionRequest({
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      sessionId: input.botKey,
+      projectId: input.projectId,
+      runtimeConfiguration: input.runtimeConfiguration,
+      ...(input.nativeSession === undefined ? {} : { nativeSession: input.nativeSession }),
+      ...(input.agent === undefined ? {} : { agent: input.agent }),
+      ...(input.accessMode === undefined ? {} : { accessMode: input.accessMode }),
+    })
+    const result = await createEntry(prepared)
+    result.entry.persistent = true
+    if (result.entry.userPaused) throw new AgentHostError('SESSION_BUSY', 'Bot sandbox is paused by its owner', { retryable: true })
+    if (result.entry.paused) {
+      await result.entry.runtime.resume?.()
+      result.entry.paused = false
+    }
+    result.entry.lastUsedAt = Date.now()
+    return result
+  }
+
+  async function botSubstratePayload(
+    entry: SessionEntry,
+    identity: { ownerId: string; workspaceId: string; projectId: string; botKey: string },
+  ): Promise<Record<string, unknown>> {
+    if (!entry.runtime.desktopEndpoint) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'This Bot runtime does not provide a desktop session')
+    const endpoint = await entry.runtime.desktopEndpoint()
+    const binding = desktopGateway.register({
+      ownerId: identity.ownerId,
+      workspaceId: identity.workspaceId,
+      projectId: identity.projectId,
+      sessionId: identity.botKey,
+    }, endpoint)
+    const worker = entry.runtime.workerEndpoint === undefined ? undefined : await entry.runtime.workerEndpoint()
+    return {
+      ok: true,
+      boxKey: identity.botKey,
+      ...(entry.runtime.sandboxId === undefined ? {} : { sandboxId: entry.runtime.sandboxId }),
+      ...(worker === undefined ? {} : { workerUrl: worker.url, workerHeaders: worker.headers }),
+      desktopUrl: binding.desktopUrl,
+      vncUrl: endpoint.url,
+    }
+  }
+
+  async function handleBotSubstrateEnsure(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    botKey: string,
+  ): Promise<void> {
+    if (!isBotSubstrateKey(botKey)) throw new AgentHostError('INVALID_BODY', 'Bot substrate key is invalid')
+    const body = parseBotSubstrateBody(await readJson(request))
+    const { entry, created } = await ensureBotSubstrateEntry({ botKey, ...body })
+    json(response, 200, {
+      ...(await botSubstratePayload(entry, {
+        ownerId: body.userId,
+        workspaceId: body.workspaceId,
+        projectId: body.projectId,
+        botKey,
+      })),
+      created,
+    })
+  }
+
+  async function handleBotSubstrateDesktop(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    botKey: string,
+  ): Promise<void> {
+    if (!isBotSubstrateKey(botKey)) throw new AgentHostError('INVALID_BODY', 'Bot substrate key is invalid')
+    const body = parseBotSubstrateBody(await readJson(request))
+    const baseKey = `${body.userId}:${body.workspaceId}:${botKey}`
+    let entry = [...sessions.entries()].find(([key]) => key.startsWith(`${baseKey}:`))?.[1]
+    if (!entry) {
+      const ensured = await ensureBotSubstrateEntry({ botKey, ...body })
+      entry = ensured.entry
+    } else {
+      entry.persistent = true
+      if (entry.paused) {
+        await entry.runtime.resume?.()
+        entry.paused = false
+      }
+      entry.lastUsedAt = Date.now()
+    }
+    json(response, 200, await botSubstratePayload(entry, {
+      ownerId: body.userId,
+      workspaceId: body.workspaceId,
+      projectId: body.projectId,
+      botKey,
+    }))
+  }
+
+  async function handleBotSubstrateDelete(
+    request: IncomingMessage,
+    response: import('node:http').ServerResponse,
+    botKey: string,
+  ): Promise<void> {
+    if (!isBotSubstrateKey(botKey)) throw new AgentHostError('INVALID_BODY', 'Bot substrate key is invalid')
+    const raw = await readJson(request) as Record<string, unknown>
+    const userId = safeIdentity(raw.userId, 'userId')
+    const workspaceId = safeIdentity(raw.workspaceId, 'workspaceId')
+    const baseKey = `${userId}:${workspaceId}:${botKey}`
+    const matching = [...sessions.entries()].filter(([key]) => key.startsWith(`${baseKey}:`))
+    if (!matching.length) return json(response, 200, { ok: true, released: false })
+    if (matching.some(([, entry]) => entry.busy)) {
+      throw new AgentHostError('SESSION_BUSY', 'Bot sandbox is busy', { retryable: true })
+    }
+    activePromptControllers.get(baseKey)?.abort()
+    const failures: unknown[] = []
+    for (const [key, entry] of matching) {
+      entry.recovering = true
+      desktopGateway.unregister(botKey)
+      try {
+        await trackCleanup(entry.runtime.cleanup())
+        if (sessions.get(key) === entry) sessions.delete(key)
+        releaseDesktopState(botKey)
+      } catch (error) {
+        entry.recovering = false
+        failures.push(error)
+      }
+    }
+    if (failures.length) throw new AgentHostError('SESSION_CLEANUP_FAILED', 'Bot sandbox cleanup failed', { retryable: true })
+    json(response, 200, { ok: true, released: true })
+  }
+
   async function handleAgentDesktop(
     request: IncomingMessage,
     response: import('node:http').ServerResponse,
@@ -1827,6 +2006,29 @@ export async function startPromptHttpServer(
           service: config.civilizationMemoryService,
         })
         return
+      }
+      // The Bot substrate is a shared execution capability, not the Code
+      // control plane. It has its own least-privilege token and never creates
+      // or addresses a Code chat session.
+      const botSubstrateMatch = /^\/v1\/substrate\/bots\/([^/]+)(?:\/(ensure|desktop))?$/.exec(url.pathname)
+      if (botSubstrateMatch) {
+        const substrateToken = config.substrateApiToken ?? config.apiToken
+        if (!authorized(request, substrateToken)) throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')
+        const botKey = decodeURIComponent(botSubstrateMatch[1]!)
+        const action = botSubstrateMatch[2]
+        if (request.method === 'POST' && action === 'ensure') {
+          await handleBotSubstrateEnsure(request, response, botKey)
+          return
+        }
+        if (request.method === 'POST' && action === 'desktop') {
+          await handleBotSubstrateDesktop(request, response, botKey)
+          return
+        }
+        if (request.method === 'DELETE' && action === undefined) {
+          await handleBotSubstrateDelete(request, response, botKey)
+          return
+        }
+        throw new AgentHostError('INVALID_BODY', 'Bot substrate route is invalid')
       }
       // Session Supabase write-confirmation approval (internal Bearer only) and listing.
       if (!authorized(request, config.apiToken)) throw new AgentHostError('AUTH_DENIED', 'Agent Host authorization is invalid')
@@ -2135,6 +2337,7 @@ export async function startPromptHttpServer(
   const reaper = setInterval(() => {
     const cutoff = Date.now() - config.sessionIdleTtlMs
     for (const [key, entry] of sessions) {
+      if (entry.persistent) continue
       if (entry.busy || entry.recovering || entry.paused || entry.lastUsedAt >= cutoff) continue
       if (entry.sessionId && desktopGateway.hasActiveConnection(entry.sessionId)) {
         entry.lastUsedAt = Date.now()
