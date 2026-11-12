@@ -1,13 +1,8 @@
-import { ensureBotRuntimeProjection, getBot } from '@/lib/bots'
+import { appendBotConfirmationResolved, ensureBotRuntimeProjection, getBot } from '@/lib/bots'
+import { BotRuntimeError, respondBotConfirmation } from '@/lib/bot-runtime.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
-
-function agentHostConfig() {
-  const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/+$/, '')
-  const apiToken = process.env.OPENLINK_AGENT_API_TOKEN
-  return baseUrl && apiToken ? { baseUrl, apiToken } : null
-}
 
 function errorResponse(code: string, status: number, retryable = false) {
   return Response.json({ error: { code, message: code, retryable } }, {
@@ -30,6 +25,11 @@ function parseBody(value: unknown): { id: string; approved?: boolean; value?: st
   return { id, ...(approved === undefined ? {} : { approved }), ...(text === undefined ? {} : { value: text }) }
 }
 
+/**
+ * Answer a Pi dialog waiting inside the Bot's worker. The answer goes through
+ * Work-host's Bot runtime command; it is not a new prompt and it does not
+ * address a Code session.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ bot_id: string }> },
@@ -47,9 +47,7 @@ export async function POST(
     console.error('[openlink-bots] runtime projection recovery failed', error)
     return errorResponse('BOT_PROJECTION_RECOVERY_FAILED', 503, true)
   }
-  if (!bot.runtimeSessionId) return errorResponse('BOT_RUNTIME_NOT_READY', 409, true)
-  const host = agentHostConfig()
-  if (!host) return errorResponse('AGENT_HOST_NOT_CONFIGURED', 503, true)
+  if (!bot.runtimeKey) return errorResponse('BOT_RUNTIME_NOT_READY', 409, true)
 
   let body: { id: string; approved?: boolean; value?: string }
   try {
@@ -58,39 +56,19 @@ export async function POST(
     return errorResponse('INVALID_BODY', 400)
   }
 
-  const workerResponse = body.approved === true
-    ? { confirmed: true }
-    : body.approved === false
-      ? { cancelled: true }
-      : { value: body.value! }
-  let upstream: Response
   try {
-    upstream = await fetch(`${host.baseUrl}/v1/agent/sessions/${encodeURIComponent(bot.runtimeSessionId)}/extension-ui-response`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${host.apiToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId: user.id,
-        workspaceId: bot.workspaceId,
-        projectId: bot.projectId,
-        sessionId: bot.runtimeSessionId,
-        id: body.id,
-        ...workerResponse,
-      }),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(10_000),
-    })
-  } catch {
-    return errorResponse('AGENT_HOST_UNAVAILABLE', 502, true)
+    await respondBotConfirmation(bot, body)
+  } catch (error) {
+    if (error instanceof BotRuntimeError) return errorResponse(error.code, error.status, error.retryable)
+    console.error('[openlink-bots] Bot confirmation response failed', error)
+    return errorResponse('BOT_CONFIRMATION_FAILED', 502, true)
   }
-  if (!upstream.ok) {
-    const payload = await upstream.json().catch(() => null) as { error?: { code?: unknown; retryable?: unknown } } | null
-    const code = typeof payload?.error?.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(payload.error.code)
-      ? payload.error.code
-      : 'EXTENSION_UI_RESPONSE_FAILED'
-    return errorResponse(code, upstream.status || 502, payload?.error?.retryable === true)
-  }
+
+  // The worker has accepted the answer. Record the resolution so a reopened
+  // Bot does not show the same question; a failed marker is not a reason to
+  // report the answer as failed.
+  await appendBotConfirmationResolved(supabase, user.id, bot, body.id).catch((error) => {
+    console.error('[openlink-bots] Bot confirmation resolution could not be recorded', error)
+  })
   return Response.json({ ok: true }, { status: 202, headers: { 'Cache-Control': 'no-store' } })
 }

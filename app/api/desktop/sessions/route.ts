@@ -1,5 +1,4 @@
-import { getBot, isBotRuntimeSessionForBot } from '@/lib/bots'
-import { getBotChatSession, getCodeChatSession, isChatSessionId, type ChatSession } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId } from '@/lib/chat-sessions'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -11,6 +10,10 @@ function hostConfig() {
   return { baseUrl, apiToken }
 }
 
+/**
+ * The Code desktop endpoint. It resolves only a Code chat session; a Bot
+ * desktop is a Work-host Bot box and is addressed through the Bot surface.
+ */
 export async function POST(request: Request) {
   const config = hostConfig()
   if (!config) return Response.json({ error: { code: 'AGENT_HOST_NOT_CONFIGURED' } }, { status: 503 })
@@ -25,28 +28,7 @@ export async function POST(request: Request) {
   }
   const chatSessionId = typeof body.chatSessionId === 'string' ? body.chatSessionId : ''
   if (!isChatSessionId(chatSessionId)) return Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404 })
-  const codeSession = await getCodeChatSession(supabase, user.id, chatSessionId)
-  let chat: ChatSession | null = codeSession
-  if (!chat) {
-    // A Bot session is not a general-purpose session capability. It is
-    // authorized only through the durable Bot row that owns the exact hidden
-    // session id and agrees on user, workspace, and Project.
-    const botSession = await getBotChatSession(supabase, user.id, chatSessionId)
-    if (botSession) {
-      const bots = await supabase
-        .schema('openlink')
-        .from('bots')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('workspace_id', botSession.workspace_id)
-        .eq('runtime_session_id', botSession.id)
-        .maybeSingle()
-      if (!bots.error && bots.data) {
-        const bot = await getBot(supabase, user.id, (bots.data as { id: string }).id)
-        if (bot && isBotRuntimeSessionForBot(bot, botSession)) chat = botSession
-      }
-    }
-  }
+  const chat = await getCodeChatSession(supabase, user.id, chatSessionId)
   if (!chat) return Response.json({ error: { code: 'SESSION_NOT_FOUND' } }, { status: 404 })
 
   const response = await fetch(`${config.baseUrl}/v1/agent/sessions/${encodeURIComponent(chatSessionId)}/desktop`, {

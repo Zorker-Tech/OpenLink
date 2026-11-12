@@ -72,6 +72,7 @@ function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[], routine
     ink: resolveColor(bot.avatarColor, 'dark'),
     lastActivityMs: Date.parse(bot.lastActivityAt) || Date.now(),
     lastEntryText: bot.lastEntryText,
+    isGroup: bot.kind === 'group',
     transcript,
     routines: routines.map((routine) => ({
       id: routine.id,
@@ -286,10 +287,10 @@ export function BotWorkspace({
   }, [])
 
   useEffect(() => {
-    if (!workHostReady || !activeBot?.runtimeSessionId) return
+    if (!workHostReady || !activeBot || activeBot.kind === 'group') return
     if (skipWarmOnceRef.current.delete(activeBot.id)) return
     void warmBot(activeBot.id)
-  }, [activeBot?.id, activeBot?.runtimeSessionId, warmBot, workHostReady])
+  }, [activeBot, warmBot, workHostReady])
 
   useEffect(() => {
     setBots((previous) => {
@@ -350,7 +351,7 @@ export function BotWorkspace({
     isEnabled: boolean
   }) => {
     if (!activeBot) return
-    const routine = routineEditor?.routine ?? null
+    const routine = routineEditor?.routine && routineEditor.routine.id ? routineEditor.routine : null
     const response = await fetch(
       routine
         ? `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`
@@ -368,7 +369,7 @@ export function BotWorkspace({
 
   const deleteRoutine = useCallback(async () => {
     const routine = routineEditor?.routine
-    if (!activeBot || !routine) return
+    if (!activeBot || !routine?.id) return
     const response = await fetch(
       `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`,
       { method: 'DELETE', cache: 'no-store' },
@@ -580,22 +581,22 @@ export function BotWorkspace({
   }, [])
 
   const toggleComputer = useCallback(() => {
-    if (!activeBot?.runtimeSessionId) {
+    if (!activeBot || activeBot.kind === 'group') {
       setError('This Bot has no isolated computer yet.')
       return
     }
     setComputerOpen((open) => !open)
     setLightboxOpen(false)
-  }, [activeBot?.runtimeSessionId])
+  }, [activeBot])
 
   const openComputer = useCallback(() => {
-    if (!activeBot?.runtimeSessionId) {
+    if (!activeBot || activeBot.kind === 'group') {
       setError('This Bot has no isolated computer yet.')
       return
     }
     setLightboxOpen(true)
     setComputerOpen(false)
-  }, [activeBot?.runtimeSessionId])
+  }, [activeBot])
 
   const useSuggestion = useCallback((suggestion: string) => {
     setDraft(suggestion)
@@ -620,7 +621,7 @@ export function BotWorkspace({
   }, [openPalette])
 
   const handleCreated = useCallback((bot: BotSummary) => {
-    const runtimeReady = bot.runtimeStatus === 'ready' && Boolean(bot.runtimeSessionId)
+    const runtimeReady = bot.runtimeStatus === 'ready'
     if (runtimeReady) skipWarmOnceRef.current.add(bot.id)
     setBots((previous) => [bot, ...previous.filter((item) => item.id !== bot.id)])
     setDetails((previous) => ({
@@ -787,10 +788,10 @@ export function BotWorkspace({
                 />
               </section>
 
-              {computerOpen && activeBot.runtimeSessionId ? (
+              {computerOpen && activeBot.kind !== 'group' ? (
                 <BotComputerPane
                   botName={activeBot.name}
-                  chatSessionId={activeBot.runtimeSessionId}
+                  botId={activeBot.id}
                   routines={activeDetail?.routines ?? []}
                   onEditRoutine={(routine) => setRoutineEditor({ routine })}
                   onClose={() => setComputerOpen(false)}
@@ -799,10 +800,10 @@ export function BotWorkspace({
                 />
               ) : null}
 
-              {lightboxOpen && activeBot.runtimeSessionId ? (
+              {lightboxOpen && activeBot.kind !== 'group' ? (
                 <BotComputerLightbox
                   botName={activeBot.name}
-                  chatSessionId={activeBot.runtimeSessionId}
+                  botId={activeBot.id}
                   onClose={() => setLightboxOpen(false)}
                 />
               ) : null}

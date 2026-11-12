@@ -261,12 +261,29 @@ export class GroupChatGlue {
     traceCtx?: unknown,
     lane = "background",
   ): Promise<void> {
+    // A group turn is one lifecycle even though it runs several member turns.
+    // The Bot surface uses these frames to hold its pending state until the
+    // whole group has settled, without polling member run state.
+    const emitTurn = (phase: "started" | "ended", ok?: boolean) => {
+      this.tm.roster.emit(
+        {
+          type: "group-turn",
+          phase,
+          timestampMs: Date.now(),
+          ...(ok === undefined ? {} : { ok }),
+        },
+        session.id,
+      );
+    };
+    let started = false;
     try {
       const roomConfig = readSlateGroupConfig(dirname(session.dbPath));
       if (roomConfig == null) return;
       const groupOrchestrator = new GroupChatOrchestrator(
         this.groupOrchestratorDeps(session, epoch, traceCtx, lane),
       );
+      emitTurn("started");
+      started = true;
       await groupOrchestrator.run({
         group: this.groupIdentityFor(session),
         memberIds: [
@@ -275,6 +292,7 @@ export class GroupChatGlue {
         ],
       });
       await this.tm.roster.emitAgentUpdate(session.id);
+      emitTurn("ended", true);
     } catch (error) {
       this.tm.trayErrors.pushError({
         agentId: session.id,
@@ -282,7 +300,9 @@ export class GroupChatGlue {
         ...describeAgentRunError(error),
       });
       await this.tm.roster.emitAgentUpdate(session.id);
+      emitTurn("ended", false);
     } finally {
+      if (!started) emitTurn("ended", false);
       this.tm.runLifecycle.endSessionRun(session);
     }
   }
