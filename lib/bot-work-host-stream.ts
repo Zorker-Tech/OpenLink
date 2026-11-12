@@ -60,6 +60,12 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
     if (type !== 'appended' && type !== 'updated') return []
     const entry = recordOf(payload.entry)
     if (entry === null) return []
+    if (entry.kind === 'event') {
+      const event = recordOf(entry.event)
+      if (event?.type === 'confirmation-resolved' && typeof event.extensionUiId === 'string') {
+        return [{ type: 'confirmation-resolved', id: event.extensionUiId }]
+      }
+    }
     const updates: BotStreamUpdate[] = []
     const normalized = normalizeWorkHostEntry(entry)
     if (normalized !== null) updates.push({ type: 'entry', entry: normalized })
@@ -84,6 +90,9 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
   if (channel === 'bot-turn') {
     const phase = typeof payload.phase === 'string' ? payload.phase : ''
     if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true } }]
+    if (phase === 'status' && typeof payload.label === 'string' && payload.label.trim()) {
+      return [{ type: 'pending', pending: { label: payload.label.trim().slice(0, 200), showLabel: true } }]
+    }
     if (phase === 'awaiting-input') return [{ type: 'pending', pending: null }]
     if (phase === 'ended') return [{ type: 'pending', pending: null }, { type: 'done' }]
     return []

@@ -7,6 +7,7 @@ import type {
 } from '../types'
 import { ActivityCard } from './ActivityCard'
 import { ComputerCard } from './ComputerCard'
+import { ConfirmationCard } from './ConfirmationCard'
 import { MessageBubble } from './MessageBubble'
 import { PendingRow } from './PendingRow'
 import { SystemEntry } from './SystemEntry'
@@ -70,6 +71,14 @@ export function Transcript({
             return (
               <div className="zbd-entry" key={entry.id}>
                 <ActivityCard entry={entry} />
+              </div>
+            )
+          }
+
+          if (entry.kind === 'confirmation') {
+            return (
+              <div className="zbd-entry" key={entry.id}>
+                <ConfirmationCard entry={entry} />
               </div>
             )
           }

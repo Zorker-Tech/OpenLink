@@ -132,6 +132,37 @@ describe("the Pi-backed Bot run step", () => {
     assert.equal(events.at(-1)?.payload?.phase, "ended");
   });
 
+  it("keeps a user-facing notice and projects a transient status line", async () => {
+    globalThis.fetch = (async () => streamOf([
+      { type: "extension_ui_request", id: "notice-1", method: "notify", message: "Heads up" },
+      { type: "extension_ui_request", id: "status-1", method: "setStatus", statusKey: "work", statusText: "Checking the deploy" },
+      { type: "agent_settled" },
+    ])) as typeof fetch;
+    const updates: RunnerUpdate[] = [];
+    const events: Array<Record<string, any>> = [];
+    const step = createPiBotRunStep({
+      agentId: AGENT_ID,
+      getBinding: () => binding(),
+      emitGatewayEvent: (event) => events.push(event as Record<string, any>),
+      now: () => 9,
+    });
+    await step(0, {
+      signal: new AbortController().signal,
+      emitUpdate: (update) => updates.push(update),
+      prompt: "deploy",
+      runOptions: {},
+      requestId: "request-4",
+      state: {},
+      setState: () => {},
+    });
+    assert.deepEqual(updates.find((update) => update.type === "send-message"), {
+      type: "send-message",
+      message: { type: "bot-activity", activity: { label: "Heads up", status: "done", tool: "notice" } },
+      timestampMs: 9,
+    });
+    assert.equal(events.some((event) => event.payload?.phase === "status" && event.payload?.label === "Checking the deploy"), true);
+  });
+
   it("refuses a turn when the Bot has no runtime binding", async () => {
     const step = createPiBotRunStep({ agentId: AGENT_ID, getBinding: () => null });
     await assert.rejects(
