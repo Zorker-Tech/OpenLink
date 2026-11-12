@@ -163,6 +163,39 @@ describe("the Pi-backed Bot run step", () => {
     assert.equal(events.some((event) => event.payload?.phase === "status" && event.payload?.label === "Checking the deploy"), true);
   });
 
+  it("fails a settled turn whose final assistant message carries a provider error", async () => {
+    globalThis.fetch = (async () => streamOf([
+      { type: "message_end", message: { role: "assistant", content: [], errorMessage: "provider unavailable", usage: { input: 1, output: 0 } } },
+      { type: "agent_settled" },
+    ])) as typeof fetch;
+    const events: Array<Record<string, any>> = [];
+    const step = createPiBotRunStep({
+      agentId: AGENT_ID,
+      getBinding: () => binding(),
+      emitGatewayEvent: (event) => events.push(event as Record<string, any>),
+      now: () => 1,
+    });
+    await assert.rejects(
+      step(0, {
+        signal: new AbortController().signal,
+        emitUpdate: () => {},
+        prompt: "hello",
+        runOptions: {},
+        requestId: "request-error",
+        state: {},
+        setState: () => {},
+      }),
+      /provider unavailable/,
+    );
+    assert.deepEqual(events.at(-1)?.payload, {
+      agentId: AGENT_ID,
+      requestId: "request-error",
+      phase: "ended",
+      ok: false,
+      error: "provider unavailable",
+    });
+  });
+
   it("refuses a turn when the Bot has no runtime binding", async () => {
     const step = createPiBotRunStep({ agentId: AGENT_ID, getBinding: () => null });
     await assert.rejects(
