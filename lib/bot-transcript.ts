@@ -125,6 +125,8 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
           }
         : null
     }
+    // Migration bookkeeping is not part of the visible timeline.
+    if (type === 'legacy-migration-complete') return null
     if (type === 'automation-changed') {
       const name = text(event.automationName).trim()
       const action = text(event.action).trim()
