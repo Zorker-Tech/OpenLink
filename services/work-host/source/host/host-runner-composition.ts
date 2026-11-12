@@ -1048,7 +1048,11 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
 
     // A shared room keeps no private mirror, memory, image persistence or local permission surface: those belong to the
     // conversation the agent is bound to, not to a room a group is talking in.
-    if (scope.hasConversationContext) {
+    // A Bot turn is executed and persisted by the shared Pi worker and the
+    // Work-host transcript. The Work-agent transcript mirror, memory and
+    // workflow context are not part of that contract; binding them would make
+    // a Bot turn depend on a conversation checkpoint it never writes.
+    if (scope.hasConversationContext && botRuntime === undefined) {
       transcriptMirrorForTurn = deps.createTranscriptMirror?.({
         transcriptsDir,
         session,
