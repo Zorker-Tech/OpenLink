@@ -279,6 +279,7 @@ const runtime = await startPromptHttpServer({
   desktopPrewarmMax,
   desktopIdleTtlMs,
   maxSessions,
+  botMaxSessions: integer(env.OPENLINK_BOT_MAX_SESSIONS, 64, 1, 512),
   ...(projectVmManager ? { projectVmManager } : {}),
   projectRuntimeManager: sshRuntimeRouter,
   civilizationMemoryService: civilizationMemoryRuntime.config,

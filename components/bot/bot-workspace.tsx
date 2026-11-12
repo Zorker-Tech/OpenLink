@@ -97,9 +97,14 @@ function upsertEntry(
 
 function friendlyRuntimeError(value: string): string {
   const messages: Record<string, string> = {
-    AGENT_HOST_NOT_CONFIGURED: 'The Bot runtime is not running. Start the OpenLink Agent Host.',
+    BOT_SUBSTRATE_NOT_CONFIGURED: 'The Bot execution substrate is not configured.',
+    BOT_SUBSTRATE_UNAVAILABLE: 'The Bot execution substrate is not available yet.',
     BOT_RUNTIME_UNAVAILABLE: 'The Bot computer is not available yet.',
     BOT_RUNTIME_NOT_READY: 'This Bot has no isolated computer yet.',
+    BOT_RUNTIME_BUSY: 'This Bot is already working on another turn.',
+    BOT_PROJECTION_RECOVERY_FAILED: 'The Bot project could not be recovered.',
+    BOT_GROUP_MEMBERS_UNAVAILABLE: 'No group member computer is available yet.',
+    BOT_CONFIRMATION_FAILED: 'The answer could not be delivered to the Bot.',
     BOT_TRANSCRIPT_WRITE_FAILED: 'The Bot transcript could not be saved.',
     BOT_CREATE_FAILED: 'The Bot could not be created.',
     BOT_READ_FAILED: 'The Bot could not be loaded.',
