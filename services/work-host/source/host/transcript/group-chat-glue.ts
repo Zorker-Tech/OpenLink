@@ -278,13 +278,19 @@ export class GroupChatGlue {
     };
     let started = false;
     try {
+      // Emit the lifecycle before reading the group config: a stream that
+      // accepted a group prompt must receive a matching end even when the
+      // group identity is no longer readable.
+      emitTurn("started");
+      started = true;
       const roomConfig = readSlateGroupConfig(dirname(session.dbPath));
-      if (roomConfig == null) return;
+      if (roomConfig == null) {
+        emitTurn("ended", false);
+        return;
+      }
       const groupOrchestrator = new GroupChatOrchestrator(
         this.groupOrchestratorDeps(session, epoch, traceCtx, lane),
       );
-      emitTurn("started");
-      started = true;
       await groupOrchestrator.run({
         group: this.groupIdentityFor(session),
         memberIds: [
