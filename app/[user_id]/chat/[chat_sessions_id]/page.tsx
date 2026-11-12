@@ -4,7 +4,7 @@ import { listPersistedChatEvents } from '@/lib/chat-session-persistence.server'
 import { getChatSessionRun } from '@/lib/chat-session-runs.server'
 import { listOrganizations } from '@/lib/organizations'
 import { getProject, listProjects } from '@/lib/projects'
-import { getChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
+import { getCodeChatSession, isChatSessionId, listChatSessions } from '@/lib/chat-sessions'
 import { getUserPreferences } from '@/lib/user-preferences.server'
 import { getUserSkill, listUserSkills } from '@/lib/user-skills.server'
 import { isLocalRuntime } from '@/lib/runtime-mode.server'
@@ -36,7 +36,7 @@ export default async function ChatSessionPage({
 
   if (userId !== user.id || !isChatSessionId(sessionId)) notFound()
 
-  const session = await observeChatStage('session.load', getChatSession(supabase, user.id, sessionId))
+  const session = await observeChatStage('session.load', getCodeChatSession(supabase, user.id, sessionId))
   if (!session) notFound()
 
   const [workspace, personalWorkspace, organizations, profile, configuredModels, chatSessions, project, previewProjectRows, initialEvents, skillSummaries, preferences, initialRun] = await Promise.all([
