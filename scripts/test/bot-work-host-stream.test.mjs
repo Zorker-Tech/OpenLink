@@ -106,6 +106,12 @@ test('a resolved question and a live status line are projected', () => {
   }), [{ type: 'pending', pending: { label: 'Checking the deploy', showLabel: true } }])
 })
 
+test('legacy migration bookkeeping is not a timeline entry', () => {
+  assert.deepEqual(normalizeWorkHostTranscript([
+    { id: 'legacy-migration-complete', kind: 'event', event: { type: 'legacy-migration-complete' }, timestampMs: 1 },
+  ]), [])
+})
+
 test('a resolved question is answered on reload', () => {
   const transcript = normalizeWorkHostTranscript([
     {

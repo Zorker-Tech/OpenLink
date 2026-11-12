@@ -772,9 +772,17 @@ export async function getBotDetail(
   }
   // Work-host is the transcript authority. A Bot that predates the Work-host
   // control plane may still have a hidden Code session; that event log is
-  // migration input only. Read it once when the Work-host transcript is empty,
-  // then never again: new turns are written by Work-host.
-  if (!transcript.length && authoritativeBot.runtimeSessionId) {
+  // migration input only. The completion marker makes the migration
+  // resumable: an interrupted append is retried on the next read, and an
+  // already-complete Bot never reads the legacy log again.
+  const legacyMigrationComplete = rawEntries.some((entry) => (
+    entry.kind === 'event'
+    && entry.event !== null
+    && typeof entry.event === 'object'
+    && !Array.isArray(entry.event)
+    && (entry.event as Record<string, unknown>).type === 'legacy-migration-complete'
+  ))
+  if (!legacyMigrationComplete && authoritativeBot.runtimeSessionId) {
     try {
       const events = await listPersistedChatEvents(supabase, userId, authoritativeBot.runtimeSessionId)
       const migrated = transcriptFromAgentEvents(events)
@@ -788,6 +796,14 @@ export async function getBotDetail(
             console.error(`[openlink-bots] legacy transcript migration failed for ${bot.id}`, error)
           })
       }
+      await appendBotAgentTranscriptEntries(authoritativeBot.workAgentId, [{
+        id: 'legacy-migration-complete',
+        kind: 'event',
+        event: { type: 'legacy-migration-complete' },
+        timestampMs: Date.now(),
+      }]).catch((error) => {
+        console.error(`[openlink-bots] legacy migration marker could not be written for ${bot.id}`, error)
+      })
     } catch (error) {
       console.error(`[openlink-bots] legacy transcript read failed for ${bot.id}`, error)
     }
