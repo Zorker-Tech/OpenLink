@@ -681,6 +681,7 @@ const providerSecret = await persistentProviderSecret()
 const apiToken = await persistentRuntimeSecret('browser-api-token', process.env.OPENLINK_BROWSER_API_TOKEN)
 const tokenSecret = await persistentRuntimeSecret('browser-token-secret', process.env.OPENLINK_BROWSER_TOKEN_SECRET)
 const agentApiToken = await persistentRuntimeSecret('agent-api-token', process.env.OPENLINK_AGENT_API_TOKEN)
+const substrateApiToken = await persistentRuntimeSecret('substrate-api-token', process.env.OPENLINK_SUBSTRATE_API_TOKEN)
 const desktopAgentApiToken = await persistentRuntimeSecret('desktop-agent-api-token', process.env.OPENLINK_DESKTOP_AGENT_API_TOKEN)
 const openSandboxApiToken = await persistentRuntimeSecret('opensandbox-api-token', process.env.OPEN_SANDBOX_API_KEY)
 const knowledgeApiToken = await persistentRuntimeSecret('knowledge-api-token', process.env.OPENLINK_KNOWLEDGE_INTERNAL_TOKEN)
@@ -986,6 +987,8 @@ const {
     SLATE_GATEWAY_REQUIRE_AUTH: '1',
     SLATE_USE_EXISTING_BOX_EXEC_DAEMON: '1',
     SLATE_DISABLE_SEND_ACCEPT_RETURN: '1',
+    OPENLINK_AGENT_HOST_URL: agentHostUrl,
+    OPENLINK_SUBSTRATE_API_TOKEN: substrateApiToken,
   },
   bff: {
     OPENLINK_WORK_HOST_URL: workHostUrl,
@@ -999,7 +1002,12 @@ const knowledgeService = knowledgeServiceEnabled
   ? run(process.execPath, ['dist/src/main.js'], { cwd: knowledgeServiceDirectory, env: serviceEnvironment })
   : null
 if (knowledgeService) await waitForHealth(knowledgeServiceUrl, knowledgeService, 'Knowledge Service')
-const agentHost = run(process.execPath, ['dist/src/main.js'], { cwd: agentHostDirectory, env: serviceEnvironment })
+// The substrate token is least-privilege: only the Agent Host validates it and
+// only Work-host presents it. It is not inherited by the web or browser hosts.
+const agentHost = run(process.execPath, ['dist/src/main.js'], {
+  cwd: agentHostDirectory,
+  env: { ...serviceEnvironment, OPENLINK_SUBSTRATE_API_TOKEN: substrateApiToken },
+})
 await waitForHealth(agentHostUrl, agentHost, 'Agent Host')
 let shuttingDown = false
 let workHost = null

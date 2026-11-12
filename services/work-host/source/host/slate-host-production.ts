@@ -9,6 +9,10 @@ import { withBotBlockDetection } from "./runner/bot-block-detection.ts"
 import { withSiteVisitTracking, type ActionAuditor } from "./runner/site-visit-tracking.ts"
 import type { ErasedProductionBoxGeneratedPorts } from "./boxes/production.ts"
 import { SlateHost, type HostExtensionRegistry, type HostRunnerComposition } from "./slate-host.ts"
+import { getSlateAgentsRootDir } from "./storage/agent-paths.ts"
+import { BotRuntimeStore, type BotRuntimeBinding } from "./bot/bot-runtime-store.ts"
+import { createBotRuntimeGateway } from "./bot/bot-runtime-gateway.ts"
+import { createPiBotRunStep } from "./bot/pi-bot-runner.ts"
 
 export interface ProductionSlateHostPorts {
   readonly extensionsById: Readonly<Record<HostExtensionId, HostExtensionDeclaration<unknown, any>>>
@@ -31,6 +35,10 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
     if (extensions == null) throw new Error("the production host extensions have not been started")
     return extensions
   }
+  // Bot bindings live beside their agent stores, so a Work-host data-root
+  // restore restores the Bot links with the transcripts they belong to.
+  const botRuntimeStore = new BotRuntimeStore(getSlateAgentsRootDir())
+  const botRuntime = createBotRuntimeGateway(botRuntimeStore)
   const mcpAuthCompletion = new HostMcpAuthCompletion({
     getMcp: () => requireExtensions().api("mcp") as ReturnType<HostMcpAuthCompletion["deps"]["getMcp"]>,
     getTranscript: () => requireExtensions().api("transcript") as unknown as ReturnType<HostMcpAuthCompletion["deps"]["getTranscript"]>,
@@ -38,6 +46,7 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
 
   return new SlateHost({
     extensionHost: ports.extensionHost,
+    botRuntime,
     async startExtensions(host) {
       extensions = (await startWorkHostExtensions({
         host: { ...ports.extensionHost, ...host },
@@ -50,7 +59,24 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
         extensions: started,
         ctx: ports.runnerContext,
         emitGatewayEvent,
-        buildRunner: (options) => new SlateAgentRunner(options as SlateAgentRunnerOptions),
+        botRuntimeProvider: (agentId) => botRuntimeStore.read(agentId),
+        buildRunner: (options) => {
+          const binding = options.botRuntime as BotRuntimeBinding | undefined
+          if (binding === undefined) return new SlateAgentRunner(options as SlateAgentRunnerOptions)
+          // A Bot turn runs in the Bot's own sandbox through the shared Pi
+          // worker. The ordinary Work-agent turn shell is deliberately not
+          // built: its model session and checkpoint belong to Work agents.
+          const { productionTurnRunShell: _workAgentTurnShell, ...botOptions } = options as SlateAgentRunnerOptions
+          return new SlateAgentRunner({
+            ...botOptions,
+            isBotRunner: true,
+            runStep: createPiBotRunStep({
+              agentId: binding.agentId,
+              getBinding: () => botRuntimeStore.read(binding.agentId),
+              emitGatewayEvent,
+            }),
+          })
+        },
         createRequestContext: (options) =>
           createHostRequestContext(
             options.transcriptsDir,

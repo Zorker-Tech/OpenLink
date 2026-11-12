@@ -18,7 +18,14 @@ import {
 
 export function statusForCommandError(error: unknown): number {
   const name = error instanceof Error ? error.name : "";
-  return name === "SlateAgentLimitError" || name === "SlateSkillPublishError" ? 409 : 500;
+  if (name === "SlateAgentLimitError" || name === "SlateSkillPublishError") return 409;
+  // Bot substrate failures already carry the status their caller needs
+  // (unavailable, conflict, invalid identity). Preserve it instead of
+  // flattening every failure to 500.
+  const status = error !== null && typeof error === "object"
+    ? (error as { status?: unknown }).status
+    : undefined;
+  return typeof status === "number" && status >= 400 && status < 600 ? status : 500;
 }
 
 export async function readBody(request: AsyncIterable<unknown>): Promise<string> {

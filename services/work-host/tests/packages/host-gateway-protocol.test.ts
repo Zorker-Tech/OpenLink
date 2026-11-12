@@ -38,9 +38,9 @@ async function dispatch(table: Readonly<Record<string, unknown>>, method: string
 describe("the gateway's command table", () => {
   it("has one handler per command, and every handler calls the api it came from", () => {
     const names = Object.keys(SLATE_GATEWAY_COMMANDS);
-    assert.equal(names.length, 125);
+    assert.equal(names.length, 129);
     assert.equal(names.at(0), "getTranscript");
-    assert.equal(names.at(-1), "listBoxMcpServers");
+    assert.equal(names.at(-1), "respondBotExtensionUi");
     for (const name of names) assert.equal(typeof SLATE_GATEWAY_COMMANDS[name as never], "function", name);
   });
 
@@ -61,6 +61,10 @@ describe("the gateway's command table", () => {
     assert.equal(Object.hasOwn(SLATE_GATEWAY_COMMANDS, "createBackgroundAgent"), true);
     assert.equal(Object.hasOwn(SLATE_GATEWAY_COMMANDS, "appendAgentTranscriptEntries"), true);
     assert.equal(Object.hasOwn(SLATE_GATEWAY_COMMANDS, "replaceAgentTranscriptEntries"), true);
+    assert.equal(Object.hasOwn(SLATE_GATEWAY_COMMANDS, "ensureBotBox"), true);
+    assert.equal(Object.hasOwn(SLATE_GATEWAY_COMMANDS, "getBotBoxStatus"), true);
+    assert.equal(Object.hasOwn(SLATE_GATEWAY_COMMANDS, "releaseBotBox"), true);
+    assert.equal(Object.hasOwn(SLATE_GATEWAY_COMMANDS, "respondBotExtensionUi"), true);
   });
 
   it("serves the same methods, with the same handling, in its slim form", () => {

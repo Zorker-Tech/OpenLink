@@ -84,7 +84,10 @@ export interface SlateHostRuntime {
     requestDiskSaverAudit(agentId: string): Promise<boolean>;
     releaseAgentBox(agentId: string): Promise<void>;
     forgetLocalToolPermission(agentId: string): void;
+    botRuntime?: import("../gateway/host-gateway-api.ts").HostGatewayDependencies["botRuntime"] | undefined;
   }): HostGatewayDependencies;
+  /** The Bot control-plane services, when this host serves Bots. */
+  readonly botRuntime?: import("../gateway/host-gateway-api.ts").HostGatewayDependencies["botRuntime"] | undefined;
   readonly isAgentLimitError?: (error: unknown) => boolean;
   readonly buildIdentityFallback?: string;
   readonly now?: () => number;
@@ -424,6 +427,7 @@ export class SlateHost {
         requestDiskSaverAudit: (agentId) => this.requestDiskSaverAudit(agentId),
         releaseAgentBox: (agentId) => this.releaseBox(agentId),
         forgetLocalToolPermission: (agentId) => this.forgetLocalToolPermission(agentId),
+        ...(this.runtime.botRuntime === undefined ? {} : { botRuntime: this.runtime.botRuntime }),
       }),
     );
   }

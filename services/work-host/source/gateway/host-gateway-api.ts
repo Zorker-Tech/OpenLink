@@ -9,6 +9,7 @@ import {
   parseCoordinatorAgentThreadRequest,
   parseCoordinatorTranscriptWindowRequest,
 } from "../shared/rpc/coordinator.ts";
+import type { BotRuntimeGateway } from "../host/bot/bot-runtime-gateway.ts";
 
 export const HOST_CAPABILITIES = [
   "orderedReplicasV1",
@@ -40,6 +41,7 @@ export interface HostGatewayDependencies {
   releaseAgentBox(agentId: string): Promise<void>;
   handleDesktopMcpAuthCompletion(completion: unknown): Promise<void>;
   forgetLocalToolPermission(agentId: string): void;
+  readonly botRuntime?: BotRuntimeGateway | undefined;
   readonly now?: () => number;
 }
 
@@ -744,6 +746,22 @@ export function createHostGatewayApi(
     setBoxSecrets: ({ secrets }: any) =>
       call(ports.extensions.api("secrets"), "set")({ secrets }),
     getBoxSecretsStatus: () =>
-      call(ports.extensions.api("secrets"), "getStatus")()
+      call(ports.extensions.api("secrets"), "getStatus")(),
+    ensureBotBox: (args: any) => {
+      if (ports.botRuntime == null) throw new Error("Bot runtime is unavailable");
+      return ports.botRuntime.ensure(args);
+    },
+    getBotBoxStatus: (args: any) => {
+      if (ports.botRuntime == null) throw new Error("Bot runtime is unavailable");
+      return ports.botRuntime.status(args);
+    },
+    releaseBotBox: (args: any) => {
+      if (ports.botRuntime == null) throw new Error("Bot runtime is unavailable");
+      return ports.botRuntime.release(args);
+    },
+    respondBotExtensionUi: (args: any) => {
+      if (ports.botRuntime == null) throw new Error("Bot runtime is unavailable");
+      return ports.botRuntime.respondExtensionUi(args);
+    }
   };
 }
