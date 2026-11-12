@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { localSupabaseCookieName } from '@/utils/supabase/cookie-name'
+import { localSupabaseCookieNameForHeaders } from '@/utils/supabase/cookie-name'
 import { supabaseFetch } from '@/utils/supabase/fetch'
 
 export async function updateSession(request: NextRequest) {
@@ -18,7 +18,7 @@ export async function updateSession(request: NextRequest) {
   if (!supabaseUrl || !supabaseKey) return supabaseResponse
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    ...(local ? { cookieOptions: { name: localSupabaseCookieName(request.headers.get('host'), supabaseUrl) } } : {}),
+    ...(local ? { cookieOptions: { name: localSupabaseCookieNameForHeaders(request.headers, supabaseUrl) } } : {}),
     cookies: {
       getAll() {
         return request.cookies.getAll()

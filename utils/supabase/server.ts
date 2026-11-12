@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
 import { isLocalRuntime } from '@/lib/runtime-mode.server'
-import { localSupabaseCookieName } from '@/utils/supabase/cookie-name'
+import { localSupabaseCookieNameForHeaders } from '@/utils/supabase/cookie-name'
 import { supabaseFetch } from '@/utils/supabase/fetch'
 
 export async function createClient(): Promise<Awaited<ReturnType<typeof createServerClient>>> {
@@ -12,7 +12,7 @@ export async function createClient(): Promise<Awaited<ReturnType<typeof createSe
     return createZokerbaseClient(
       cookieStore,
       endpoint,
-      localSupabaseCookieName(requestHeaders.get('host'), endpoint.url),
+      localSupabaseCookieNameForHeaders(requestHeaders, endpoint.url),
     )
   }
   const cloudUrl = process.env.OPENLINK_CLOUD_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!
