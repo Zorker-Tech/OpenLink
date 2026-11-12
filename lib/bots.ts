@@ -872,8 +872,18 @@ export async function getBotDetail(
       if (migrated.length) {
         transcript = migrated
         await appendToWorkHost(supabase, userId, authoritativeBot, migrated.map(toWorkHostEntry))
-          .then((nextBot) => {
+          .then(async (nextBot) => {
             authoritativeBot = nextBot
+            // A partial earlier migration may already have Work-host-only
+            // entries. Re-read the authority so the returned timeline is the
+            // union, not the legacy log alone.
+            try {
+              const refreshed = await getBotAgentTranscript(nextBot.workAgentId)
+              rawEntries = refreshed
+              transcript = normalizeWorkHostTranscript(refreshed)
+            } catch {
+              // Keep the migrated view; the next read retries the mirror.
+            }
           })
           .catch((error) => {
             console.error(`[openlink-bots] legacy transcript migration failed for ${bot.id}`, error)
