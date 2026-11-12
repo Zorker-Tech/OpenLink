@@ -1742,7 +1742,11 @@ export async function startPromptHttpServer(
     const matching = [...sessions.entries()].filter(([key]) => key.startsWith(`${baseKey}:`))
     if (!matching.length) return json(response, 200, { ok: true, released: false })
     if (matching.some(([, entry]) => entry.busy)) {
-      throw new AgentHostError('SESSION_BUSY', 'Bot sandbox is busy', { retryable: true })
+      // The Bot row is already gone from the control plane. Hand the sandbox
+      // back to the Code idle policy instead of leaving a persistent workload
+      // that nothing will ever release.
+      for (const [, entry] of matching) entry.persistent = false
+      return json(response, 202, { ok: true, released: false, deferred: true })
     }
     activePromptControllers.get(baseKey)?.abort()
     const failures: unknown[] = []
