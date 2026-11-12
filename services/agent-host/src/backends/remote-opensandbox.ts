@@ -34,6 +34,7 @@ export interface RemoteRpcPromptSession {
   readonly sandboxId: string
   pause(): Promise<void>
   resume(): Promise<void>
+  workerEndpoint(): Promise<{ url: string; headers: Record<string, string> }>
   desktopEndpoint(): Promise<DesktopEndpoint>
   desktopStatus(): Promise<DesktopRuntimeStatus>
   suspendDesktop(): Promise<DesktopSuspendResult>
@@ -336,6 +337,13 @@ export class RemoteOpenSandboxRpcBackend {
           paused = true
         },
         resume: ensureRunning,
+        workerEndpoint: async () => {
+          await ensureRunning()
+          return {
+            url: baseUrl,
+            headers: { ...endpoint.headers, 'X-OpenLink-Agent-Token': workerToken, 'Content-Type': 'application/json' },
+          }
+        },
         desktopEndpoint,
         desktopStatus: () => desktopControl('status'),
         suspendDesktop: async () => {

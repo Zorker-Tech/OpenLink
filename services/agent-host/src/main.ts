@@ -271,6 +271,7 @@ const runtime = await startPromptHttpServer({
   host,
   port,
   apiToken,
+  ...(env.OPENLINK_SUBSTRATE_API_TOKEN?.trim() ? { substrateApiToken: env.OPENLINK_SUBSTRATE_API_TOKEN.trim() } : {}),
   storageRoot,
   transport: 'opensandbox-node-sdk',
   sessionIdleTtlMs,

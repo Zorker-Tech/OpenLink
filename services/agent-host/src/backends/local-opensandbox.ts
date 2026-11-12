@@ -67,6 +67,7 @@ export interface OpenSandboxPromptSession {
   resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void>
   networkAccess(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
   resources(request?: AgentResourceRequest): Promise<unknown>
+  workerEndpoint(): Promise<{ url: string; headers: Record<string, string> }>
   desktopEndpoint(): Promise<DesktopEndpoint>
   desktopStatus(): Promise<DesktopRuntimeStatus>
   suspendDesktop(): Promise<DesktopSuspendResult>
@@ -424,6 +425,10 @@ export class LocalOpenSandboxBackend {
       prompt: async (message, signal, attachments) => {
         await ensureRunning()
         return requestWorkerPrompt(baseUrl, workerHeaders(), message, signal, attachments)
+      },
+      workerEndpoint: async () => {
+        await ensureRunning()
+        return { url: baseUrl, headers: workerHeaders() }
       },
       desktopEndpoint,
       desktopStatus: () => desktopControl('status'),
