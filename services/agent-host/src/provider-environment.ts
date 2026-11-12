@@ -5,6 +5,8 @@
  * execution boundary.
  */
 
+import type { AgentProviderRuntimeConfiguration } from './contracts.js'
+
 const AMBIENT_ENVIRONMENT_BY_PROVIDER: Record<string, readonly string[]> = {
   'amazon-bedrock': [
     'AWS_ACCESS_KEY_ID',
@@ -30,6 +32,29 @@ const AMBIENT_ENVIRONMENT_BY_PROVIDER: Record<string, readonly string[]> = {
 }
 
 const ENVIRONMENT_VALUE_LIMIT = 16 * 1024
+
+/**
+ * A custom endpoint has no built-in Pi model catalog. Pass the selected
+ * model's metadata to the worker so it can register that exact model instead
+ * of resolving it against a catalog entry that does not exist.
+ */
+export function providerModelEnvironment(
+  configuration: AgentProviderRuntimeConfiguration,
+): Record<string, string> {
+  if (configuration.providerId !== 'custom') return {}
+  return {
+    OPENLINK_PROVIDER_MODEL_CONFIG: JSON.stringify({
+      id: configuration.modelId,
+      name: configuration.name ?? configuration.modelId,
+      api: configuration.api ?? 'openai-completions',
+      reasoning: configuration.reasoning ?? false,
+      input: configuration.input ?? ['text'],
+      contextWindow: configuration.contextWindow ?? 128_000,
+      maxTokens: configuration.maxTokens ?? 8_192,
+      cost: configuration.cost ?? { input: 0, output: 0 },
+    }),
+  }
+}
 
 export function ambientProviderEnvironment(
   providerId: string,

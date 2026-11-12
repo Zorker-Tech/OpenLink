@@ -9,7 +9,7 @@ import type { ProjectRuntimeDescriptor } from '../project-runtime.js'
 import type { ProjectMemoryMcpBinding } from '../project-memory-mcp.js'
 import { disposeOpenSandbox } from './sandbox-cleanup.js'
 import { cleanupOpenSandboxSessionWorkloads } from './opensandbox-recovery.js'
-import { ambientProviderEnvironment, providerNetworkTargets } from '../provider-environment.js'
+import { ambientProviderEnvironment, providerModelEnvironment, providerNetworkTargets } from '../provider-environment.js'
 import { ensureDesktopEndpoint, requestDesktopControl, type DesktopRuntimeStatus, type DesktopSuspendResult } from './desktop-runtime.js'
 import { desktopAutomationAvailable, desktopAutomationEnvironment, desktopAutomationVolumes, desktopAutomationSkillDirectories, desktopAutomationSkillFiles } from '../desktop-automation.js'
 import { agentToolsAvailable, agentToolRegistryEnvironment, agentToolRegistryVolume, agentToolsSkillDirectories, agentToolsSkillFiles } from '../agent-tools.js'
@@ -176,6 +176,7 @@ export class RemoteOpenSandboxRpcBackend {
         OPENLINK_AGENT_MODEL: model,
         OPENLINK_PROVIDER_ID: providerId,
         OPENLINK_PROVIDER_BASE_URL: providerBaseUrl,
+        ...providerModelEnvironment(runtimeConfiguration),
         ...ambientProviderEnvironment(providerId),
         ...(providerApiKey ? { OPENLINK_PROVIDER_API_KEY: vaultPlaceholder } : {}),
         ...(browser ? {

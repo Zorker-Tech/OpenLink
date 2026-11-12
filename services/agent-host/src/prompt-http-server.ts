@@ -399,7 +399,52 @@ function parseRuntimeConfiguration(value: unknown): AgentProviderRuntimeConfigur
     throw new AgentHostError('INVALID_BODY', 'provider baseUrl is invalid')
   }
   if (!revision || revision.length > 80 || /[\r\n\u0000]/.test(revision)) throw new AgentHostError('INVALID_BODY', 'provider revision is invalid')
-  return { providerId, modelId, apiKey, baseUrl: endpoint.toString().replace(/\/$/, ''), revision }
+  // A provider without a built-in Pi catalog (the custom endpoint) carries the
+  // selected model's metadata so the in-sandbox worker can register exactly
+  // that model instead of guessing from a provider name it does not know.
+  const api = typeof input.api === 'string' && /^[a-z0-9-]{1,64}$/.test(input.api) ? input.api : undefined
+  const name = typeof input.name === 'string' && input.name.trim() && !/[\r\n\u0000]/.test(input.name)
+    ? input.name.trim().slice(0, 160)
+    : undefined
+  const reasoning = typeof input.reasoning === 'boolean' ? input.reasoning : undefined
+  const inputTypes = Array.isArray(input.input)
+    ? input.input.filter((value): value is string => value === 'text' || value === 'image').slice(0, 8)
+    : undefined
+  const contextWindow = typeof input.contextWindow === 'number' && Number.isFinite(input.contextWindow)
+    && input.contextWindow >= 1 && input.contextWindow <= 100_000_000
+    ? Math.floor(input.contextWindow)
+    : undefined
+  const maxTokens = typeof input.maxTokens === 'number' && Number.isFinite(input.maxTokens)
+    && input.maxTokens >= 1 && input.maxTokens <= 100_000_000
+    ? Math.floor(input.maxTokens)
+    : undefined
+  const cost = (() => {
+    if (!input.cost || typeof input.cost !== 'object' || Array.isArray(input.cost)) return undefined
+    const record = input.cost as Record<string, unknown>
+    const inputCost = typeof record.input === 'number' && Number.isFinite(record.input) && record.input >= 0 ? record.input : undefined
+    const outputCost = typeof record.output === 'number' && Number.isFinite(record.output) && record.output >= 0 ? record.output : undefined
+    if (inputCost === undefined || outputCost === undefined) return undefined
+    return {
+      input: inputCost,
+      output: outputCost,
+      ...(typeof record.cacheRead === 'number' && Number.isFinite(record.cacheRead) && record.cacheRead >= 0 ? { cacheRead: record.cacheRead } : {}),
+      ...(typeof record.cacheWrite === 'number' && Number.isFinite(record.cacheWrite) && record.cacheWrite >= 0 ? { cacheWrite: record.cacheWrite } : {}),
+    }
+  })()
+  return {
+    providerId,
+    modelId,
+    apiKey,
+    baseUrl: endpoint.toString().replace(/\/$/, ''),
+    revision,
+    ...(api === undefined ? {} : { api }),
+    ...(name === undefined ? {} : { name }),
+    ...(reasoning === undefined ? {} : { reasoning }),
+    ...(inputTypes === undefined || inputTypes.length === 0 ? {} : { input: inputTypes }),
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+    ...(maxTokens === undefined ? {} : { maxTokens }),
+    ...(cost === undefined ? {} : { cost }),
+  }
 }
 
 function isUnsafeLiteralIp(hostname: string): boolean {

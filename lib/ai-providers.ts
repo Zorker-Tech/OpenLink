@@ -36,6 +36,7 @@ export const AI_PROVIDERS = [
   provider('azure-openai-responses', 'Azure OpenAI', '通过 Azure 部署访问 OpenAI Responses API。', null, { category: 'cloud', logo: 'azure' }),
   provider('baseten', 'Baseten', '面向生产环境的高性能模型推理平台。', 'https://inference.baseten.co/v1', { category: 'cloud' }),
   provider('cerebras', 'Cerebras', '基于 Cerebras 芯片的低延迟、高吞吐模型推理。', 'https://api.cerebras.ai/v1'),
+  provider('custom', 'Custom Provider', '接入任意 OpenAI 兼容端点，自定义 Base URL、API Key 与模型 ID。', null, { category: 'gateway', logo: 'custom', apiKeyLabel: 'API Key' }),
   provider('cloudflare-ai-gateway', 'Cloudflare AI Gateway', '通过 Cloudflare 网关统一路由和治理多家模型。', null, { category: 'gateway', logo: 'cloudflare' }),
   provider('cloudflare-workers-ai', 'Cloudflare Workers AI', '在 Cloudflare 全球网络运行 GPU 加速模型。', null, { category: 'cloud', logo: 'cloudflare' }),
   provider('deepseek', 'DeepSeek', 'DeepSeek 推理与对话模型，兼顾编码能力与成本。', 'https://api.deepseek.com', { category: 'china' }),
