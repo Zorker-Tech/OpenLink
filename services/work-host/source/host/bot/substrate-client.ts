@@ -9,7 +9,7 @@
  */
 import type { BotRuntimeBinding } from "./bot-runtime-store.ts";
 
-const DEFAULT_ENSURE_TIMEOUT_MS = 300_000;
+const DEFAULT_ENSURE_TIMEOUT_MS = 900_000;
 const DEFAULT_DESKTOP_TIMEOUT_MS = 120_000;
 const DEFAULT_RELEASE_TIMEOUT_MS = 30_000;
 const SAFE_BOT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
