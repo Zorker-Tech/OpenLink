@@ -64,13 +64,18 @@ function belongsToAgent(event: unknown, agentId: string): boolean {
   return false;
 }
 
-function isTerminal(event: unknown): boolean {
+function isTerminal(event: unknown, activeRequestId: string | null): boolean {
   if (event === null || typeof event !== "object" || Array.isArray(event)) return false;
   const record = event as Record<string, unknown>;
   if (record.channel === "bot-turn") {
     const payload = record.payload;
-    return payload !== null && typeof payload === "object" && !Array.isArray(payload)
-      && (payload as Record<string, unknown>).phase === "ended";
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const turn = payload as Record<string, unknown>;
+    if (turn.phase !== "ended") return false;
+    // Wait for the turn this stream started. An ended frame from a superseded
+    // turn must not close the new projection.
+    if (activeRequestId === null) return false;
+    return typeof turn.requestId !== "string" || turn.requestId === activeRequestId;
   }
   if (record.channel === "transcript") {
     const payload = record.payload;
@@ -104,11 +109,30 @@ export async function handleBotPromptStream(
   // Subscribe before accepting the prompt: the runner may start and settle
   // between the acceptance call and the first read of this stream.
   let terminal = false;
+  let activeRequestId: string | null = null;
   const pending: string[] = [];
   let wake: (() => void) | null = null;
   const unsubscribe = dependencies.subscribe((event) => {
     if (!belongsToAgent(event, body.agentId)) return;
-    if (isTerminal(event)) terminal = true;
+    if (event !== null && typeof event === "object" && !Array.isArray(event)) {
+      const record = event as Record<string, unknown>;
+      if (record.channel === "bot-turn") {
+        const payload = record.payload;
+        if (payload !== null && typeof payload === "object" && !Array.isArray(payload)) {
+          const turn = payload as Record<string, unknown>;
+          if (turn.phase === "started" && typeof turn.requestId === "string") {
+            activeRequestId = turn.requestId;
+          }
+          if (turn.phase === "ended") {
+            // Drop a superseded turn's end before this stream's turn starts,
+            // and any end that names a different request.
+            if (activeRequestId === null) return;
+            if (typeof turn.requestId === "string" && turn.requestId !== activeRequestId) return;
+          }
+        }
+      }
+    }
+    if (isTerminal(event, activeRequestId)) terminal = true;
     pending.push(`${JSON.stringify(event)}\n`);
     wake?.();
   });
