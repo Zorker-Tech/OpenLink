@@ -6,6 +6,7 @@ import {
   chunkWorkHostEntries,
   fromDurableGroupEntry,
   normalizeWorkHostTranscript,
+  pendingConfirmationsFromTranscript,
   toWorkHostEntry,
   transcriptFromAgentEvents,
   type BotTranscriptEntry,
@@ -15,7 +16,6 @@ import { releaseBotRuntime } from '@/lib/bot-runtime.server'
 import type { BotDetail, BotGroupMemberSummary, BotRoutine, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
 import {
   pendingBotConfirmations,
-  pendingBotConfirmationsFromWorkHostEntries,
   type BotConfirmationRequest,
 } from '@/lib/bot-confirmations'
 import { listPersistedChatEvents, listPersistedConfirmationEvents } from '@/lib/chat-session-persistence.server'
@@ -891,7 +891,7 @@ export async function getBotDetail(
       console.error(`[openlink-bots] legacy transcript read failed for ${bot.id}`, error)
     }
   }
-  pendingConfirmations = pendingBotConfirmationsFromWorkHostEntries(rawEntries)
+  pendingConfirmations = pendingConfirmationsFromTranscript(transcript)
   if (!pendingConfirmations.length && !transcript.length && authoritativeBot.runtimeSessionId) {
     try {
       pendingConfirmations = pendingBotConfirmations(
