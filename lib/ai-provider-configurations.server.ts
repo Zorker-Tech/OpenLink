@@ -30,7 +30,7 @@ interface ProviderConfigurationRow {
 export type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 
 const selectColumns = 'user_id, provider_id, enabled, is_default, base_url, default_model_id, enabled_model_ids, model_params, encrypted_api_key, api_key_iv, api_key_tag, api_key_hint, encryption_version, created_at, updated_at'
-const validProviderModelId = (modelId: string) => /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(modelId)
+const validProviderModelId = (modelId: string) => /^[A-Za-z0-9@][A-Za-z0-9._:/@-]{0,255}$/.test(modelId)
 
 function summary(row: ProviderConfigurationRow): AiProviderConfigurationSummary {
   return {
