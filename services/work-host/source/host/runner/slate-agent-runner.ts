@@ -137,6 +137,8 @@ export interface SlateAgentRunnerOptions<T = unknown> {
    * nudges, so the host must not synthesise extra turns for it.
    */
   readonly isBotRunner?: boolean;
+  /** A group member turn is not the agent's own DM turn. */
+  readonly isGroupMemberTurn?: boolean;
   readonly isSharedRoomTurn?: boolean;
   readonly isSharedRoomBoxToolsEnabled?: () => boolean;
   readonly subagentType?: string;

@@ -907,6 +907,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         !Boolean(looseMethod(experiments, "checkFeatureGate")?.("slate_shared_room_box_tools_kill_switch")) &&
         sharedRoomBoxToolsAreEnabled(process.env.SLATE_SHARED_ROOM_BOX_TOOLS),
       getAgentId: () => session.id,
+      isGroupMemberTurn: scope.groupMemberTurn,
       ...(botRuntime === undefined ? {} : { botRuntime, isBotRunner: true }),
       agentProfileProvider: hooks.agentProfileProvider,
       connectorManifests: CONNECTOR_MANIFESTS,

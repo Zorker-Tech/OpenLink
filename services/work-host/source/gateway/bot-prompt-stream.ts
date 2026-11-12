@@ -49,6 +49,9 @@ function belongsToAgent(event: unknown, agentId: string): boolean {
   const payload = record.payload;
   if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return false;
   const payloadRecord = payload as Record<string, unknown>;
+  // A group member turn is projected through the group's transcript and
+  // group-turn frames; it must not drive the member's own DM stream.
+  if (channel === "bot-turn" && payloadRecord.groupMember === true) return false;
   if (payloadRecord.agentId === agentId) return true;
   if (channel === "agent-upserted") {
     const agent = payloadRecord.agent;

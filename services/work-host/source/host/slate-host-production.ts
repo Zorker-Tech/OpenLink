@@ -74,6 +74,7 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
               agentId: binding.agentId,
               getBinding: () => botRuntimeStore.read(binding.agentId),
               emitGatewayEvent,
+              groupMember: (options as SlateAgentRunnerOptions).isGroupMemberTurn === true,
             }),
           })
         },
