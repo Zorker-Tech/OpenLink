@@ -31,6 +31,9 @@ export async function POST(
 
   try {
     const bot = await ensureBotRuntimeProjection(supabase, user.id, found)
+    // A group has no sandbox of its own; warming it would overwrite its ready
+    // status with a model-less failure.
+    if (bot.kind === 'group') return errorResponse('BOT_GROUP_HAS_NO_COMPUTER', 409, false)
     await updateBotRuntimeState(supabase, user.id, bot.id, { status: 'provisioning' })
     const result = await warmBotRuntime(supabase, user.id, bot)
     await updateBotRuntimeState(supabase, user.id, bot.id, { status: 'ready' })
