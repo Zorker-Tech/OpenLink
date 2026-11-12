@@ -266,6 +266,16 @@ describe("creating and reconfiguring a group", () => {
     assert.deepEqual(existing.named("switchAgent")[0]?.args, ["group-1"]);
     assert.equal(existing.named("createAgent").length, 0);
     assert.deepEqual(found.agent, { id: "group-1", isGroup: true, memberIds: ["member-2", "member-1"], snapshotEpoch: "epoch", snapshotSeq: 1 });
+    // A product-owned id is the only identity an embedding product's retry can
+    // safely match: two distinct groups may legitimately share a member set.
+    const externalDirs = agentsDir();
+    const external = world({ agents: [{ id: "member-1" }, { id: "member-2" }, { id: "group-1", isGroup: true, memberIds: ["member-1", "member-2"] }] });
+    externalDirs.group("external-group", ["member-1", "member-2"]);
+    writeSlateGroupConfig(join(externalDirs.root, "external-group"), { version: GROUP_CONFIG_VERSION, memberIds: ["member-1", "member-2"], externalId: "openlink-group-1" });
+    (external.tm.sessionStore as { getAgentDir: unknown }).getAgentDir = (id: string) => id === "group-1" ? join(externalDirs.root, "external-group") : join(external.root, id);
+    const retried = await external.glue.createGroup({ name: "Another name", memberIds: ["member-2", "member-1"], externalId: "openlink-group-1" });
+    assert.equal(external.named("createAgent").length, 0);
+    assert.deepEqual(retried.agent, { id: "group-1", isGroup: true, memberIds: ["member-1", "member-2"], snapshotEpoch: "epoch", snapshotSeq: 1 });
   });
 
   it("reconfigures a group's members, and leaves a room alone", async () => {
@@ -274,10 +284,18 @@ describe("creating and reconfiguring a group", () => {
     // This roster does not say which directory is a group, so nothing stops the group's own id from being asked
     // for: it is still never a member of itself.
     const world1 = world({ agents: [{ id: "member-1" }, { id: "member-2" }, { id: "group-1" }], directories: { "group-1": groupDir } });
+    writeSlateGroupConfig(groupDir, {
+      version: GROUP_CONFIG_VERSION,
+      memberIds: ["member-1"],
+      externalId: "openlink-group-1",
+      remoteMembers: [{ ownerAuthId: "owner-1", agentId: "remote-1", name: "Remote" }],
+    });
     await world1.glue.setGroupMembers("group-1", ["member-2", "group-1", "nobody", "member-2"]);
     // The group itself and anything unknown are not members, and what is asked for is written down.
-    const written = JSON.parse(readFileSync(getSlateGroupPath(groupDir), "utf8")) as { memberIds: string[]; version: number };
+    const written = JSON.parse(readFileSync(getSlateGroupPath(groupDir), "utf8")) as { memberIds: string[]; version: number; externalId?: string; remoteMembers?: unknown[] };
     assert.deepEqual([written.memberIds, written.version], [["member-2"], GROUP_CONFIG_VERSION]);
+    assert.equal(written.externalId, "openlink-group-1");
+    assert.deepEqual(written.remoteMembers, [{ ownerAuthId: "owner-1", agentId: "remote-1", name: "Remote" }]);
     assert.equal(world1.named("emitAgents").length, 1);
     // Nothing left to put in the group writes nothing at all.
     const before = readFileSync(getSlateGroupPath(groupDir), "utf8");
