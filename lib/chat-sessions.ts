@@ -53,10 +53,6 @@ export interface CodeChatSession extends ChatSession {
   surface: 'code'
 }
 
-export interface BotChatSession extends ChatSession {
-  surface: 'bot'
-}
-
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>
 
 const CHAT_SESSION_SELECT = 'id, user_id, workspace_id, project_id, provider_id, model_id, agent, title, initial_prompt, access_mode, created_at, updated_at, surface'
@@ -227,19 +223,6 @@ export async function getCodeChatSession(
 ): Promise<CodeChatSession | null> {
   const session = await readChatSession(supabase, userId, sessionId, 'code')
   return session as CodeChatSession | null
-}
-
-/**
- * Resolve a Bot's hidden execution session. Callers must still verify that the
- * `openlink.bots` row maps to this id before granting Bot-scoped access.
- */
-export async function getBotChatSession(
-  supabase: ServerSupabaseClient,
-  userId: string,
-  sessionId: string,
-): Promise<BotChatSession | null> {
-  const session = await readChatSession(supabase, userId, sessionId, 'bot')
-  return session as BotChatSession | null
 }
 
 export async function updateChatSessionTitle(
