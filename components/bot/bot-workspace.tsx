@@ -689,9 +689,8 @@ export function BotWorkspace({
     setBots(remaining)
     setActiveId((current) => remaining.some((bot) => bot.id === current) ? current : (remaining[0]?.id ?? ''))
     setDetails((previous) => {
-      const next = { ...previous }
-      delete next[botId]
-      return next
+      const keep = new Set(remaining.map((bot) => bot.id))
+      return Object.fromEntries(Object.entries(previous).filter(([id]) => keep.has(id)))
     })
     setProfileOpen(false)
     window.history.replaceState(null, '', `/app/${encodeURIComponent(workspaceSlug)}/bots`)
