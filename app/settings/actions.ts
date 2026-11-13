@@ -205,26 +205,40 @@ export async function checkAiProviderConfigurationAction(providerId: string, mod
     const baseUrl = process.env.OPENLINK_AGENT_HOST_URL?.replace(/\/$/, '')
     const token = process.env.OPENLINK_AGENT_API_TOKEN
     if (!baseUrl || !token) return { ok: false as const, error: 'AGENT_HOST_NOT_CONFIGURED' }
-    const response = await fetch(`${baseUrl}/v1/providers/check`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.id,
-        workspaceId: 'provider-settings',
-        projectId: draft.id,
-        // The probe is a one-word connectivity test. Cap its output so a slow
-        // local reasoning model cannot consume the whole check timeout; chats
-        // keep the user's configured output limit.
-        runtimeConfiguration: {
-          ...runtimeConfiguration,
-          maxTokens: Math.min(runtimeConfiguration.maxTokens ?? 8_192, 256),
-        },
-      }),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(120_000),
+    const requestBody = JSON.stringify({
+      userId: user.id,
+      workspaceId: 'provider-settings',
+      projectId: draft.id,
+      // The probe is a one-word connectivity test. Cap its output so a slow
+      // local reasoning model cannot consume the whole check timeout; chats
+      // keep the user's configured output limit.
+      runtimeConfiguration: {
+        ...runtimeConfiguration,
+        maxTokens: Math.min(runtimeConfiguration.maxTokens ?? 8_192, 256),
+      },
     })
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
+    let response: Response | null = null
+    let detail = ''
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      response = await fetch(`${baseUrl}/v1/providers/check`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: requestBody,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(120_000),
+      })
+      if (response.ok) break
+      detail = await response.text().catch(() => '')
+      // A sandbox bootstrap can hit a transient Docker archive race while a
+      // previous sandbox is being cleaned up. One retry keeps the check
+      // deterministic without hiding a real provider/configuration failure.
+      if (attempt === 0 && response.status >= 500 && detail.includes('PROVISIONING_FAILED')) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
+        continue
+      }
+      break
+    }
+    if (!response?.ok) {
       return { ok: false as const, error: detail.slice(0, 500) || 'PROVIDER_CHECK_FAILED' }
     }
     return { ok: true as const }
