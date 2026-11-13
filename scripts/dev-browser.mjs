@@ -840,6 +840,11 @@ const shared = {
     : {}),
   OPENLINK_RUNTIME_MODE: runtimeMode,
   NEXT_PUBLIC_OPENLINK_RUNTIME_MODE: runtimeMode,
+  // Local development commonly points a custom provider at an HTTP gateway on
+  // the LAN (for example a llama.cpp/OpenAI-compatible server). Cloud and
+  // remote deployments keep the strict public-HTTPS default.
+  OPENLINK_ALLOW_INSECURE_PROVIDER_ENDPOINTS: process.env.OPENLINK_ALLOW_INSECURE_PROVIDER_ENDPOINTS
+    || (runtimeMode === 'local' ? '1' : '0'),
   OPENLINK_KNOWLEDGE_SERVICE_URL: knowledgeServiceUrl,
   OPENLINK_KNOWLEDGE_INTERNAL_TOKEN: knowledgeApiToken,
   ...(localZero ? {

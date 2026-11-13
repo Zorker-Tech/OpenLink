@@ -138,6 +138,23 @@ function required(key: string): string {
   return value
 }
 
+function modelConfigFromModel(model: string | undefined, providerId: string | undefined): ProviderModelConfig | undefined {
+  if (!model || !providerId) return undefined
+  const prefix = `${providerId}/`
+  const id = model.startsWith(prefix) ? model.slice(prefix.length) : model
+  if (!id) return undefined
+  return {
+    id,
+    name: id,
+    api: 'openai-completions',
+    reasoning: false,
+    input: ['text'],
+    contextWindow: 128_000,
+    maxTokens: 8_192,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  }
+}
+
 function config(): WorkerConfig {
   const port = Number(process.env.OPENLINK_AGENT_WORKER_PORT || 43130)
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('OPENLINK_AGENT_WORKER_PORT is invalid')
@@ -145,6 +162,8 @@ function config(): WorkerConfig {
   const accessMode = process.env.OPENLINK_AGENT_ACCESS_MODE === 'open' || process.env.OPENLINK_AGENT_ACCESS_MODE === 'ask'
     ? process.env.OPENLINK_AGENT_ACCESS_MODE as 'open' | 'ask'
     : 'restricted'
+  const model = process.env.OPENLINK_AGENT_MODEL || process.env.GEMINI_MODEL
+  const providerId = process.env.OPENLINK_PROVIDER_ID || (process.env.GEMINI_API_KEY ? 'google' : undefined)
   return {
     host: process.env.OPENLINK_AGENT_WORKER_HOST || '0.0.0.0',
     port,
@@ -152,11 +171,11 @@ function config(): WorkerConfig {
     workspaceRoot: resolve(process.env.OPENLINK_AGENT_WORKSPACE_ROOT || '/workspace'),
     sessionRoot: resolve(process.env.OPENLINK_AGENT_SESSION_ROOT || '/openlink/session'),
     sessionFile: process.env.OPENLINK_AGENT_SESSION_FILE ? resolve(process.env.OPENLINK_AGENT_SESSION_FILE) : undefined,
-    model: process.env.OPENLINK_AGENT_MODEL || process.env.GEMINI_MODEL,
-    providerId: process.env.OPENLINK_PROVIDER_ID || (process.env.GEMINI_API_KEY ? 'google' : undefined),
+    model,
+    providerId,
     providerBaseUrl: process.env.OPENLINK_PROVIDER_BASE_URL || process.env.GOOGLE_GEMINI_BASE_URL,
     providerApiKey: process.env.OPENLINK_PROVIDER_API_KEY || process.env.GEMINI_API_KEY,
-    providerModelConfig: providerModelConfig(),
+    providerModelConfig: providerModelConfig() ?? modelConfigFromModel(model, providerId),
     browserHostUrl: process.env.OPENLINK_BROWSER_HOST_URL,
     browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
