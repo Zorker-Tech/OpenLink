@@ -206,11 +206,18 @@ export function BotDetailsPane({
                         Not available for groups
                       </div>
                     ) : (
-                      <button
+                      <div
                         aria-label={`Open ${bot.name}'s computer`}
-                        className="group relative block aspect-video w-full overflow-hidden rounded-lg border border-[var(--app-control-border)] bg-black text-left transition-colors hover:border-[var(--app-focus-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-focus-ring)]"
+                        className="group relative block aspect-video w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--app-control-border)] bg-black text-left transition-colors hover:border-[var(--app-focus-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-focus-ring)]"
                         onClick={onOpenComputer}
-                        type="button"
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            onOpenComputer()
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
                       >
                         <span className="pointer-events-none absolute inset-0 block">
                           <DesktopWorkbench
@@ -223,7 +230,7 @@ export function BotDetailsPane({
                         <span className="pointer-events-none absolute bottom-2 left-2 flex h-6 items-center gap-1.5 rounded-md bg-black/60 px-2 text-[11px] font-medium text-white backdrop-blur-sm">
                           Open computer
                         </span>
-                      </button>
+                      </div>
                     )}
                   </section>
 
