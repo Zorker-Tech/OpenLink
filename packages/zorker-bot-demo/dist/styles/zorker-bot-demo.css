@@ -805,7 +805,28 @@
 }
 
 .zbd-typing-dots {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 2px;
+}
+
+.zbd-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--zbd-current-accent);
+  opacity: 0.4;
+  animation: zbd-typing-bounce 1.15s ease-in-out infinite;
+}
+
+.zbd-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.zbd-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 .zbd-card-wrap {
@@ -1675,6 +1696,19 @@
   }
   50% {
     transform: scale(1.035);
+  }
+}
+
+@keyframes zbd-typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
   }
 }
 

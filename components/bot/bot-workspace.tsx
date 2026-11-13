@@ -32,7 +32,10 @@ import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/compone
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { BotDetail, BotRoutine, BotSummary } from '@/lib/bot-types'
 import {
+  OPTIMISTIC_USER_ENTRY_PREFIX,
+  optimisticUserEntry,
   previewFromEntries,
+  reconcileOptimisticUserEntry,
   type BotStreamUpdate,
   type BotTranscriptEntry,
 } from '@/lib/bot-transcript'
@@ -82,17 +85,6 @@ function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[], routine
     })),
     screenKind: 'desktop',
   }
-}
-
-function upsertEntry(
-  transcript: BotTranscriptEntry[],
-  entry: BotTranscriptEntry,
-): BotTranscriptEntry[] {
-  const index = transcript.findIndex((candidate) => candidate.id === entry.id)
-  if (index === -1) return [...transcript, entry]
-  const next = [...transcript]
-  next[index] = entry
-  return next
 }
 
 function friendlyRuntimeError(value: string): string {
@@ -415,6 +407,9 @@ export function BotWorkspace({
       return
     }
     if (update.type === 'delta') {
+      // The first streamed token replaces the typing beat: the assistant is
+      // now writing in the timeline, so a separate pending row would trail it.
+      setPendingMap((previous) => (previous[botId] ? { ...previous, [botId]: null } : previous))
       setDetails((previous) => {
         const detail = previous[botId]
         if (!detail) return previous
@@ -437,10 +432,13 @@ export function BotWorkspace({
       return
     }
     if (update.type === 'entry') {
+      if (update.entry.kind === 'agent-message') {
+        setPendingMap((previous) => (previous[botId] ? { ...previous, [botId]: null } : previous))
+      }
       setDetails((previous) => {
         const detail = previous[botId]
         if (!detail) return previous
-        return { ...previous, [botId]: { ...detail, transcript: upsertEntry(detail.transcript, update.entry) } }
+        return { ...previous, [botId]: { ...detail, transcript: reconcileOptimisticUserEntry(detail.transcript, update.entry) } }
       })
       return
     }
@@ -530,12 +528,24 @@ export function BotWorkspace({
     setSending(true)
     setDraft('')
     setError(null)
+    const clientNonce = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `bot-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const optimisticId = `${OPTIMISTIC_USER_ENTRY_PREFIX}${clientNonce}`
+    setDetails((previous) => {
+      const detail = previous[botId]
+      if (!detail) return previous
+      return {
+        ...previous,
+        [botId]: { ...detail, transcript: [...detail.transcript, optimisticUserEntry(optimisticId, content)] },
+      }
+    })
     setPendingMap((previous) => ({ ...previous, [botId]: { label: 'Working', showLabel: true } }))
     try {
       const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify({ message: content, clientNonce }),
       })
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
@@ -562,7 +572,17 @@ export function BotWorkspace({
         }
       }
     } catch (sendError) {
-      if (!accepted) setDraft((current) => current || content)
+      if (!accepted) {
+        setDraft((current) => current || content)
+        setDetails((previous) => {
+          const detail = previous[botId]
+          if (!detail) return previous
+          return {
+            ...previous,
+            [botId]: { ...detail, transcript: detail.transcript.filter((entry) => entry.id !== optimisticId) },
+          }
+        })
+      }
       setError(sendError instanceof Error ? friendlyRuntimeError(sendError.message) : 'The Bot could not finish this turn.')
     } finally {
       setSending(false)
