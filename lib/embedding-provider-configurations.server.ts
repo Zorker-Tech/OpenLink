@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getEmbeddingProvider, isEmbeddingProviderId, type EmbeddingProtocol } from '@/lib/embedding-providers'
 import type { EmbeddingProviderConfigurationSummary, EmbeddingProviderRuntimeConfiguration } from '@/lib/ai-provider-types'
+import { isValidModelId } from '@/lib/model-id'
 import { decryptProviderSecret, encryptProviderSecret, providerSecretHint } from '@/lib/provider-secrets.server'
 import { createClient } from '@/utils/supabase/server'
 
@@ -35,7 +36,7 @@ function summary(row: Row): EmbeddingProviderConfigurationSummary {
   }
 }
 
-function validModelId(value: string) { return /^[A-Za-z0-9@][A-Za-z0-9._:/@-]{0,255}$/.test(value) }
+function validModelId(value: string) { return isValidModelId(value) }
 
 export interface SaveEmbeddingProviderConfigurationInput {
   providerId: string

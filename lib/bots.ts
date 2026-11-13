@@ -14,6 +14,7 @@ import {
 } from '@/lib/bot-transcript'
 import { isBotAvatarColor, isBotAvatarShape } from '@/lib/bot-avatar'
 import { assertGroupMemberCandidate, isGroupBot, normalizeGroupMemberIds } from '@/lib/bot-groups'
+import { isValidModelId } from '@/lib/model-id'
 import { releaseBotRuntime } from '@/lib/bot-runtime.server'
 import type { BotDetail, BotGroupMemberSummary, BotRoutine, BotRuntimeStatus, BotSummary } from '@/lib/bot-types'
 import {
@@ -79,7 +80,6 @@ interface BotRow {
 const BOT_SELECT = 'id, user_id, workspace_id, project_id, runtime_session_id, runtime_status, runtime_ready_at, runtime_last_error, runtime_checked_at, work_agent_id, name, description, avatar_shape, avatar_color, kind, member_ids, provider_id, model_id, last_entry_text, last_activity_at, last_viewed_at, created_at, updated_at'
 const SAFE_BOT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SAFE_AVATAR_ID = /^[a-z0-9-]{1,32}$/
-const SAFE_MODEL_ID = /^[A-Za-z0-9@][A-Za-z0-9._:/@-]{0,255}$/
 const BOT_AGENT_RECOVERY_LOCKS = new Map<string, Promise<unknown>>()
 const BOT_PROJECTION_RECOVERY_LOCKS = new Map<string, Promise<unknown>>()
 
@@ -811,7 +811,7 @@ function normalizeModel(value: unknown): { providerId: string; modelId: string }
   const record = value as Record<string, unknown>
   const providerId = typeof record.providerId === 'string' ? record.providerId.trim() : ''
   const modelId = typeof record.modelId === 'string' ? record.modelId.trim() : ''
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(providerId) || !SAFE_MODEL_ID.test(modelId)) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(providerId) || !isValidModelId(modelId)) {
     throw new BotInputError('BOT_MODEL_REQUIRED')
   }
   return { providerId, modelId }
