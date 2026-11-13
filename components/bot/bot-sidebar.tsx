@@ -137,21 +137,21 @@ export function BotSidebar({
                   title={row.name}
                   type="button"
                 >
-                  <span className="relative flex size-7 shrink-0 items-center justify-center">
+                  <span className="relative flex size-8 shrink-0 items-center justify-center">
                     <AgentAvatar
                       agent={agent}
                       assetBase="/zorker-bot-demo"
                       className={row.session.isDraft ? 'zbd-app-avatar-new' : undefined}
-                      size={27}
+                      size={32}
                     />
                     {row.unread ? <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#ff453a] ring-2 ring-[var(--app-background)]" /> : null}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.08px] text-[var(--app-foreground)]">{row.name}</span>
-                      <span className="shrink-0 text-[11px] text-[var(--app-subtle-foreground)]" suppressHydrationWarning>{row.time}</span>
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-medium leading-5 tracking-[-0.15px] text-[var(--app-foreground)]">{row.name}</span>
+                      <span className="shrink-0 text-[12px] leading-4 text-[var(--app-subtle-foreground)]" suppressHydrationWarning>{row.time}</span>
                     </span>
-                    <span className="mt-0.5 block truncate text-[12px] leading-4 text-[var(--app-muted)]">{row.preview || 'No messages yet'}</span>
+                    <span className="mt-px block truncate text-[12px] leading-4 text-[var(--app-muted)]">{row.preview || 'No messages yet'}</span>
                   </span>
                 </button>
               )
