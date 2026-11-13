@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { reactionMask } from '../lib/reaction-mask'
 import { formatTime } from '../lib/format-time'
 import type { TranscriptEntry } from '../types'
@@ -9,6 +9,7 @@ export type MessageBubbleProps = {
   assetBase: string
   showTimestamp?: boolean
   timestampLabel?: string
+  renderContent?: (content: string) => ReactNode
 }
 
 export function MessageBubble({
@@ -16,9 +17,11 @@ export function MessageBubble({
   assetBase,
   showTimestamp = false,
   timestampLabel,
+  renderContent,
 }: MessageBubbleProps) {
   const isUser = entry.kind === 'user-message'
   const reactions = entry.reactions ?? []
+  const markdown = !isUser && renderContent !== undefined
   const mask = reactions.length > 0
     ? (reactionMask(reactions.length, isUser ? 'user' : 'agent') as CSSProperties)
     : undefined
@@ -33,10 +36,10 @@ export function MessageBubble({
       <div className={isUser ? 'zbd-message-row zbd-message-row-user' : 'zbd-message-row'}>
         <div className={isUser ? 'zbd-bubble-wrap zbd-bubble-wrap-user' : 'zbd-bubble-wrap'}>
           <div
-            className={isUser ? 'zbd-bubble zbd-bubble-user' : 'zbd-bubble zbd-bubble-agent'}
+            className={`${isUser ? 'zbd-bubble zbd-bubble-user' : 'zbd-bubble zbd-bubble-agent'}${markdown ? ' zbd-bubble-markdown' : ''}`}
             style={mask}
           >
-            {isUser ? entry.content : <RichText assetBase={assetBase} content={entry.content} />}
+            {isUser ? entry.content : renderContent ? renderContent(entry.content) : <RichText assetBase={assetBase} content={entry.content} />}
           </div>
           {reactions.length > 0 ? (
             <span className={isUser ? 'zbd-reactions zbd-reactions-user' : 'zbd-reactions zbd-reactions-agent'}>

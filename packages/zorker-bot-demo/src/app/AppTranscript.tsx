@@ -35,6 +35,7 @@ export type AppTranscriptProps = {
   assetBase: string
   session: AppSession
   displayName: string
+  renderMessage?: (content: string) => ReactNode
   transcriptRef: Ref<HTMLDivElement>
   onOpenComputer: () => void
   onTakeOver: () => void
@@ -51,6 +52,7 @@ export function AppTranscript({
   assetBase,
   session,
   displayName,
+  renderMessage,
   transcriptRef,
   onOpenComputer,
   onTakeOver,
@@ -143,6 +145,7 @@ export function AppTranscript({
               <MessageBubble
                 assetBase={assetBase}
                 entry={entry}
+                renderContent={renderMessage}
                 showTimestamp={showTimestamp}
                 timestampLabel={
                   showTimestamp

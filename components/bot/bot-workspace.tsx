@@ -17,6 +17,8 @@ import {
   type AppSidebarRow,
 } from '@zorker/bot-demo/app'
 import { AgentAvatar, resolveColor } from '@zorker/avatar'
+import { MessageResponse } from '@/components/ai-elements/message'
+import { Loader2 } from 'lucide-react'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
 import { BotWorkspaceView } from '@/components/bot/bot-workspace-view'
@@ -96,6 +98,10 @@ function taskAvatarState(label: string | null | undefined): string {
   if (value.includes('write') || value.includes('edit') || value.includes('code')) return 'coding'
   if (value.includes('computer') || value.includes('desktop')) return 'computing'
   return 'working'
+}
+
+function renderBotMarkdown(content: string) {
+  return <MessageResponse className="zbd-app-markdown">{content}</MessageResponse>
 }
 
 function providerErrorMessage(value: string): string {
@@ -911,18 +917,31 @@ export function BotWorkspace({
                       onSuggestion={useSuggestion}
                       onTakeOver={openComputer}
                       pending={null}
+                      renderMessage={renderBotMarkdown}
                       status={activePending ? (
                         <>
-                          <AgentAvatar
-                            className="shrink-0"
-                            color={activeBot.avatarColor}
-                            renderer="complete"
-                            shape={activeBot.avatarShape}
-                            size={20}
-                            state={taskAvatarState(activePending.label)}
-                            theme={activeTheme}
+                          <span className="relative flex size-5 shrink-0 items-center justify-center">
+                            <AgentAvatar
+                              className="shrink-0"
+                              color={activeBot.avatarColor}
+                              renderer="complete"
+                              shape={activeBot.avatarShape}
+                              size={20}
+                              state={taskAvatarState(activePending.label)}
+                              theme={activeTheme}
+                            />
+                            <span
+                              aria-hidden="true"
+                              className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-[var(--app-background)]"
+                              style={{ background: resolveColor(activeBot.avatarColor, activeTheme) }}
+                            />
+                          </span>
+                          <Loader2
+                            aria-hidden="true"
+                            className="size-3.5 shrink-0 animate-spin"
+                            style={{ color: resolveColor(activeBot.avatarColor, activeTheme) }}
                           />
-                          <span className="min-w-0 truncate">{activePending.label || 'Working…'}</span>
+                          <span className="min-w-0 truncate">{activePending.label || 'Working'}</span>
                         </>
                       ) : null}
                       screen={END_SCREEN}
