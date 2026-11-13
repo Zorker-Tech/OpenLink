@@ -18,6 +18,50 @@ export type BotStreamUpdate =
   | { type: 'done' }
   | { type: 'error'; message: string }
 
+export const OPTIMISTIC_USER_ENTRY_PREFIX = 'optimistic-user-'
+
+export function optimisticUserEntry(id: string, content: string): BotTranscriptEntry {
+  return { kind: 'user-message', id, content, timestampMs: Date.now() }
+}
+
+export function upsertBotTranscriptEntry(
+  transcript: BotTranscriptEntry[],
+  entry: BotTranscriptEntry,
+): BotTranscriptEntry[] {
+  const index = transcript.findIndex((candidate) => candidate.id === entry.id)
+  if (index === -1) return [...transcript, entry]
+  const next = [...transcript]
+  next[index] = entry
+  return next
+}
+
+/**
+ * Replace the optimistic copy of a user message with the durable Work-host
+ * echo in place. The echo can arrive after the assistant has started
+ * streaming, so appending it would move the user bubble behind the reply.
+ */
+export function reconcileOptimisticUserEntry(
+  transcript: BotTranscriptEntry[],
+  entry: BotTranscriptEntry,
+): BotTranscriptEntry[] {
+  const hasDurable = transcript.some((candidate) => candidate.id === entry.id)
+  if (entry.kind !== 'user-message') return upsertBotTranscriptEntry(transcript, entry)
+  const optimisticIndex = transcript.findIndex((candidate) => (
+    candidate.kind === 'user-message'
+    && candidate.id.startsWith(OPTIMISTIC_USER_ENTRY_PREFIX)
+    && candidate.content === entry.content
+  ))
+  if (optimisticIndex === -1) {
+    return hasDurable ? transcript : upsertBotTranscriptEntry(transcript, entry)
+  }
+  const optimisticId = transcript[optimisticIndex].id
+  const next = transcript.filter((candidate) => candidate.id !== entry.id)
+  const nextIndex = next.findIndex((candidate) => candidate.id === optimisticId)
+  if (nextIndex === -1) return next
+  next[nextIndex] = entry
+  return next
+}
+
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
 
 function safeId(value: unknown, fallback: string): string {
