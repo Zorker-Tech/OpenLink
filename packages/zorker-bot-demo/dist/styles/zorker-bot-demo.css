@@ -965,6 +965,18 @@
   padding: 0 20px 12px;
 }
 
+.zbd-composer-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px 8px;
+  color: var(--zbd-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  animation: zbd-pending-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
 .zbd-composer-fade {
   position: absolute;
   right: 0;

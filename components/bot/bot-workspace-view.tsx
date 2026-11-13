@@ -1,118 +1,71 @@
 'use client'
 
 import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
-import { Globe2, Monitor, X } from 'lucide-react'
-import { useState } from 'react'
-
-type BotWorkspaceTab = 'realtime' | 'desktop'
+import { PaneResizeHandle, usePaneResize } from '@/components/bot/bot-pane-resize'
 
 type BotWorkspaceViewProps = {
   botName: string
   botId: string
+  avatarColor: string
+  avatarShape: string
+  theme: 'light' | 'dark'
   onClose: () => void
 }
 
-const BOT_WORKSPACE_TABS: ReadonlyArray<{ id: BotWorkspaceTab; label: string; icon: typeof Globe2 }> = [
-  { id: 'realtime', label: 'Live Browser', icon: Globe2 },
-  { id: 'desktop', label: 'Desktop', icon: Monitor },
-]
-
 /**
- * Tab geometry shared with the Code workspace so the two surfaces read as one
- * system: 28px tall, equal 120px width, 8px radius, inset control border.
+ * The Bot computer owns the full right-hand surface. Its title doubles as the
+ * only chrome; the running desktop itself is inset into a rounded canvas.
  */
-function tabClassName(selected: boolean): string {
-  return `mr-0.5 flex h-7 w-[120px] shrink-0 items-center gap-1.5 overflow-hidden rounded-lg pl-2.5 pr-2 text-[13px] font-medium tracking-[-0.0762px] transition-[background-color,color,box-shadow] duration-150 ${
-    selected
-      ? 'bg-[var(--app-active)]! text-[var(--app-foreground)] shadow-[inset_0_0_0_1px_var(--app-control-border),0_1px_2px_var(--app-shadow)]'
-      : 'bg-[var(--app-surface)]! text-[var(--app-muted)] shadow-[inset_0_0_0_1px_var(--app-control-border)] hover:bg-[var(--app-hover)]! hover:text-[var(--app-foreground)]'
-  }`
-}
-
-/**
- * The Bot computer uses the same right-side workspace structure as a Code
- * session: a tab strip above a full-height surface. Only the live browser and
- * desktop surfaces belong to a Bot; the Code-only tabs and publish actions are
- * intentionally absent.
- */
-export function BotWorkspaceView({ botName, botId, onClose }: BotWorkspaceViewProps) {
-  const [tab, setTab] = useState<BotWorkspaceTab>('desktop')
+export function BotWorkspaceView({
+  botName,
+  botId,
+  avatarColor,
+  avatarShape,
+  theme,
+  onClose,
+}: BotWorkspaceViewProps) {
+  const pane = usePaneResize({
+    defaultWidth: 560,
+    minWidth: 380,
+    maxWidth: 960,
+    storageKey: 'openlink-bot-workspace-width',
+  })
 
   return (
     <aside
       aria-label={`${botName} workspace`}
-      className="zbd-side-pane zbd-app-computer-pane w-[min(760px,55vw)]! min-w-[380px]!"
+      className="zbd-side-pane zbd-app-computer-pane relative shrink-0"
+      style={{ width: pane.width }}
     >
+      <PaneResizeHandle
+        maxWidth={960}
+        minWidth={380}
+        onNudge={pane.nudge}
+        onPointerDown={pane.beginResize}
+        resizing={pane.resizing}
+        width={pane.width}
+      />
       <div className="zbd-side-pane-inner">
-        <header className="flex h-11 shrink-0 items-center border-b border-[var(--app-border)] bg-[var(--app-background)] px-2.5">
-          <div aria-label="Bot workspace" className="flex h-7 min-w-0 flex-1 items-center overflow-hidden" role="tablist">
-            <div className="flex min-w-0 items-center overflow-x-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {BOT_WORKSPACE_TABS.map(({ id, label, icon: Icon }) => {
-                const selected = tab === id
-                return (
-                  <button
-                    aria-controls={`bot-workspace-panel-${id}`}
-                    aria-selected={selected}
-                    className={tabClassName(selected)}
-                    id={`bot-workspace-tab-${id}`}
-                    key={id}
-                    onClick={() => setTab(id)}
-                    role="tab"
-                    type="button"
-                  >
-                    <Icon aria-hidden className="size-3.5 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{label}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+        <header className="relative flex h-11 shrink-0 items-center justify-center bg-[var(--app-background)] px-3">
+          <h1 className="max-w-[calc(100%-72px)] truncate text-[11px] font-semibold tracking-[-0.05px] text-[var(--app-foreground)]">
+            {botName}&apos;s computer
+          </h1>
           <button
-            aria-label="Close workspace"
-            className="zbd-window-action ml-1 shrink-0"
+            aria-label="Close computer"
+            className="zbd-window-action absolute right-3 opacity-0 transition-opacity focus-visible:opacity-100 [@media(hover:hover)]:hover:opacity-100"
             onClick={onClose}
             type="button"
           >
-            <X className="size-3.5" />
+            <span aria-hidden className="text-[16px] leading-none">×</span>
           </button>
         </header>
-
-        <div className="relative min-h-0 flex-1">
-          <div
-            aria-hidden={tab !== 'desktop'}
-            aria-labelledby="bot-workspace-tab-desktop"
-            className={`absolute inset-0 ${tab === 'desktop' ? 'visible' : 'invisible pointer-events-none'}`}
-            id="bot-workspace-panel-desktop"
-            role="tabpanel"
-          >
-            <DesktopWorkbench botId={botId} />
-          </div>
-          <div
-            aria-hidden={tab !== 'realtime'}
-            aria-labelledby="bot-workspace-tab-realtime"
-            className={`absolute inset-0 ${tab === 'realtime' ? 'visible' : 'invisible pointer-events-none'}`}
-            id="bot-workspace-panel-realtime"
-            role="tabpanel"
-          >
-            <div className="flex size-full flex-col items-center justify-center gap-3 bg-[var(--app-background)] px-8 text-center">
-              <span className="grid size-12 place-items-center rounded-full bg-[var(--app-active)] text-[var(--app-muted)]">
-                <Globe2 className="size-5" />
-              </span>
-              <div>
-                <p className="text-[13px] font-medium">Live Browser</p>
-                <p className="mt-1 max-w-[320px] text-[12px] leading-5 text-[var(--app-muted)]">
-                  The Bot browser is part of its desktop. Open the Desktop tab to watch or take over the running session.
-                </p>
-              </div>
-              <button
-                className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-[12px] hover:bg-[var(--app-active)]"
-                onClick={() => setTab('desktop')}
-                type="button"
-              >
-                <Monitor className="size-3.5" />
-                Open Desktop
-              </button>
-            </div>
+        <div className="min-h-0 flex-1 px-3.5 pb-5">
+          <div className="size-full overflow-hidden rounded-xl bg-[var(--app-active)]">
+            <DesktopWorkbench
+              botId={botId}
+              loadingAvatar={{ color: avatarColor, shape: avatarShape, theme }}
+              loadingLabel="Waking up..."
+            />
           </div>
         </div>
       </div>

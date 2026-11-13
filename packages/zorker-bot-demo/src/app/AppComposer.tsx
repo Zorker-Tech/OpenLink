@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
 import {
   ClockIcon,
@@ -15,6 +16,7 @@ export type AppComposerProps = {
   displayName: string
   disabled: boolean
   showRoutine?: boolean
+  status?: ReactNode
   value: string
   onChange: (value: string) => void
   onSend: () => void
@@ -25,6 +27,7 @@ export function AppComposer({
   displayName,
   disabled,
   showRoutine = true,
+  status,
   value,
   onChange,
   onSend,
@@ -81,6 +84,7 @@ export function AppComposer({
   return (
     <div className="zbd-composer-wrap zbd-app-composer-wrap">
       <div aria-hidden="true" className="zbd-composer-fade" />
+      {status ? <div className="zbd-composer-status">{status}</div> : null}
       <div className="zbd-composer zbd-app-composer">
         <div className="zbd-app-composer-plus-wrap" ref={menuRef}>
           <button
