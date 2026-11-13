@@ -814,8 +814,9 @@ export function BotWorkspace({
               <section className="zbd-chat zbd-app-chat flex min-h-0 min-w-0 flex-1 flex-col">
                 <button
                   aria-label={`Open ${activeBot.name} details`}
-                  className="mx-auto mt-3 mb-1.5 flex h-8 w-fit max-w-[min(320px,calc(100%-24px))] min-w-0 shrink-0 items-center gap-2 rounded-full bg-transparent pl-1.5 pr-4 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)] transition-colors"
+                  className="absolute left-1/2 top-3 z-20 flex h-8 w-fit max-w-[min(320px,calc(100%-24px))] min-w-0 -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--app-border)] pl-1.5 pr-4 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors"
                   onClick={toggleDetails}
+                  style={{ background: 'color-mix(in srgb, var(--app-elevated) 82%, transparent)' }}
                   type="button"
                 >
                   <AgentAvatar
