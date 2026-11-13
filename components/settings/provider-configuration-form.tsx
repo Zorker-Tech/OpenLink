@@ -378,7 +378,14 @@ function translateError(error: string, t: (source: string) => string) {
   if (error === 'FETCH_MODELS_EMPTY') return t('上游未返回任何模型，请检查 Base URL 或 API Key。')
   if (error.startsWith('FETCH_MODELS_FAILED_')) return t('无法从上游获取模型，请检查 API 代理地址与 API Key。')
   if (error.includes('fetch failed')) return t('无法连接 Agent Host 或模型服务。')
-  return error
+  if (/\b429\b|rate limit|too many requests|quota/i.test(error)) return t('请求过于频繁，请稍后重试。')
+  if (/\b401\b|\b403\b|unauthorized|forbidden|invalid api key/i.test(error)) return t('API Key 无效或没有权限。')
+  if (/\b404\b|model.*not found|not found.*model/i.test(error)) return t('模型不存在或未启用。')
+  if (/context (length|window)|too many tokens/i.test(error)) return t('上下文超出模型限制。')
+  if (/\b5\d\d\b|internal server error|service unavailable|bad gateway/i.test(error)) return t('服务商暂时不可用，请稍后重试。')
+  if (/timeout|timed out|aborted/i.test(error)) return t('模型服务响应超时，请稍后重试。')
+  if (/fetch failed|network|econn|enotfound/i.test(error)) return t('无法连接到模型服务，请检查端点与网络。')
+  return error.length > 180 ? `${error.slice(0, 177)}…` : error
 }
 
 function formatTokens(tokens: number) {

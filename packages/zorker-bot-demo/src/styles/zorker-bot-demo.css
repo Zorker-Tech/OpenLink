@@ -673,8 +673,9 @@
 
 .zbd-bubble {
   padding: 8px 12px;
-  /* Shared with the composer: one radius for every message length. */
-  border-radius: var(--radius-2xl, 18px);
+  /* Concentric with the composer's 24px outer radius: 24px - 8px padding
+     leaves 16px for the message surface at every content length. */
+  border-radius: 16px;
   font-size: 14px;
   line-height: 20px;
   letter-spacing: -0.15px;
@@ -1001,9 +1002,7 @@
   gap: 8px;
   padding: 8px;
   border: 0.5px solid var(--zbd-border-default);
-  /* Concentric with the 18px message bubble; the 8px padding leaves a 10px
-     inner radius for controls that opt into the nested step. */
-  border-radius: var(--radius-2xl, 18px);
+  border-radius: 999px;
   background: color-mix(in srgb, var(--zbd-bg-elevated) 70%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   backdrop-filter: blur(20px) saturate(160%);
@@ -2034,6 +2033,24 @@
   font-size: 12px;
   line-height: 16px;
   letter-spacing: -0.05px;
+}
+
+.zbd-app-task-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 2px;
+  color: var(--zbd-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.zbd-app-task-status > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .zbd-app-group-entry .zbd-bubble-wrap {
