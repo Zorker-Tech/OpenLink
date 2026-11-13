@@ -212,7 +212,13 @@ export async function checkAiProviderConfigurationAction(providerId: string, mod
         userId: user.id,
         workspaceId: 'provider-settings',
         projectId: draft.id,
-        runtimeConfiguration,
+        // The probe is a one-word connectivity test. Cap its output so a slow
+        // local reasoning model cannot consume the whole check timeout; chats
+        // keep the user's configured output limit.
+        runtimeConfiguration: {
+          ...runtimeConfiguration,
+          maxTokens: Math.min(runtimeConfiguration.maxTokens ?? 8_192, 256),
+        },
       }),
       cache: 'no-store',
       signal: AbortSignal.timeout(120_000),

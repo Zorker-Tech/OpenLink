@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { isIP } from 'node:net'
 import { dirname, resolve } from 'node:path'
 import { resolve as resolveGuestPath } from 'node:path/posix'
 import { promisify } from 'node:util'
@@ -173,6 +174,17 @@ interface ProviderCredentialVault {
 }
 
 const providerVaultPlaceholder = 'openlink-provider-vault-placeholder'
+
+/**
+ * The OpenSandbox Credential Vault only accepts FQDN binding hosts. A local
+ * inference gateway addressed by a literal IP therefore cannot use the vault.
+ * With the explicit insecure-endpoint opt-in we keep the egress policy but
+ * hand the worker the real key instead of a vault placeholder.
+ */
+function usesDirectProviderKey(providerHosts: string[]): boolean {
+  return process.env.OPENLINK_ALLOW_INSECURE_PROVIDER_ENDPOINTS === '1'
+    && providerHosts.some((host) => isIP(host) !== 0)
+}
 
 function providerCredentialVaultRequest(providerBaseUrl: string, providerHosts: string[], providerApiKey: string) {
   const providerUrl = new URL(providerBaseUrl)
@@ -551,11 +563,12 @@ export class LocalOpenSandboxBackend {
         throw new Error(`sandbox is ${info.status.state}`)
       }
       const egressEnabled = projectRuntime?.egressMode !== 'disabled'
-      if (egressEnabled && runtimeConfiguration.apiKey) {
+      const providerHosts = providerNetworkTargets(runtimeConfiguration.providerId, runtimeConfiguration.baseUrl)
+      if (egressEnabled && runtimeConfiguration.apiKey && !usesDirectProviderKey(providerHosts)) {
         await ensureProviderCredentialVault(
           sandbox.credentialVault,
           runtimeConfiguration.baseUrl,
-          providerNetworkTargets(runtimeConfiguration.providerId, runtimeConfiguration.baseUrl),
+          providerHosts,
           runtimeConfiguration.apiKey,
         )
       }
@@ -621,6 +634,7 @@ export class LocalOpenSandboxBackend {
     const providerApiKey = runtimeConfiguration.apiKey
     const providerBaseUrl = runtimeConfiguration.baseUrl
     const providerHosts = providerNetworkTargets(providerId, providerBaseUrl)
+    const directProviderKey = usesDirectProviderKey(providerHosts)
     const model = `${runtimeConfiguration.providerId}/${runtimeConfiguration.modelId}`
     const browser = browserSession ? browserAgentBinding(browserSession, LOCAL_BROWSER_EXTENSION_PATH, projectRuntime) : undefined
     const browserHost = browser
@@ -685,7 +699,7 @@ export class LocalOpenSandboxBackend {
         ...(agentOptions?.agent === 'codex' ? { XDG_CACHE_HOME: '/openlink/session/codex-cache' } : {}),
         ...(agentOptions?.accessMode ? { OPENLINK_AGENT_ACCESS_MODE: agentOptions.accessMode } : {}),
         ...ambientProviderEnvironment(providerId),
-        ...(providerApiKey ? { OPENLINK_PROVIDER_API_KEY: egressEnabled ? providerVaultPlaceholder : providerApiKey } : {}),
+        ...(providerApiKey ? { OPENLINK_PROVIDER_API_KEY: egressEnabled && !directProviderKey ? providerVaultPlaceholder : providerApiKey } : {}),
         OPENLINK_BROWSER_EXTENSION_PATH: LOCAL_BROWSER_EXTENSION_PATH,
         OPENLINK_BROWSER_CAPABILITY_FILE: '/openlink/session/browser-capability.json',
         ...(projectId && this.config.supabaseMcp && supabaseMcpUrl ? {
@@ -779,7 +793,7 @@ export class LocalOpenSandboxBackend {
     })
 
     try {
-      if (egressEnabled && providerApiKey) {
+      if (egressEnabled && providerApiKey && !directProviderKey) {
         await ensureProviderCredentialVault(sandbox.credentialVault, providerBaseUrl, providerHosts, providerApiKey)
       }
       const endpoint = await sandbox.getEndpoint(43130)

@@ -17,6 +17,7 @@ interface Config {
   model?: string
   providerId?: string
   providerBaseUrl?: string
+  providerModelConfig?: ProviderModelConfig
   browserHostUrl?: string
   browserSessionId?: string
   browserControlToken?: string
@@ -24,6 +25,61 @@ interface Config {
   desktopExtensionPath?: string
   projectMemoryExtensionPath?: string
   runtimePolicy?: string
+}
+
+interface ProviderModelConfig {
+  id: string
+  name: string
+  api?: string
+  reasoning: boolean
+  input: Array<'text' | 'image'>
+  contextWindow: number
+  maxTokens: number
+  cost: { input: number; output: number; cacheRead: number; cacheWrite: number }
+}
+
+/**
+ * Custom endpoints have no built-in Pi catalog entry. The Agent Host passes
+ * the selected model's metadata so the worker can register exactly that model
+ * in models.json; otherwise the CLI cannot resolve `custom/<model>`.
+ */
+function providerModelConfig(): ProviderModelConfig | undefined {
+  const raw = process.env.OPENLINK_PROVIDER_MODEL_CONFIG?.trim()
+  if (!raw || raw.length > 16_000) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return undefined
+  }
+  if (!parsed || typeof parsed !== 'object') return undefined
+  const input = parsed as Record<string, unknown>
+  const id = typeof input.id === 'string' ? input.id.trim() : ''
+  if (!id || id.length > 256) return undefined
+  const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim().slice(0, 256) : id
+  const api = typeof input.api === 'string' && /^[a-z0-9-]{1,64}$/.test(input.api) ? input.api : undefined
+  const inputTypes = Array.isArray(input.input)
+    ? input.input.filter((item): item is 'text' | 'image' => item === 'text' || item === 'image')
+    : []
+  const positiveInteger = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback
+  const nonNegative = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+  const cost = input.cost && typeof input.cost === 'object' ? input.cost as Record<string, unknown> : {}
+  return {
+    id,
+    name,
+    ...(api !== undefined ? { api } : {}),
+    reasoning: input.reasoning === true,
+    input: inputTypes.length > 0 ? inputTypes : ['text'],
+    contextWindow: positiveInteger(input.contextWindow, 128_000),
+    maxTokens: positiveInteger(input.maxTokens, 8_192),
+    cost: {
+      input: nonNegative(cost.input),
+      output: nonNegative(cost.output),
+      cacheRead: nonNegative(cost.cacheRead),
+      cacheWrite: nonNegative(cost.cacheWrite),
+    },
+  }
 }
 
 interface AgentExtensionUiResponse {
@@ -39,9 +95,29 @@ function required(key: string): string {
   return value
 }
 
+function modelConfigFromModel(model: string | undefined, providerId: string | undefined): ProviderModelConfig | undefined {
+  if (!model || !providerId) return undefined
+  const prefix = `${providerId}/`
+  const id = model.startsWith(prefix) ? model.slice(prefix.length) : model
+  if (!id) return undefined
+  return {
+    id,
+    name: id,
+    api: 'openai-completions',
+    reasoning: false,
+    input: ['text'],
+    contextWindow: 128_000,
+    maxTokens: 8_192,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  }
+}
+
 function loadConfig(): Config {
   const port = Number(process.env.OPENLINK_AGENT_RPC_PORT || 43131)
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('OPENLINK_AGENT_RPC_PORT is invalid')
+  const model = process.env.OPENLINK_AGENT_MODEL || process.env.GEMINI_MODEL
+  const providerId = process.env.OPENLINK_PROVIDER_ID || (process.env.GEMINI_API_KEY ? 'google' : undefined)
+  const providerBaseUrl = process.env.OPENLINK_PROVIDER_BASE_URL || process.env.GOOGLE_GEMINI_BASE_URL
   return {
     host: process.env.OPENLINK_AGENT_RPC_HOST || '0.0.0.0',
     port,
@@ -50,9 +126,10 @@ function loadConfig(): Config {
     sessionRoot: resolve(process.env.OPENLINK_AGENT_SESSION_ROOT || '/openlink/session'),
     sessionId: required('OPENLINK_AGENT_SESSION_ID'),
     sessionFile: process.env.OPENLINK_AGENT_SESSION_FILE ? resolve(process.env.OPENLINK_AGENT_SESSION_FILE) : undefined,
-    model: process.env.OPENLINK_AGENT_MODEL || process.env.GEMINI_MODEL,
-    providerId: process.env.OPENLINK_PROVIDER_ID || (process.env.GEMINI_API_KEY ? 'google' : undefined),
-    providerBaseUrl: process.env.OPENLINK_PROVIDER_BASE_URL || process.env.GOOGLE_GEMINI_BASE_URL,
+    model,
+    providerId,
+    providerBaseUrl,
+    providerModelConfig: providerModelConfig() ?? modelConfigFromModel(model, providerId),
     browserHostUrl: process.env.OPENLINK_BROWSER_HOST_URL,
     browserSessionId: process.env.OPENLINK_BROWSER_SESSION_ID,
     browserControlToken: process.env.OPENLINK_BROWSER_CONTROL_TOKEN,
@@ -238,11 +315,24 @@ class RpcRuntime {
     await mkdir(configDir, { recursive: true, mode: 0o700 })
     await mkdir(piSessions, { recursive: true, mode: 0o700 })
     if (this.config.providerId && this.config.providerBaseUrl) {
+      const modelConfig = this.config.providerModelConfig
       await writeFile(resolve(configDir, 'models.json'), JSON.stringify({
         providers: {
           [this.config.providerId]: {
             baseUrl: this.config.providerBaseUrl,
             ...(process.env.OPENLINK_PROVIDER_API_KEY ? { apiKey: '$OPENLINK_PROVIDER_API_KEY' } : {}),
+            ...(modelConfig ? {
+              models: [{
+                id: modelConfig.id,
+                name: modelConfig.name,
+                ...(modelConfig.api !== undefined ? { api: modelConfig.api } : {}),
+                reasoning: modelConfig.reasoning,
+                input: modelConfig.input,
+                cost: modelConfig.cost,
+                contextWindow: modelConfig.contextWindow,
+                maxTokens: modelConfig.maxTokens,
+              }],
+            } : {}),
           },
         },
       }), { mode: 0o600 })

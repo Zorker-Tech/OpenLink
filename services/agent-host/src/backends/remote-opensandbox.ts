@@ -1,5 +1,6 @@
 import { ConnectionConfig, Sandbox, type Endpoint } from '@alibaba-group/opensandbox'
 import { randomBytes } from 'node:crypto'
+import { isIP } from 'node:net'
 import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from '../contracts.js'
 import type { DesktopEndpoint } from '../desktop-gateway.js'
 import type { BrowserAgentSession } from '../browser-client.js'
@@ -126,6 +127,10 @@ export class RemoteOpenSandboxRpcBackend {
     const providerBaseUrl = runtimeConfiguration.baseUrl
     const providerUrl = new URL(providerBaseUrl)
     const providerHosts = providerNetworkTargets(providerId, providerBaseUrl)
+    // The Credential Vault only accepts FQDN binding hosts. Literal-IP LAN
+    // gateways opt into a direct key under the insecure-endpoint flag.
+    const directProviderKey = process.env.OPENLINK_ALLOW_INSECURE_PROVIDER_ENDPOINTS === '1'
+      && providerHosts.some((host) => isIP(host) !== 0)
     const model = `${runtimeConfiguration.providerId}/${runtimeConfiguration.modelId}`
     const browser = browserSession ? browserAgentBinding(browserSession, REMOTE_BROWSER_EXTENSION_PATH, projectRuntime) : undefined
     const browserHost = browser ? browserHostNetworkTarget(browser.hostUrl) : undefined
@@ -178,7 +183,7 @@ export class RemoteOpenSandboxRpcBackend {
         OPENLINK_PROVIDER_BASE_URL: providerBaseUrl,
         ...providerModelEnvironment(runtimeConfiguration),
         ...ambientProviderEnvironment(providerId),
-        ...(providerApiKey ? { OPENLINK_PROVIDER_API_KEY: vaultPlaceholder } : {}),
+        ...(providerApiKey ? { OPENLINK_PROVIDER_API_KEY: directProviderKey ? providerApiKey : vaultPlaceholder } : {}),
         ...(browser ? {
           OPENLINK_BROWSER_HOST_URL: browser.hostUrl,
           OPENLINK_BROWSER_SESSION_ID: browser.sessionId,
@@ -276,7 +281,7 @@ export class RemoteOpenSandboxRpcBackend {
           mode: 666,
         }])
       }
-      if (providerApiKey) await sandbox.credentialVault.create({
+      if (providerApiKey && !directProviderKey) await sandbox.credentialVault.create({
         credentials: [{ name: 'provider-api-key', source: { type: 'inline', value: providerApiKey } }],
         bindings: [{
           name: 'provider-api',

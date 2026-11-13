@@ -397,7 +397,18 @@ function parseRuntimeConfiguration(value: unknown): AgentProviderRuntimeConfigur
   const hostname = endpoint.hostname.toLowerCase().replace(/^\[|\]$/g, '')
   const localName = hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local') || hostname.endsWith('.internal')
   const unsafeIp = isIP(hostname) !== 0 && isUnsafeLiteralIp(hostname)
-  if ((!allowInsecureEndpoint && endpoint.protocol !== 'https:') || !['https:', 'http:'].includes(endpoint.protocol) || !hostname || endpoint.username || endpoint.password || localName || unsafeIp || baseUrl.length > 2_048) {
+  // Public HTTPS endpoints are always allowed. Plain HTTP and private/loopback
+  // targets are an explicit opt-in for local/LAN inference gateways; without
+  // the flag they remain blocked as SSRF-sensitive destinations.
+  const insecureTarget = localName || unsafeIp
+  if (
+    (!allowInsecureEndpoint && (endpoint.protocol !== 'https:' || insecureTarget))
+    || !['https:', 'http:'].includes(endpoint.protocol)
+    || !hostname
+    || endpoint.username
+    || endpoint.password
+    || baseUrl.length > 2_048
+  ) {
     throw new AgentHostError('INVALID_BODY', 'provider baseUrl is invalid')
   }
   if (!revision || revision.length > 80 || /[\r\n\u0000]/.test(revision)) throw new AgentHostError('INVALID_BODY', 'provider revision is invalid')
