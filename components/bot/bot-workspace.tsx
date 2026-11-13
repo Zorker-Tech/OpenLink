@@ -87,6 +87,17 @@ function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[], routine
   }
 }
 
+function taskAvatarState(label: string | null | undefined): string {
+  const value = (label ?? '').toLowerCase()
+  if (value.includes('think')) return 'thinking'
+  if (value.includes('search')) return 'searching'
+  if (value.includes('read')) return 'reading'
+  if (value.includes('run') || value.includes('command') || value.includes('bash') || value.includes('exec')) return 'running'
+  if (value.includes('write') || value.includes('edit') || value.includes('code')) return 'coding'
+  if (value.includes('computer') || value.includes('desktop')) return 'computing'
+  return 'working'
+}
+
 function friendlyRuntimeError(value: string): string {
   const messages: Record<string, string> = {
     BOT_SUBSTRATE_NOT_CONFIGURED: 'The Bot execution substrate is not configured.',
@@ -366,6 +377,24 @@ export function BotWorkspace({
     }
     return payload.routines
   }, [])
+
+  const toggleRoutine = useCallback(async (routine: BotRoutine, isEnabled: boolean) => {
+    if (!activeBot) return
+    try {
+      const response = await fetch(
+        `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isEnabled }),
+          cache: 'no-store',
+        },
+      )
+      applyRoutines(activeBot.id, await readRoutines(response))
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? friendlyRuntimeError(toggleError.message) : 'The routine could not be updated.')
+    }
+  }, [activeBot, applyRoutines, readRoutines])
 
   const saveRoutine = useCallback(async (spec: {
     name: string
@@ -783,26 +812,23 @@ export function BotWorkspace({
 
             <div className="bot-chat-root zbd-root relative flex min-h-0 min-w-0 flex-1" data-sidebar-collapsed={collapsed ? '' : undefined}>
               <section className="zbd-chat zbd-app-chat flex min-h-0 min-w-0 flex-1 flex-col">
-                <div className="zbd-chat-header-wrap flex items-center justify-center">
-                  <button
-                    aria-label={`Open ${activeBot.name} details`}
-                    className="flex h-8 w-fit max-w-[min(320px,calc(100%-24px))] min-w-0 items-center gap-1.5 rounded-full border border-[var(--app-border)] pl-1.5 pr-3 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors"
-                    onClick={toggleDetails}
-                    style={{ background: 'color-mix(in srgb, var(--app-elevated) 82%, transparent)' }}
-                    type="button"
-                  >
-                    <AgentAvatar
-                      className="shrink-0"
-                      color={activeBot.avatarColor}
-                      renderer="complete"
-                      shape={activeBot.avatarShape}
-                      size={22}
-                      state="idle"
-                      theme={activeTheme}
-                    />
-                    <span className="min-w-0 truncate">{activeBot.name}</span>
-                  </button>
-                </div>
+                <button
+                  aria-label={`Open ${activeBot.name} details`}
+                  className="mx-auto my-1.5 flex h-8 w-fit max-w-[min(320px,calc(100%-24px))] min-w-0 shrink-0 items-center gap-2 rounded-full border border-[var(--app-border)] pl-1.5 pr-4 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] transition-colors"
+                  onClick={toggleDetails}
+                  type="button"
+                >
+                  <AgentAvatar
+                    className="shrink-0"
+                    color={activeBot.avatarColor}
+                    renderer="complete"
+                    shape={activeBot.avatarShape}
+                    size={22}
+                    state="idle"
+                    theme={activeTheme}
+                  />
+                  <span className="min-w-0 truncate">{activeBot.name}</span>
+                </button>
                 {loadingMap[activeId] && !activeDetail ? (
                   <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--app-muted)]">
                     Loading {activeBot.name}…
@@ -837,7 +863,7 @@ export function BotWorkspace({
                       onOpenComputer={openComputer}
                       onSuggestion={useSuggestion}
                       onTakeOver={openComputer}
-                      pending={activePending}
+                      pending={null}
                       screen={END_SCREEN}
                       session={activeSession!}
                       transcriptRef={transcriptRef}
@@ -857,6 +883,20 @@ export function BotWorkspace({
                     void sendMessage()
                   }}
                   showRoutine
+                  status={activePending ? (
+                    <>
+                      <AgentAvatar
+                        className="shrink-0"
+                        color={activeBot.avatarColor}
+                        renderer="complete"
+                        shape={activeBot.avatarShape}
+                        size={20}
+                        state={taskAvatarState(activePending.label)}
+                        theme={activeTheme}
+                      />
+                      <span className="min-w-0 truncate">{activePending.label || 'Working…'}</span>
+                    </>
+                  ) : null}
                   value={draft}
                 />
               </section>
@@ -865,14 +905,20 @@ export function BotWorkspace({
                 <BotDetailsPane
                   bot={activeBot}
                   theme={activeTheme}
+                  routines={activeDetail?.routines ?? []}
                   onClose={() => setDetailsOpen(false)}
                   onEditProfile={() => setProfileOpen(true)}
+                  onEditRoutine={(routine) => setRoutineEditor({ routine })}
                   onOpenComputer={openComputer}
+                  onToggleRoutine={(routine, isEnabled) => { void toggleRoutine(routine, isEnabled) }}
                 />
               ) : computerOpen && activeBot.kind !== 'group' ? (
                 <BotWorkspaceView
+                  avatarColor={activeBot.avatarColor}
+                  avatarShape={activeBot.avatarShape}
                   botId={activeBot.id}
                   botName={activeBot.name}
+                  theme={activeTheme}
                   onClose={() => setComputerOpen(false)}
                 />
               ) : null}

@@ -1,5 +1,6 @@
 'use client'
 
+import { AgentAvatar } from '@zorker/avatar'
 import { ThinkingOrb } from '@/components/thinking/src'
 import { browserReachableGatewayUrl } from '@/lib/browser-runtime/client'
 import { useT } from '@/lib/i18n/client'
@@ -152,7 +153,18 @@ function rfbFocus(target: HTMLElement | null) {
   target?.querySelector('canvas')?.focus({ preventScroll: true })
 }
 
-export function DesktopWorkbench({ chatSessionId, botId }: { chatSessionId?: string; botId?: string }) {
+type DesktopWorkbenchProps = {
+  chatSessionId?: string
+  botId?: string
+  loadingAvatar?: {
+    color: string
+    shape: string
+    theme: 'light' | 'dark'
+  }
+  loadingLabel?: string
+}
+
+export function DesktopWorkbench({ chatSessionId, botId, loadingAvatar, loadingLabel }: DesktopWorkbenchProps) {
   const t = useT()
   const [desktopUrl, setDesktopUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<DesktopStatus>('connecting')
@@ -219,7 +231,7 @@ export function DesktopWorkbench({ chatSessionId, botId }: { chatSessionId?: str
 
   return (
     <section aria-label={t('桌面')} className={`flex size-full min-h-0 flex-col ${theme('editor')}`}>
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-black">
+      <div className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${loadingAvatar ? 'bg-[var(--app-active)]' : 'bg-black'}`}>
         {desktopUrl && status !== 'failed' && (
           <DesktopCanvas
             desktopUrl={desktopUrl}
@@ -228,9 +240,25 @@ export function DesktopWorkbench({ chatSessionId, botId }: { chatSessionId?: str
           />
         )}
         {status === 'connecting' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[var(--app-background)] text-sm text-[var(--app-muted)]">
-            <ThinkingOrb aria-label={t('正在启动桌面环境')} size={64} state="shaping" />
-            <span>{t('正在启动桌面环境')}</span>
+          <div className={`absolute inset-0 flex flex-col items-center justify-center text-[var(--app-muted)] ${loadingAvatar ? 'gap-1.5' : 'gap-2 text-sm'}`}>
+            {loadingAvatar ? (
+              <span className="flex flex-col items-center gap-1.5">
+                <AgentAvatar
+                  color={loadingAvatar.color}
+                  renderer="complete"
+                  shape={loadingAvatar.shape}
+                  size={24}
+                  state="idle"
+                  theme={loadingAvatar.theme}
+                />
+                <span className="text-[11px] leading-4">{loadingLabel ?? t('正在启动桌面环境')}</span>
+              </span>
+            ) : (
+              <>
+                <ThinkingOrb aria-label={t('正在启动桌面环境')} size={64} state="shaping" />
+                <span>{loadingLabel ?? t('正在启动桌面环境')}</span>
+              </>
+            )}
           </div>
         )}
         {status === 'failed' && (
