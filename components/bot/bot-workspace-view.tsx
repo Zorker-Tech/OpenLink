@@ -19,10 +19,10 @@ const BOT_WORKSPACE_TABS: ReadonlyArray<{ id: BotWorkspaceTab; label: string; ic
 
 /**
  * Tab geometry shared with the Code workspace so the two surfaces read as one
- * system: 28px tall, 112–126px wide, 8px radius, inset control border.
+ * system: 28px tall, equal 120px width, 8px radius, inset control border.
  */
 function tabClassName(selected: boolean): string {
-  return `mr-0.5 flex h-7 min-w-[112px] max-w-[126px] shrink-0 items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-[13px] font-medium tracking-[-0.0762px] transition-[background-color,color,box-shadow] duration-150 ${
+  return `mr-0.5 flex h-7 w-[120px] shrink-0 items-center gap-1.5 overflow-hidden rounded-lg pl-2.5 pr-2 text-[13px] font-medium tracking-[-0.0762px] transition-[background-color,color,box-shadow] duration-150 ${
     selected
       ? 'bg-[var(--app-active)]! text-[var(--app-foreground)] shadow-[inset_0_0_0_1px_var(--app-control-border),0_1px_2px_var(--app-shadow)]'
       : 'bg-[var(--app-surface)]! text-[var(--app-muted)] shadow-[inset_0_0_0_1px_var(--app-control-border)] hover:bg-[var(--app-hover)]! hover:text-[var(--app-foreground)]'
@@ -61,7 +61,7 @@ export function BotWorkspaceView({ botName, botId, onClose }: BotWorkspaceViewPr
                     type="button"
                   >
                     <Icon aria-hidden className="size-3.5 shrink-0" />
-                    <span className="truncate">{label}</span>
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
                   </button>
                 )
               })}
