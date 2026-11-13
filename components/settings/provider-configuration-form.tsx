@@ -235,7 +235,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
 
   return (
     <main className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-      <div className="mx-auto w-full max-w-[1024px] pb-12">
+      <div className="mx-auto w-full max-w-[1024px] pb-24">
         <section className="rounded-xl bg-[var(--app-surface)] p-4 shadow-[inset_0_0_0_1px_var(--app-border)]">
         <div className={`flex min-h-9 items-center gap-3 ${enabled || oauthOnly ? '' : 'opacity-65 grayscale'}`}>
           <ProviderBrand provider={provider} size={24} />
@@ -338,9 +338,9 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
           </div>
         </section>
 
-        <div className="sticky bottom-0 mt-6 flex items-center justify-end gap-3 border-t border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-background)_92%,transparent)] py-4 backdrop-blur-xl">
-          {status && <span className={`mr-auto text-sm ${status.kind === 'success' ? 'text-[var(--app-success)]' : 'text-[var(--app-danger)]'}`}>{status.message}</span>}
-          <button className="flex h-9 items-center gap-2 rounded-md bg-[var(--app-submit-background)] px-4 text-sm font-medium text-[var(--app-submit-foreground)] disabled:opacity-50" disabled={pending || !defaultModelId} onClick={save} type="button">{pending && <Loader2 className="size-4 animate-spin" />}{t('保存配置')}</button>
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex items-end justify-end gap-3 px-4 pb-4 sm:px-6 sm:pb-5">
+          {status && <span className={`pointer-events-auto mb-0.5 max-w-[min(440px,calc(100vw-9rem))] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] px-3 py-2 text-sm shadow-[0_10px_30px_var(--app-shadow)] ${status.kind === 'success' ? 'text-[var(--app-success)]' : 'text-[var(--app-danger)]'}`}>{status.message}</span>}
+          <button className="pointer-events-auto flex h-9 shrink-0 items-center gap-2 rounded-lg bg-[var(--app-submit-background)] px-4 text-sm font-medium text-[var(--app-submit-foreground)] shadow-[0_10px_30px_var(--app-shadow)] transition-opacity hover:opacity-90 disabled:opacity-50" disabled={pending || !defaultModelId} onClick={save} type="button">{pending && <Loader2 className="size-4 animate-spin" />}{t('保存配置')}</button>
         </div>
       </div>
     </main>
@@ -358,7 +358,10 @@ function ConfigRow({ children, description, label }: { children: React.ReactNode
 
 function translateError(error: string, t: (source: string) => string) {
   if (error === 'PROVIDER_API_KEY_REQUIRED') return t('启用此服务商前需要填写 API Key。')
+  if (error === 'PROVIDER_BASE_URL_REQUIRED') return t('请填写 API 代理地址。')
   if (error === 'PROVIDER_CREDENTIAL_REKEY_REQUIRED') return t('已保存的密钥无法解密，请重新输入 API Key 并保存。')
+  if (error === 'UNKNOWN_PROVIDER_MODEL') return t('模型 ID 无效，请检查模型列表后重试。')
+  if (error === 'UNKNOWN_PROVIDER') return t('服务商不存在或已下线。')
   if (error === 'MODEL_NOT_ENABLED') return t('当前模型尚未启用。')
   if (error === 'MODEL_PARAMS_INVALID') return t('模型参数无效，请检查上下文窗口与最大输出限制。')
   if (error === 'AGENT_HOST_NOT_CONFIGURED') return t('Agent Host 尚未启动。')
