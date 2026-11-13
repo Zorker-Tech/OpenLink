@@ -98,6 +98,52 @@ function taskAvatarState(label: string | null | undefined): string {
   return 'working'
 }
 
+function providerErrorMessage(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  let message = normalized
+  try {
+    const parsed = JSON.parse(normalized) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>
+      const error = record.error
+      if (error && typeof error === 'object' && !Array.isArray(error)) {
+        const errorMessage = (error as Record<string, unknown>).message
+        if (typeof errorMessage === 'string' && errorMessage.trim()) message = errorMessage
+      } else if (typeof error === 'string' && error.trim()) {
+        message = error
+      } else if (typeof record.message === 'string' && record.message.trim()) {
+        message = record.message
+      }
+    }
+  } catch {
+    // Provider errors are often plain text, not JSON.
+  }
+  const text = message.replace(/\s+/g, ' ').trim() || normalized
+  const haystack = `${normalized.toLowerCase()} ${text.toLowerCase()}`
+  if (/\b429\b|rate limit|too many requests|quota exceeded|insufficient_quota|resource_exhausted/.test(haystack)) {
+    return 'Rate limit reached. Please try again shortly.'
+  }
+  if (/\b401\b|\b403\b|unauthorized|forbidden|invalid api key|incorrect api key|authentication|permission denied/.test(haystack)) {
+    return 'The provider rejected the credentials. Check the API key.'
+  }
+  if (/\b404\b|model .*not found|not found.*model|does not exist|unknown model/.test(haystack)) {
+    return 'The selected model is not available.'
+  }
+  if (/context (length|window)|too many tokens|maximum context|token limit|prompt is too long/.test(haystack)) {
+    return "The conversation exceeded the model's context window."
+  }
+  if (/\b5\d\d\b|internal server error|service unavailable|bad gateway|gateway timeout|server overloaded/.test(haystack)) {
+    return 'The provider is temporarily unavailable. Please try again.'
+  }
+  if (/timeout|timed out|aborted|deadline exceeded/.test(haystack)) {
+    return 'The provider took too long to respond. Please try again.'
+  }
+  if (/fetch failed|network|econn|enotfound|connection refused|socket hang up/.test(haystack)) {
+    return 'Could not reach the provider. Check the endpoint and network.'
+  }
+  return text.length > 180 ? `${text.slice(0, 177)}…` : text
+}
+
 function friendlyRuntimeError(value: string): string {
   const messages: Record<string, string> = {
     BOT_SUBSTRATE_NOT_CONFIGURED: 'The Bot execution substrate is not configured.',
@@ -124,7 +170,7 @@ function friendlyRuntimeError(value: string): string {
     UNKNOWN_PROVIDER_MODEL: 'The selected model is no longer available.',
     SESSION_BUSY: 'This Bot is already working on another turn.',
   }
-  return messages[value] ?? value
+  return messages[value] ?? providerErrorMessage(value)
 }
 
 export function BotWorkspace({
@@ -865,6 +911,20 @@ export function BotWorkspace({
                       onSuggestion={useSuggestion}
                       onTakeOver={openComputer}
                       pending={null}
+                      status={activePending ? (
+                        <>
+                          <AgentAvatar
+                            className="shrink-0"
+                            color={activeBot.avatarColor}
+                            renderer="complete"
+                            shape={activeBot.avatarShape}
+                            size={20}
+                            state={taskAvatarState(activePending.label)}
+                            theme={activeTheme}
+                          />
+                          <span className="min-w-0 truncate">{activePending.label || 'Working…'}</span>
+                        </>
+                      ) : null}
                       screen={END_SCREEN}
                       session={activeSession!}
                       transcriptRef={transcriptRef}
@@ -884,20 +944,6 @@ export function BotWorkspace({
                     void sendMessage()
                   }}
                   showRoutine
-                  status={activePending ? (
-                    <>
-                      <AgentAvatar
-                        className="shrink-0"
-                        color={activeBot.avatarColor}
-                        renderer="complete"
-                        shape={activeBot.avatarShape}
-                        size={20}
-                        state={taskAvatarState(activePending.label)}
-                        theme={activeTheme}
-                      />
-                      <span className="min-w-0 truncate">{activePending.label || 'Working…'}</span>
-                    </>
-                  ) : null}
                   value={draft}
                 />
               </section>

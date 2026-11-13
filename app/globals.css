@@ -781,7 +781,9 @@
 }
 .bot-workspace .zbd-composer {
   border-color: var(--app-control-border);
-  border-radius: var(--radius-2xl, 18px);
+  /* The composer keeps its outer radius; the 8px padding leaves the 16px
+     message-bubble radius as the concentric inner step. */
+  border-radius: 24px;
   background: var(--app-surface);
 }
 .bot-workspace .zbd-composer-send {

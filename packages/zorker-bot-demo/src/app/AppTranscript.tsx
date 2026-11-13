@@ -1,4 +1,4 @@
-import type { Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import type {
   ComputerStatus,
   PendingBeat,
@@ -29,6 +29,7 @@ const EMPTY_SUGGESTIONS = [
 export type AppTranscriptProps = {
   entries: TranscriptEntry[]
   pending: PendingBeat | null
+  status?: ReactNode
   screen: ScriptedScreen
   cardStatus: ComputerStatus
   assetBase: string
@@ -44,6 +45,7 @@ export type AppTranscriptProps = {
 export function AppTranscript({
   entries,
   pending,
+  status,
   screen,
   cardStatus,
   assetBase,
@@ -156,7 +158,10 @@ export function AppTranscript({
             <PendingRow assetBase={assetBase} pending={pending} />
           </div>
         ) : null}
-        {entries.length === 0 && !pending ? (
+        {status ? (
+          <div className="zbd-entry zbd-app-task-status">{status}</div>
+        ) : null}
+        {entries.length === 0 && !pending && !status ? (
           <div className="zbd-app-empty">
             <span className="zbd-app-empty-avatar">
               <AgentAvatar
