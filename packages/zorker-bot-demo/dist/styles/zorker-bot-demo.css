@@ -607,7 +607,8 @@
   flex: 1;
   min-height: 0;
   padding: 8px 20px 48px;
-  overflow-y: auto;
+  /* Painted inside the surface so the scrollbar never takes layout width. */
+  overflow-y: overlay;
   scrollbar-color: color-mix(in srgb, var(--zbd-text-primary) 18%, transparent) transparent;
   scrollbar-width: thin;
 }
@@ -672,7 +673,8 @@
 
 .zbd-bubble {
   padding: 8px 12px;
-  border-radius: 16px;
+  /* Shared with the composer: one radius for every message length. */
+  border-radius: var(--radius-2xl, 18px);
   font-size: 14px;
   line-height: 20px;
   letter-spacing: -0.15px;
@@ -999,7 +1001,9 @@
   gap: 8px;
   padding: 8px;
   border: 0.5px solid var(--zbd-border-default);
-  border-radius: 999px;
+  /* Concentric with the 18px message bubble; the 8px padding leaves a 10px
+     inner radius for controls that opt into the nested step. */
+  border-radius: var(--radius-2xl, 18px);
   background: color-mix(in srgb, var(--zbd-bg-elevated) 70%, transparent);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   backdrop-filter: blur(20px) saturate(160%);
