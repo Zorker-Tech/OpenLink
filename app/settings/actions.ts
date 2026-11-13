@@ -11,6 +11,7 @@ import { getEmbeddingProvider } from '@/lib/embedding-providers'
 import { saveEmbeddingProviderConfiguration } from '@/lib/embedding-provider-configurations.server'
 import { getAiProvider } from '@/lib/ai-providers'
 import { MODEL_ID_PATTERN } from '@/lib/model-id'
+import { normalizeModelParams } from '@/lib/provider-model-params'
 import { ensureDraftProject } from '@/lib/projects'
 import { getOwnedWorkspace } from '@/lib/workspaces'
 import type { AiProviderModel, ProviderModelParams } from '@/lib/ai-provider-types'
@@ -38,7 +39,7 @@ const providerSchema = z.object({
     try { return ['http:', 'https:'].includes(new URL(value).protocol) } catch { return false }
   }, 'INVALID_BASE_URL'),
   defaultModelId: z.string().min(1).max(256),
-  enabledModelIds: z.array(z.string().min(1).max(256)).max(256),
+  enabledModelIds: z.array(z.string().min(1).max(256)).max(1024),
   modelParams: z.record(z.string().min(1).max(256), z.object({
     name: z.string().min(1).max(256),
     reasoning: z.boolean(),
@@ -239,14 +240,14 @@ function defaultModelParams(modelId: string): ProviderModelParams {
 
 function toProviderModelParams(modelId: string, catalog?: AiProviderModel): ProviderModelParams {
   if (!catalog) return defaultModelParams(modelId)
-  return {
+  return normalizeModelParams({
     name: catalog.name,
     reasoning: catalog.reasoning,
     input: Array.isArray(catalog.input) && catalog.input.length ? catalog.input : ['text'],
     contextWindow: catalog.contextWindow,
     maxTokens: catalog.maxTokens,
     cost: catalog.cost,
-  }
+  }, modelId)
 }
 
 export type FetchProviderModelsResult =

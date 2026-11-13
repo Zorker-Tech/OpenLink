@@ -3,6 +3,7 @@ import 'server-only'
 import { getAiProvider, isAiProviderId } from '@/lib/ai-providers'
 import { getAiProviderModels } from '@/lib/ai-provider-models.server'
 import { isValidModelId } from '@/lib/model-id'
+import { normalizeModelParams } from '@/lib/provider-model-params'
 import { modelLogoSlug } from '@/lib/model-logos'
 import type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, AiProviderModel, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 import { decryptProviderSecret, encryptProviderSecret, providerSecretHint } from '@/lib/provider-secrets.server'
@@ -41,7 +42,7 @@ function summary(row: ProviderConfigurationRow): AiProviderConfigurationSummary 
     baseUrl: row.base_url,
     defaultModelId: row.default_model_id,
     enabledModelIds: row.enabled_model_ids ?? [],
-    modelParams: row.model_params ?? {},
+    modelParams: normalizeStoredModelParams(row.model_params),
     apiKeyHint: row.api_key_hint,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -102,6 +103,21 @@ function defaultModelParams(modelId: string): ProviderModelParams {
 }
 
 /**
+ * Stored rows can predate the current schema or contain catalog sentinels
+ * (for example negative prices on variable-price routers). Normalize on read
+ * so the settings surface always receives values it can save back unchanged.
+ */
+function normalizeStoredModelParams(
+  params: Record<string, ProviderModelParams> | null | undefined,
+): Record<string, ProviderModelParams> {
+  const normalized: Record<string, ProviderModelParams> = {}
+  for (const [modelId, value] of Object.entries(params ?? {})) {
+    if (value) normalized[modelId] = normalizeModelParams(value, modelId)
+  }
+  return normalized
+}
+
+/**
  * Merge stored model params with the incoming edit. Every enabled model must
  * end up with a params entry so consumers (context-window resolution, the
  * model editor) never see a parameterless model: entries survive from the
@@ -132,6 +148,9 @@ function mergeModelParams(
   }
   for (const modelId of enabledModelIds) {
     if (!merged[modelId]) merged[modelId] = defaultModelParams(modelId)
+  }
+  for (const [modelId, params] of Object.entries(merged)) {
+    merged[modelId] = normalizeModelParams(params, modelId)
   }
   return merged
 }
@@ -292,7 +311,8 @@ export async function resolveAgentProviderRuntimeConfiguration(
   const modelDefinition = models.find((model) => model.id === modelId)
   const modelBaseUrl = modelDefinition?.baseUrl
   const baseUrl = row.base_url || modelBaseUrl || definition.baseUrl || ''
-  const modelParams = row.model_params?.[modelId]
+  const storedParams = row.model_params?.[modelId]
+  const modelParams = storedParams ? normalizeModelParams(storedParams, modelId) : undefined
   const configuredInput = Array.isArray(modelParams?.input)
     ? modelParams.input.filter((value): value is string => typeof value === 'string').slice(0, 8)
     : []
