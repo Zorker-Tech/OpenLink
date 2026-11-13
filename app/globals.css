@@ -781,7 +781,7 @@
 }
 .bot-workspace .zbd-composer {
   border-color: var(--app-control-border);
-  border-radius: 24px;
+  border-radius: var(--radius-2xl, 18px);
   background: var(--app-surface);
 }
 .bot-workspace .zbd-composer-send {
@@ -797,6 +797,13 @@
 }
 .bot-workspace .zbd-app-computer-pane {
   background: var(--app-background);
+}
+/* App scrollbars are painted over the surface instead of reserving a gutter,
+   so panels and transcripts keep the width their layout was designed for. */
+.openlink-app-shell [class*="overflow-y-auto"],
+.openlink-app-shell [class*="overflow-y-scroll"] {
+  overflow-y: overlay;
+  scrollbar-gutter: auto;
 }
 .bot-workspace .zbd-side-pane {
   border-left-color: var(--app-border);
