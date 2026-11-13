@@ -387,7 +387,9 @@ function parseRuntimeConfiguration(value: unknown): AgentProviderRuntimeConfigur
   const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl : ''
   const revision = typeof input.revision === 'string' ? input.revision : ''
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(providerId) || providerId.length > 96) throw new AgentHostError('INVALID_BODY', 'providerId is invalid')
-  if (!/^[A-Za-z0-9@][A-Za-z0-9._:/@-]{0,255}$/.test(modelId)) throw new AgentHostError('INVALID_BODY', 'modelId is invalid')
+  // Mirrors lib/model-id.ts: provider catalogs use namespaced, tagged and
+  // `~`-aliased model IDs, so the transport accepts the same punctuation.
+  if (!/^[A-Za-z0-9@~][A-Za-z0-9._:/@~+-]{0,255}$/.test(modelId)) throw new AgentHostError('INVALID_BODY', 'modelId is invalid')
   if (apiKey.length > 8_192 || /[\r\n\u0000]/.test(apiKey)) throw new AgentHostError('INVALID_BODY', 'provider credential is invalid')
   let endpoint: URL
   try { endpoint = new URL(baseUrl) } catch { throw new AgentHostError('INVALID_BODY', 'provider baseUrl is invalid') }

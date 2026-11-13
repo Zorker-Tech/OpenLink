@@ -10,6 +10,7 @@ import { getAiProviderModels } from '@/lib/ai-provider-models.server'
 import { getEmbeddingProvider } from '@/lib/embedding-providers'
 import { saveEmbeddingProviderConfiguration } from '@/lib/embedding-provider-configurations.server'
 import { getAiProvider } from '@/lib/ai-providers'
+import { MODEL_ID_PATTERN } from '@/lib/model-id'
 import { ensureDraftProject } from '@/lib/projects'
 import { getOwnedWorkspace } from '@/lib/workspaces'
 import type { AiProviderModel, ProviderModelParams } from '@/lib/ai-provider-types'
@@ -70,7 +71,7 @@ const embeddingProviderSchema = z.object({
   isDefault: z.boolean(),
   baseUrl: providerSchema.shape.baseUrl,
   protocol: z.enum(['openai', 'ollama', 'tei']),
-  defaultModelId: z.string().regex(/^[A-Za-z0-9@][A-Za-z0-9._:/@-]{0,255}$/),
+  defaultModelId: z.string().regex(MODEL_ID_PATTERN),
   vectorDimension: z.number().int().min(2).max(32_768),
   apiKey: z.string().trim().max(8192).optional(),
   clearApiKey: z.boolean().optional(),

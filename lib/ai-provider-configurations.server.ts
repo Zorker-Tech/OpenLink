@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getAiProvider, isAiProviderId } from '@/lib/ai-providers'
 import { getAiProviderModels } from '@/lib/ai-provider-models.server'
+import { isValidModelId } from '@/lib/model-id'
 import { modelLogoSlug } from '@/lib/model-logos'
 import type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, AiProviderModel, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 import { decryptProviderSecret, encryptProviderSecret, providerSecretHint } from '@/lib/provider-secrets.server'
@@ -30,7 +31,7 @@ interface ProviderConfigurationRow {
 export type { AgentProviderRuntimeConfiguration, AiProviderConfigurationSummary, ConfiguredModelOption, ProviderModelParams } from '@/lib/ai-provider-types'
 
 const selectColumns = 'user_id, provider_id, enabled, is_default, base_url, default_model_id, enabled_model_ids, model_params, encrypted_api_key, api_key_iv, api_key_tag, api_key_hint, encryption_version, created_at, updated_at'
-const validProviderModelId = (modelId: string) => /^[A-Za-z0-9@][A-Za-z0-9._:/@-]{0,255}$/.test(modelId)
+const validProviderModelId = isValidModelId
 
 function summary(row: ProviderConfigurationRow): AiProviderConfigurationSummary {
   return {
@@ -146,8 +147,12 @@ export async function saveAiProviderConfiguration(
   const modelIds = new Set(models.map((model) => model.id))
   if (input.modelParams !== undefined) {
     for (const [modelId, params] of Object.entries(input.modelParams)) {
-      if (!validProviderModelId(modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
       if (!params) continue
+      // A fetched catalog can contain alias IDs that the user has not enabled
+      // yet. Keep their editable parameters, but never let them block saving a
+      // valid selection: only the strict length/control-character bounds apply
+      // here, and selected IDs are validated below.
+      if (modelId.length > 256 || /[\u0000-\u001f\u007f]/.test(modelId)) throw new Error('UNKNOWN_PROVIDER_MODEL')
       if (!Number.isFinite(params.contextWindow) || !Number.isFinite(params.maxTokens)) throw new Error('MODEL_PARAMS_INVALID')
     }
   }
