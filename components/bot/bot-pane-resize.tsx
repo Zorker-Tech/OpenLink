@@ -106,7 +106,7 @@ export function PaneResizeHandle({
       aria-valuemax={maxWidth}
       aria-valuemin={minWidth}
       aria-valuenow={Math.round(width)}
-      className="absolute inset-y-0 left-0 z-30 w-1.5 cursor-col-resize touch-none select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
+      className="group absolute inset-y-0 left-0 z-30 w-1.5 cursor-col-resize touch-none select-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)]"
       onKeyDown={(event) => {
         if (event.key === 'ArrowLeft') {
           event.preventDefault()
@@ -129,7 +129,9 @@ export function PaneResizeHandle({
       <span
         aria-hidden="true"
         className={`absolute inset-y-0 left-0 w-px transition-colors ${
-          resizing ? 'bg-[var(--app-focus-ring)]' : 'bg-[var(--app-border)] hover:bg-[var(--app-focus-ring)]'
+          resizing
+            ? 'bg-[var(--app-focus-ring)]'
+            : 'bg-[var(--app-border)] group-hover:bg-[var(--app-focus-ring)] group-focus-visible:bg-[var(--app-focus-ring)]'
         }`}
       />
     </div>
