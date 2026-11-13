@@ -1,13 +1,18 @@
 import type { ProviderModelParams } from '@/lib/ai-provider-types'
 
-const nonNegative = (value: unknown): number => {
+const MAX_COST = 1_000_000
+const MAX_TOKENS = 100_000_000
+const MAX_NAME_LENGTH = 256
+const MAX_INPUT_MODALITIES = 8
+
+const nonNegative = (value: unknown, max = MAX_COST): number => {
   const numeric = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0
+  return Number.isFinite(numeric) && numeric > 0 ? Math.min(numeric, max) : 0
 }
 
-const positiveInteger = (value: unknown, fallback: number): number => {
+const positiveInteger = (value: unknown, fallback: number, max = MAX_TOKENS): number => {
   const numeric = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(numeric) && numeric >= 1 ? Math.floor(numeric) : fallback
+  return Number.isFinite(numeric) && numeric >= 1 ? Math.min(Math.floor(numeric), max) : fallback
 }
 
 /**
@@ -33,10 +38,12 @@ export function normalizeModelCost(cost: ProviderModelParams['cost'] | null | un
  */
 export function normalizeModelParams(params: ProviderModelParams, fallbackName: string): ProviderModelParams {
   const input = Array.isArray(params.input)
-    ? params.input.filter((value) => value === 'text' || value === 'image')
+    ? params.input.filter((value) => value === 'text' || value === 'image').slice(0, MAX_INPUT_MODALITIES)
     : []
   return {
-    name: typeof params.name === 'string' && params.name.trim() ? params.name : fallbackName,
+    name: typeof params.name === 'string' && params.name.trim()
+      ? params.name.slice(0, MAX_NAME_LENGTH)
+      : fallbackName.slice(0, MAX_NAME_LENGTH),
     reasoning: Boolean(params.reasoning),
     input: input.length ? input : ['text'],
     contextWindow: positiveInteger(params.contextWindow, 128_000),

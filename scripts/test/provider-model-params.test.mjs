@@ -37,6 +37,22 @@ test('invalid token bounds fall back instead of blocking a save', () => {
   assert.deepEqual(params.cost, { input: 0, output: 0 })
 })
 
+test('out-of-range catalog values are clamped to the settings bounds', () => {
+  const params = normalizeModelParams({
+    name: 'x'.repeat(300),
+    reasoning: false,
+    input: ['text', 'text', 'text', 'text', 'text', 'text', 'text', 'text', 'text'],
+    contextWindow: 200_000_000,
+    maxTokens: 200_000_000,
+    cost: { input: 2_000_000, output: 2_000_000 },
+  }, 'fallback')
+  assert.equal(params.name.length, 256)
+  assert.equal(params.input.length, 8)
+  assert.equal(params.contextWindow, 100_000_000)
+  assert.equal(params.maxTokens, 100_000_000)
+  assert.deepEqual(params.cost, { input: 1_000_000, output: 1_000_000 })
+})
+
 test('valid parameters are preserved exactly', () => {
   const input = {
     name: 'Claude Sonnet',
