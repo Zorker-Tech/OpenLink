@@ -698,6 +698,80 @@
   letter-spacing: -0.15px;
 }
 
+/* Markdown defaults are document-sized; inside a message the hierarchy must
+   stay on the 14px message scale with compact block spacing. */
+.zbd-bubble-markdown .zbd-app-markdown :where(h1, h2, h3, h4, h5, h6) {
+  margin: 12px 0 4px !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.15px !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0 !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(p, ul, ol, blockquote, pre, table) {
+  margin: 0 0 8px !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(p, ul, ol, blockquote, pre, table):last-child {
+  margin-bottom: 0 !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(ul, ol) {
+  padding-inline-start: 18px !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown li {
+  margin: 2px 0 !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(code) {
+  padding: 1px 4px !important;
+  border-radius: 4px !important;
+  background: var(--zbd-bg-active) !important;
+  font-size: 12px !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(pre) {
+  padding: 8px 10px !important;
+  border-radius: 10px !important;
+  background: var(--zbd-bg-active) !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  overflow-x: auto;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(pre code) {
+  padding: 0 !important;
+  background: transparent !important;
+  font-size: inherit !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(table) {
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(hr) {
+  margin: 10px 0 !important;
+  border-color: var(--zbd-border-default) !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(blockquote) {
+  padding-inline-start: 10px !important;
+  border-inline-start: 2px solid var(--zbd-border-default) !important;
+  color: var(--zbd-text-secondary);
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(a) {
+  color: var(--zbd-current-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .zbd-bubble-user {
   background: var(--zbd-bubble-user);
   color: var(--zbd-bubble-user-ink);
