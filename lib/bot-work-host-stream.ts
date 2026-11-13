@@ -81,7 +81,15 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
     if (item === null) return []
     if (item.kind === 'tool-call') {
       const update = activityFromTool(item)
-      return update === null ? [] : [update]
+      if (update === null) return []
+      // The outline carries the live task label; surface it in the Bot status
+      // row while the detailed tool result stays in the timeline card.
+      const label = typeof item.summary === 'string' && item.summary.trim()
+        ? item.summary.trim().slice(0, 200)
+        : typeof item.name === 'string' && item.name.trim()
+          ? item.name.trim().slice(0, 200)
+          : 'Working'
+      return [{ type: 'pending', pending: { label, showLabel: true } }, update]
     }
     if (item.kind === 'thinking') return [{ type: 'pending', pending: { label: 'Thinking', showLabel: true } }]
     return []

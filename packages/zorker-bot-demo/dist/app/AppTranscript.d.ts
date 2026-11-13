@@ -10,11 +10,12 @@ export type AppTranscriptProps = {
     assetBase: string;
     session: AppSession;
     displayName: string;
+    renderMessage?: (content: string) => ReactNode;
     transcriptRef: Ref<HTMLDivElement>;
     onOpenComputer: () => void;
     onTakeOver: () => void;
     onFinishComputer: () => void;
     onSuggestion: (suggestion: string) => void;
 };
-export declare function AppTranscript({ entries, pending, status, screen, cardStatus, assetBase, session, displayName, transcriptRef, onOpenComputer, onTakeOver, onFinishComputer, onSuggestion, }: AppTranscriptProps): import("react").JSX.Element;
+export declare function AppTranscript({ entries, pending, status, screen, cardStatus, assetBase, session, displayName, renderMessage, transcriptRef, onOpenComputer, onTakeOver, onFinishComputer, onSuggestion, }: AppTranscriptProps): import("react").JSX.Element;
 //# sourceMappingURL=AppTranscript.d.ts.map

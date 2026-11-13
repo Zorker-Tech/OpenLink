@@ -687,6 +687,17 @@
   color: var(--zbd-text-primary);
 }
 
+.zbd-bubble-markdown {
+  /* Markdown owns block spacing; the plain-text pre-wrap rule would double it. */
+  white-space: normal;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown {
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.15px;
+}
+
 .zbd-bubble-user {
   background: var(--zbd-bubble-user);
   color: var(--zbd-bubble-user-ink);

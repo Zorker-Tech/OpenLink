@@ -67,11 +67,15 @@ test('outline tool calls become live activity rows with a stable id', () => {
     channel: 'outline',
     payload: { type: 'updated', agentId: 'agent-1', item: { kind: 'tool-call', id: 'call-1', name: 'read', status: 'completed', summary: '4 files' } },
   })
-  assert.equal(pending[0].entry.id, 'bot-tool-call-1')
-  assert.equal(pending[0].entry.activity.status, 'running')
-  assert.equal(completed[0].entry.id, 'bot-tool-call-1')
-  assert.equal(completed[0].entry.activity.status, 'done')
-  assert.equal(completed[0].entry.activity.detail, '4 files')
+  assert.deepEqual(pending[0], { type: 'pending', pending: { label: 'read', showLabel: true } })
+  assert.deepEqual(completed[0], { type: 'pending', pending: { label: '4 files', showLabel: true } })
+  const pendingEntry = pending.find((update) => update.type === 'entry')
+  const completedEntry = completed.find((update) => update.type === 'entry')
+  assert.equal(pendingEntry.entry.id, 'bot-tool-call-1')
+  assert.equal(pendingEntry.entry.activity.status, 'running')
+  assert.equal(completedEntry.entry.id, 'bot-tool-call-1')
+  assert.equal(completedEntry.entry.activity.status, 'done')
+  assert.equal(completedEntry.entry.activity.detail, '4 files')
 })
 
 test('turn and group lifecycles drive the pending state and terminate the stream', () => {
