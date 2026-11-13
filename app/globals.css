@@ -767,7 +767,11 @@
   }
 }
 .bot-workspace .zbd-app-transcript {
-  padding: 20px 28px 56px;
+  padding: 8px 28px 56px;
+  /* The capsule floats over the transcript. Fade the top edge so scrolled
+     messages disappear behind it instead of being hard-clipped. */
+  mask-image: linear-gradient(to bottom, transparent 0, black 52px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 52px);
 }
 .bot-workspace .zbd-app-transcript-inner {
   max-width: 820px;
