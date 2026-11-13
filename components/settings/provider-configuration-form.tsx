@@ -126,6 +126,8 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
 
   const save = () => startTransition(async () => {
     setStatus(null)
+    const params = payloadModelParams()
+    setModelParams(params)
     const result = await saveAiProviderConfigurationAction({
       providerId: provider.id,
       enabled: oauthOnly ? false : enabled,
@@ -133,7 +135,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
       baseUrl,
       defaultModelId,
       enabledModelIds: [...enabledModels],
-      modelParams: payloadModelParams(),
+      modelParams: params,
       apiKey: apiKey || undefined,
     })
     if (!result.ok) { setStatus({ kind: 'error', message: translateError(result.error, t) }); return }
@@ -143,6 +145,8 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
 
   const check = () => startChecking(async () => {
     setStatus(null)
+    const params = payloadModelParams()
+    setModelParams(params)
     const saved = await saveAiProviderConfigurationAction({
       providerId: provider.id,
       enabled: true,
@@ -150,7 +154,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
       baseUrl,
       defaultModelId,
       enabledModelIds: [...enabledModels],
-      modelParams: payloadModelParams(),
+      modelParams: params,
       apiKey: apiKey || undefined,
     })
     if (!saved.ok) { setStatus({ kind: 'error', message: translateError(saved.error, t) }); return }
