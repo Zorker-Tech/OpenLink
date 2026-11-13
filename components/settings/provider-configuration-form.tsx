@@ -244,7 +244,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
 
   return (
     <main className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-      <div className="mx-auto w-full max-w-[1024px] pb-12">
+      <div className="mx-auto w-full max-w-[1024px] pb-24">
         <section className="rounded-xl bg-[var(--app-surface)] p-4 shadow-[inset_0_0_0_1px_var(--app-border)]">
         <div className={`flex min-h-9 items-center gap-3 ${enabled || oauthOnly ? '' : 'opacity-65 grayscale'}`}>
           <ProviderBrand provider={provider} size={24} />
@@ -347,8 +347,8 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
           </div>
         </section>
 
-        <div className="pointer-events-none sticky bottom-0 z-20 mt-6 flex items-end justify-end gap-3 pb-4">
-          {status && <span className={`pointer-events-auto mb-0.5 max-w-[min(440px,calc(100vw-9rem))] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] px-3 py-2 text-sm shadow-[0_10px_30px_var(--app-shadow)] ${status.kind === 'success' ? 'text-[var(--app-success)]' : 'text-[var(--app-danger)]'}`}>{status.message}</span>}
+        <div className="pointer-events-none fixed bottom-4 right-4 z-30 flex items-end justify-end gap-3 sm:bottom-6 sm:right-6">
+          {status && <span className={`pointer-events-auto mb-0.5 max-w-[min(440px,calc(100vw-10rem))] rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] px-3 py-2 text-sm shadow-[0_10px_30px_var(--app-shadow)] ${status.kind === 'success' ? 'text-[var(--app-success)]' : 'text-[var(--app-danger)]'}`}>{status.message}</span>}
           <button className="pointer-events-auto flex h-9 shrink-0 items-center gap-2 rounded-lg bg-[var(--app-submit-background)] px-4 text-sm font-medium text-[var(--app-submit-foreground)] shadow-[0_10px_30px_var(--app-shadow)] transition-opacity hover:opacity-90 disabled:opacity-50" disabled={pending || !defaultModelId} onClick={save} type="button">{pending && <Loader2 className="size-4 animate-spin" />}{t('保存配置')}</button>
         </div>
       </div>
