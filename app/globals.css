@@ -767,9 +767,10 @@
   }
 }
 .bot-workspace .zbd-app-transcript {
-  padding: 8px 28px 56px;
-  /* The capsule floats over the transcript. Fade the top edge so scrolled
-     messages disappear behind it instead of being hard-clipped. */
+  /* Capsule zone: 12px top inset + 32px capsule + 12px breathing room. The
+     space stays transparent; the floating capsule is the only chrome in it. */
+  padding: 56px 28px 56px;
+  /* Scrolled messages fade behind the floating capsule instead of clipping. */
   mask-image: linear-gradient(to bottom, transparent 0, black 52px);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 52px);
 }
