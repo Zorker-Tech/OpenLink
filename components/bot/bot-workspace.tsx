@@ -766,20 +766,21 @@ export function BotWorkspace({
                 <div className="zbd-chat-header-wrap flex items-center justify-center">
                   <button
                     aria-label={`Open ${activeBot.name} details`}
-                    className="flex h-8 max-w-[min(280px,calc(100%-24px))] items-center gap-2 rounded-full border border-[var(--app-border)] px-3 text-[12px] font-medium text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors"
+                    className="flex h-8 w-fit max-w-[min(320px,calc(100%-24px))] min-w-0 items-center gap-1.5 rounded-full border border-[var(--app-border)] pl-1.5 pr-3 text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors"
                     onClick={toggleDetails}
                     style={{ background: 'color-mix(in srgb, var(--app-elevated) 82%, transparent)' }}
                     type="button"
                   >
                     <AgentAvatar
+                      className="shrink-0"
                       color={activeBot.avatarColor}
                       renderer="complete"
                       shape={activeBot.avatarShape}
-                      size={20}
+                      size={22}
                       state="idle"
                       theme={activeTheme}
                     />
-                    <span className="truncate">{activeBot.name}</span>
+                    <span className="min-w-0 truncate">{activeBot.name}</span>
                   </button>
                 </div>
                 {loadingMap[activeId] && !activeDetail ? (
