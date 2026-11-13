@@ -6,6 +6,7 @@ import { AppSelect } from '@/components/ui/app-select'
 import type { AiProviderConfigurationSummary, AiProviderModel, ProviderModelParams } from '@/lib/ai-provider-types'
 import type { AiProviderDefinition } from '@/lib/ai-providers'
 import { useT } from '@/lib/i18n/client'
+import { normalizeModelParams } from '@/lib/provider-model-params'
 import { CircleHelp, Eye, EyeOff, Loader2, LockKeyhole, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { useMemo, useState, useTransition } from 'react'
 
@@ -28,45 +29,41 @@ interface ModelRecord {
 function catalogRecord(model: AiProviderModel): ModelRecord {
   return {
     id: model.id,
-    name: model.name,
-    reasoning: Boolean(model.reasoning),
-    input: Array.isArray(model.input) && model.input.length ? model.input : ['text'],
-    contextWindow: model.contextWindow,
-    maxTokens: model.maxTokens,
-    cost: model.cost,
+    ...normalizeModelParams({
+      name: model.name,
+      reasoning: Boolean(model.reasoning),
+      input: Array.isArray(model.input) && model.input.length ? model.input : ['text'],
+      contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens,
+      cost: model.cost,
+    }, model.id),
   }
 }
 
 function paramRecord(id: string, params: ProviderModelParams): ModelRecord {
   return {
     id,
-    name: params.name || id,
-    reasoning: Boolean(params.reasoning),
-    input: Array.isArray(params.input) && params.input.length ? params.input : ['text'],
-    contextWindow: params.contextWindow,
-    maxTokens: params.maxTokens,
-    cost: params.cost,
+    ...normalizeModelParams(params, id),
   }
 }
 
 function toParams(record: ModelRecord | undefined, modelId: string): ProviderModelParams {
-  const fallback: ProviderModelParams = {
+  if (!record) return normalizeModelParams({
     name: modelId,
     reasoning: false,
     input: ['text'],
     contextWindow: 128_000,
     maxTokens: 8_192,
     cost: { input: 0, output: 0 },
-  }
-  if (!record) return fallback
-  return {
+  }, modelId)
+  return normalizeModelParams({
     name: record.name,
     reasoning: record.reasoning,
     input: record.input,
     contextWindow: record.contextWindow,
     maxTokens: record.maxTokens,
     cost: record.cost,
-  }
+  }, modelId)
 }
 
 
@@ -123,6 +120,10 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
     return query ? modelRecords.filter((model) => `${model.name} ${model.id}`.toLowerCase().includes(query)) : modelRecords
   }, [modelQuery, modelRecords])
 
+  const payloadModelParams = () => Object.fromEntries(
+    Object.entries(modelParams).map(([modelId, params]) => [modelId, normalizeModelParams(params, modelId)]),
+  )
+
   const save = () => startTransition(async () => {
     setStatus(null)
     const result = await saveAiProviderConfigurationAction({
@@ -132,7 +133,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
       baseUrl,
       defaultModelId,
       enabledModelIds: [...enabledModels],
-      modelParams,
+      modelParams: payloadModelParams(),
       apiKey: apiKey || undefined,
     })
     if (!result.ok) { setStatus({ kind: 'error', message: translateError(result.error, t) }); return }
@@ -149,7 +150,7 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
       baseUrl,
       defaultModelId,
       enabledModelIds: [...enabledModels],
-      modelParams,
+      modelParams: payloadModelParams(),
       apiKey: apiKey || undefined,
     })
     if (!saved.ok) { setStatus({ kind: 'error', message: translateError(saved.error, t) }); return }
@@ -219,17 +220,21 @@ export function ProviderConfigurationForm({ configuration, models, provider }: P
     const result = await fetchProviderModelsAction({ providerId: provider.id, baseUrl, apiKey: apiKey || undefined })
     if (!result.ok || !result.models) { setStatus({ kind: 'error', message: translateError(result.error, t) }); return }
     const upserted = { ...modelParams }
-    const enabled = new Set(enabledModels)
     for (const model of result.models) {
       upserted[model.id] = { ...toParams(undefined, model.id), ...model }
-      enabled.add(model.id)
     }
     setModelParams(upserted)
-    setEnabledModels(enabled)
-    if (!defaultModelId) {
-      const first = result.models[0]
-      if (first) setDefaultModelId(first.id)
+    // Fetching the catalog must not enable every upstream model: the list can
+    // be larger than the save payload budget, and the surface asks the user to
+    // enable models explicitly. Keep the current selection and only make sure
+    // the default model is part of it.
+    const enabled = new Set(enabledModels)
+    const nextDefault = defaultModelId || result.models[0]?.id || ''
+    if (nextDefault) {
+      enabled.add(nextDefault)
+      if (!defaultModelId) setDefaultModelId(nextDefault)
     }
+    setEnabledModels(enabled)
     setStatus({ kind: 'success', message: t('已从上游获取 {count} 个模型，请在下方启用并编辑参数', { count: result.models.length }) })
   })
 
@@ -362,6 +367,7 @@ function translateError(error: string, t: (source: string) => string) {
   if (error === 'PROVIDER_CREDENTIAL_REKEY_REQUIRED') return t('已保存的密钥无法解密，请重新输入 API Key 并保存。')
   if (error === 'UNKNOWN_PROVIDER_MODEL') return t('模型 ID 无效，请检查模型列表后重试。')
   if (error === 'UNKNOWN_PROVIDER') return t('服务商不存在或已下线。')
+  if (error === 'INVALID_PROVIDER_CONFIGURATION') return t('配置数据无效，请刷新页面后重试。')
   if (error === 'MODEL_NOT_ENABLED') return t('当前模型尚未启用。')
   if (error === 'MODEL_PARAMS_INVALID') return t('模型参数无效，请检查上下文窗口与最大输出限制。')
   if (error === 'AGENT_HOST_NOT_CONFIGURED') return t('Agent Host 尚未启动。')
