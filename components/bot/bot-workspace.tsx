@@ -91,12 +91,13 @@ function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[], routine
 
 function taskAvatarState(label: string | null | undefined): string {
   const value = (label ?? '').toLowerCase()
-  if (value.includes('think')) return 'thinking'
-  if (value.includes('search')) return 'searching'
-  if (value.includes('read')) return 'reading'
-  if (value.includes('run') || value.includes('command') || value.includes('bash') || value.includes('exec')) return 'running'
-  if (value.includes('write') || value.includes('edit') || value.includes('code')) return 'coding'
-  if (value.includes('computer') || value.includes('desktop')) return 'computing'
+  if (/think|思考|想/.test(value)) return 'thinking'
+  if (/search|find|grep|搜索|查找|检索/.test(value)) return 'searching'
+  if (/read|cat|file|读取|查看/.test(value)) return 'reading'
+  if (/run|command|bash|shell|exec|运行|执行|命令/.test(value)) return 'running'
+  if (/write|edit|code|写|编辑|代码/.test(value)) return 'coding'
+  if (/browser|chrome|navigate|web|打开|浏览|网页/.test(value)) return 'controlling'
+  if (/computer|desktop|屏幕|桌面/.test(value)) return 'computing'
   return 'working'
 }
 
@@ -207,6 +208,8 @@ export function BotWorkspace({
     initialBot ? { [initialBot.id]: initialBot } : {},
   )
   const [pendingMap, setPendingMap] = useState<Record<string, PendingBeat | null>>({})
+  const [taskTitleMap, setTaskTitleMap] = useState<Record<string, string>>({})
+  const [taskStateMap, setTaskStateMap] = useState<Record<string, string>>({})
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
   const [warmingMap, setWarmingMap] = useState<Record<string, boolean>>({})
   const [draft, setDraft] = useState('')
@@ -231,6 +234,8 @@ export function BotWorkspace({
   const activeTranscript = activeDetail?.transcript ?? []
   const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
   const activePending = pendingMap[activeId] ?? null
+  const activeTaskTitle = taskTitleMap[activeId] || activePending?.label || ''
+  const activeTaskState = taskStateMap[activeId] || (activePending ? taskAvatarState(activePending.label) : 'thinking')
   const activeWarming = activeId ? warmingMap[activeId] === true : false
   const activeSession = activeBot ? botToSession(activeBot, activeTranscript, activeDetail?.routines) : null
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
@@ -484,7 +489,20 @@ export function BotWorkspace({
 
   const applyUpdate = useCallback((botId: string, update: BotStreamUpdate) => {
     if (update.type === 'pending') {
-      setPendingMap((previous) => ({ ...previous, [botId]: update.pending }))
+      const pending = update.pending
+      if (pending) {
+        const label = (pending.label ?? '').trim()
+        const generic = !label || /^(working|thinking)$/i.test(label)
+        setTaskStateMap((previous) => ({
+          ...previous,
+          [botId]: pending.state ?? (generic ? 'thinking' : taskAvatarState(label)),
+        }))
+        const descriptive = label.length > 16 || /[\u4e00-\u9fff]/.test(label) || label.includes(' ')
+        if (!generic && descriptive) {
+          setTaskTitleMap((previous) => ({ ...previous, [botId]: label }))
+        }
+      }
+      setPendingMap((previous) => ({ ...previous, [botId]: pending }))
       return
     }
     if (update.type === 'delta') {
@@ -621,7 +639,10 @@ export function BotWorkspace({
         [botId]: { ...detail, transcript: [...detail.transcript, optimisticUserEntry(optimisticId, content)] },
       }
     })
-    setPendingMap((previous) => ({ ...previous, [botId]: { label: 'Working', showLabel: true } }))
+    const taskTitle = content.slice(0, 160)
+    setTaskTitleMap((previous) => ({ ...previous, [botId]: taskTitle }))
+    setTaskStateMap((previous) => ({ ...previous, [botId]: 'thinking' }))
+    setPendingMap((previous) => ({ ...previous, [botId]: { label: taskTitle, showLabel: true, state: 'thinking' } }))
     try {
       const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/prompt`, {
         method: 'POST',
@@ -927,7 +948,7 @@ export function BotWorkspace({
                               renderer="complete"
                               shape={activeBot.avatarShape}
                               size={20}
-                              state={taskAvatarState(activePending.label)}
+                              state={activeTaskState}
                               theme={activeTheme}
                             />
                             <span
@@ -941,7 +962,10 @@ export function BotWorkspace({
                             className="size-3.5 shrink-0 animate-spin"
                             style={{ color: resolveColor(activeBot.avatarColor, activeTheme) }}
                           />
-                          <span className="min-w-0 truncate">{activePending.label || 'Working'}</span>
+                          {activeTaskTitle.toLowerCase() !== activeTaskState ? (
+                            <span className="shrink-0 lowercase text-[var(--app-subtle-foreground)]">{activeTaskState}</span>
+                          ) : null}
+                          <span className="min-w-0 truncate">{activeTaskTitle || 'Working'}</span>
                         </>
                       ) : null}
                       screen={END_SCREEN}
