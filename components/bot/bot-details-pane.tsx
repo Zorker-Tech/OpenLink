@@ -120,7 +120,7 @@ export function BotDetailsPane({
 
             <div
               aria-label="Bot details views"
-              className="mt-4 inline-flex items-center gap-1 rounded-lg bg-[var(--app-active)] p-1 text-[12px] leading-4"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[var(--app-active)] p-1 text-[12px] leading-4"
               role="tablist"
             >
               {(['details', 'library'] as const).map((value) => {
@@ -129,7 +129,7 @@ export function BotDetailsPane({
                   <button
                     aria-controls={selected ? panelId(value) : undefined}
                     aria-selected={selected}
-                    className={`h-6 rounded-md px-2.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)] ${
+                    className={`h-7 rounded-md px-3 font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--app-focus-ring)] ${
                       selected
                         ? 'bg-[var(--app-surface)] text-[var(--app-foreground)] shadow-[0_1px_2px_var(--app-shadow)]'
                         : 'text-[var(--app-muted)] hover:text-[var(--app-foreground)]'
