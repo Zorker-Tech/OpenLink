@@ -7,6 +7,19 @@ function recordOf(value: unknown): Record<string, unknown> | null {
     : null
 }
 
+/** Map the host's live task label to the avatar state vocabulary. */
+function statusState(label: string): string {
+  const value = label.toLowerCase()
+  if (/think|思考|想/.test(value)) return 'thinking'
+  if (/search|find|grep|搜索|查找|检索/.test(value)) return 'searching'
+  if (/read|cat|file|读取|查看/.test(value)) return 'reading'
+  if (/run|command|bash|shell|exec|运行|执行|命令/.test(value)) return 'running'
+  if (/write|edit|code|写|编辑|代码/.test(value)) return 'coding'
+  if (/browser|chrome|navigate|web|打开|浏览|网页/.test(value)) return 'controlling'
+  if (/computer|desktop|屏幕|桌面/.test(value)) return 'computing'
+  return 'working'
+}
+
 function activityFromTool(item: Record<string, unknown>): BotStreamUpdate | null {
   const rawId = typeof item.id === 'string' ? item.id.trim() : ''
   if (!rawId) return null
@@ -48,7 +61,7 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
     const type = typeof payload.type === 'string' ? payload.type : ''
     if (type === 'group-turn') {
       const phase = typeof payload.phase === 'string' ? payload.phase : ''
-      if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true } }]
+      if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } }]
       if (phase === 'ended') {
         const updates: BotStreamUpdate[] = [{ type: 'pending', pending: null }]
         if (payload.ok === false) updates.push({ type: 'error', message: 'BOT_GROUP_TURN_FAILED' })
@@ -84,22 +97,24 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
       if (update === null) return []
       // The outline carries the live task label; surface it in the Bot status
       // row while the detailed tool result stays in the timeline card.
+      const toolName = typeof item.name === 'string' ? item.name.trim() : ''
       const label = typeof item.summary === 'string' && item.summary.trim()
         ? item.summary.trim().slice(0, 200)
-        : typeof item.name === 'string' && item.name.trim()
-          ? item.name.trim().slice(0, 200)
+        : toolName
+          ? toolName.slice(0, 200)
           : 'Working'
-      return [{ type: 'pending', pending: { label, showLabel: true } }, update]
+      return [{ type: 'pending', pending: { label, showLabel: true, state: statusState(toolName || label) } }, update]
     }
-    if (item.kind === 'thinking') return [{ type: 'pending', pending: { label: 'Thinking', showLabel: true } }]
+    if (item.kind === 'thinking') return [{ type: 'pending', pending: { label: 'Thinking', showLabel: true, state: 'thinking' } }]
     return []
   }
 
   if (channel === 'bot-turn') {
     const phase = typeof payload.phase === 'string' ? payload.phase : ''
-    if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true } }]
+    if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } }]
     if (phase === 'status' && typeof payload.label === 'string' && payload.label.trim()) {
-      return [{ type: 'pending', pending: { label: payload.label.trim().slice(0, 200), showLabel: true } }]
+      const label = payload.label.trim().slice(0, 200)
+      return [{ type: 'pending', pending: { label, showLabel: true, state: statusState(label) } }]
     }
     if (phase === 'awaiting-input') return [{ type: 'pending', pending: null }]
     if (phase === 'ended') {

@@ -15,6 +15,8 @@ export type Agent = {
 export type PendingBeat = {
     label: string | null;
     showLabel: boolean;
+    /** Avatar state id supplied by the host (thinking/searching/reading/...). */
+    state?: string;
 };
 export type ComputerStatus = 'action-needed' | 'handed-over' | 'working' | 'done';
 export type ComputerEntry = {

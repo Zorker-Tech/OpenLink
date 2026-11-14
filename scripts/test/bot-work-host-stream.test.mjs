@@ -67,8 +67,8 @@ test('outline tool calls become live activity rows with a stable id', () => {
     channel: 'outline',
     payload: { type: 'updated', agentId: 'agent-1', item: { kind: 'tool-call', id: 'call-1', name: 'read', status: 'completed', summary: '4 files' } },
   })
-  assert.deepEqual(pending[0], { type: 'pending', pending: { label: 'read', showLabel: true } })
-  assert.deepEqual(completed[0], { type: 'pending', pending: { label: '4 files', showLabel: true } })
+  assert.deepEqual(pending[0], { type: 'pending', pending: { label: 'read', showLabel: true, state: 'reading' } })
+  assert.deepEqual(completed[0], { type: 'pending', pending: { label: '4 files', showLabel: true, state: 'reading' } })
   const pendingEntry = pending.find((update) => update.type === 'entry')
   const completedEntry = completed.find((update) => update.type === 'entry')
   assert.equal(pendingEntry.entry.id, 'bot-tool-call-1')
@@ -80,7 +80,7 @@ test('outline tool calls become live activity rows with a stable id', () => {
 
 test('turn and group lifecycles drive the pending state and terminate the stream', () => {
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'bot-turn', payload: { agentId: 'agent-1', phase: 'started' } }), [
-    { type: 'pending', pending: { label: 'Working', showLabel: true } },
+    { type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } },
   ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'bot-turn', payload: { agentId: 'agent-1', phase: 'ended', ok: true } }), [
     { type: 'pending', pending: null },
@@ -92,7 +92,7 @@ test('turn and group lifecycles drive the pending state and terminate the stream
     { type: 'done' },
   ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'transcript', payload: { agentId: 'group-1', type: 'group-turn', phase: 'started' } }), [
-    { type: 'pending', pending: { label: 'Working', showLabel: true } },
+    { type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } },
   ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'transcript', payload: { agentId: 'group-1', type: 'group-turn', phase: 'ended', ok: true } }), [
     { type: 'pending', pending: null },
@@ -112,7 +112,7 @@ test('a resolved question and a live status line are projected', () => {
   assert.deepEqual(botUpdatesFromWorkHostFrame({
     channel: 'bot-turn',
     payload: { agentId: 'agent-1', phase: 'status', label: 'Checking the deploy' },
-  }), [{ type: 'pending', pending: { label: 'Checking the deploy', showLabel: true } }])
+  }), [{ type: 'pending', pending: { label: 'Checking the deploy', showLabel: true, state: 'working' } }])
 })
 
 test('legacy migration bookkeeping is not a timeline entry', () => {
