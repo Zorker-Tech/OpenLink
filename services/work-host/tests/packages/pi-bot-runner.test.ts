@@ -43,11 +43,18 @@ describe("the Pi-backed Bot run step", () => {
   it("translates Pi events into one delivered message and one turn lifecycle", async () => {
     const requests: Array<{ url: string; body: unknown; headers: Headers }> = [];
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
       requests.push({
-        url: String(input),
+        url,
         body: init?.body === undefined ? undefined : JSON.parse(String(init.body)),
         headers: new Headers(init?.headers),
       });
+      if (url.endsWith("/v1/title")) {
+        return new Response(JSON.stringify({ title: "Fix the login flow" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       return streamOf([
         { type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "planning" } },
         { type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello" } },
@@ -77,10 +84,18 @@ describe("the Pi-backed Bot run step", () => {
     });
 
     assert.deepEqual(result, { done: true });
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0]!.url, "http://worker.example/v1/events");
-    assert.deepEqual(requests[0]!.body, { message: "hello" });
-    assert.equal(requests[0]!.headers.get("authorization"), "Bearer worker-token");
+    // The title is a parallel metadata request; the turn itself still uses
+    // exactly one prompt stream.
+    await new Promise((resolve) => setImmediate(resolve));
+    const promptRequests = requests.filter((request) => request.url.endsWith("/v1/events"));
+    const titleRequests = requests.filter((request) => request.url.endsWith("/v1/title"));
+    assert.equal(promptRequests.length, 1);
+    assert.equal(promptRequests[0]!.url, "http://worker.example/v1/events");
+    assert.deepEqual(promptRequests[0]!.body, { message: "hello" });
+    assert.equal(promptRequests[0]!.headers.get("authorization"), "Bearer worker-token");
+    assert.equal(titleRequests.length, 1);
+    assert.deepEqual(titleRequests[0]!.body, { message: "hello" });
+    assert.equal(titleRequests[0]!.headers.get("authorization"), "Bearer worker-token");
     assert.deepEqual(
       updates.filter((update) => update.type !== "tool-call"),
       [
@@ -94,10 +109,20 @@ describe("the Pi-backed Bot run step", () => {
       updates.filter((update) => update.type === "tool-call").map((update) => update.status),
       ["pending", "completed"],
     );
-    assert.deepEqual(events, [
+    assert.deepEqual(events.filter((event) => {
+      const payload = event && typeof event === "object" ? (event as Record<string, any>).payload : null;
+      return payload?.phase !== "title";
+    }), [
       { channel: "bot-turn", payload: { agentId: AGENT_ID, requestId: "request-1", phase: "started" } },
       { channel: "bot-turn", payload: { agentId: AGENT_ID, requestId: "request-1", phase: "ended", ok: true } },
     ]);
+    assert.deepEqual(events.find((event) => {
+      const payload = event && typeof event === "object" ? (event as Record<string, any>).payload : null;
+      return payload?.phase === "title";
+    }), {
+      channel: "bot-turn",
+      payload: { agentId: AGENT_ID, requestId: "request-1", phase: "title", title: "Fix the login flow" },
+    });
   });
 
   it("turns a Pi dialog into a durable question card and an awaiting-input event", async () => {

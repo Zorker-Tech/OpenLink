@@ -163,17 +163,10 @@ export async function handleBotPromptStream(
     wake?.();
   });
 
-  try {
-    await dependencies.api.sendPrompt({
-      agentId: body.agentId,
-      prompt: body.prompt,
-      ...(body.clientNonce === undefined ? {} : { clientNonce: body.clientNonce }),
-    });
-  } catch (error) {
-    unsubscribe();
-    throw error;
-  }
-
+  // Open the projection before accepting the prompt. Acceptance may take long
+  // enough for the runner's first frames (including the title) to be ready;
+  // holding the headers until it returns would deliver them in one batch after
+  // the turn has already produced its answer.
   response.writeHead(200, {
     "content-type": "application/x-ndjson; charset=utf-8",
     "cache-control": "no-cache, no-transform",
@@ -181,6 +174,22 @@ export async function handleBotPromptStream(
     "x-accel-buffering": "no",
   });
   response.flushHeaders?.();
+
+  void dependencies.api.sendPrompt({
+    agentId: body.agentId,
+    prompt: body.prompt,
+    ...(body.clientNonce === undefined ? {} : { clientNonce: body.clientNonce }),
+  }).catch((error: unknown) => {
+    // Acceptance failed after the projection was opened: report it in-band so
+    // the client sees the same error contract as a failed turn.
+    const message = error instanceof Error ? error.message.slice(0, 2000) : "BOT_PROMPT_FAILED";
+    pending.push(`${JSON.stringify({
+      channel: "bot-turn",
+      payload: { agentId: body.agentId, phase: "ended", ok: false, error: message },
+    })}\n`);
+    terminal = true;
+    wake?.();
+  });
 
   const startedAt = Date.now();
   let lastActivityAt = startedAt;

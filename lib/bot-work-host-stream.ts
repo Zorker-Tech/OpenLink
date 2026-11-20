@@ -116,6 +116,11 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
       const label = payload.label.trim().slice(0, 200)
       return [{ type: 'pending', pending: { label, showLabel: true, state: statusState(label) } }]
     }
+    if (phase === 'title' && typeof payload.title === 'string' && payload.title.trim()) {
+      // The worker's LLM title is a task summary, not a tool label: it replaces
+      // the optimistic prompt excerpt without touching the avatar state.
+      return [{ type: 'title', title: payload.title.trim().slice(0, 120) }]
+    }
     if (phase === 'awaiting-input') return [{ type: 'pending', pending: null }]
     if (phase === 'ended') {
       const updates: BotStreamUpdate[] = [{ type: 'pending', pending: null }]

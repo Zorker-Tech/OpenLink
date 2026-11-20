@@ -100,6 +100,28 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
 
   emitGateway({ phase: "started" });
 
+  // Ask for the title before the turn so it is not starved by the turn's own
+  // provider traffic (the reference host seeds the conversation name the same
+  // way). The wait is bounded: a slow title model may only cost this grace,
+  // and a late title still updates the row while the turn is running.
+  if (options.groupMember !== true) {
+    const titlePromise = client.title(context.prompt);
+    const title = await Promise.race([
+      titlePromise,
+      new Promise<null>((resolve) => {
+        const timer = setTimeout(() => resolve(null), 3_000);
+        timer.unref?.();
+      }),
+    ]);
+    if (title !== null) {
+      emitGateway({ phase: "title", title });
+    } else {
+      void titlePromise
+        .then((late) => { if (late !== null) emitGateway({ phase: "title", title: late }); })
+        .catch(() => undefined);
+    }
+  }
+
   let finalText = "";
   let usage: Record<string, number> | undefined;
   let settled = false;
@@ -178,6 +200,22 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
               typeof toolCall?.name === "string" ? toolCall.name : undefined,
               "completed",
             );
+          }
+          continue;
+        }
+        if (type === "send-message") {
+          // The SendMessage tool delivers a durable message mid-turn. It is
+          // already user-facing, so it goes straight to the transcript instead
+          // of waiting for the final assistant text.
+          const message = recordOf(event.message);
+          const content = typeof message?.content === "string" ? message.content.trim() : "";
+          if (content.length > 0) {
+            emit({
+              type: "send-message",
+              message: { type: "text", content: content.slice(0, 4000) },
+              timestampMs: now(),
+              ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
+            });
           }
           continue;
         }

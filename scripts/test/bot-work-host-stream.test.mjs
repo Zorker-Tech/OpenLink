@@ -115,6 +115,17 @@ test('a resolved question and a live status line are projected', () => {
   }), [{ type: 'pending', pending: { label: 'Checking the deploy', showLabel: true, state: 'working' } }])
 })
 
+test('a host-generated title replaces the task title without changing the avatar state', () => {
+  assert.deepEqual(botUpdatesFromWorkHostFrame({
+    channel: 'bot-turn',
+    payload: { agentId: 'agent-1', phase: 'title', title: '  修复登录流程  ' },
+  }), [{ type: 'title', title: '修复登录流程' }])
+  assert.deepEqual(botUpdatesFromWorkHostFrame({
+    channel: 'bot-turn',
+    payload: { agentId: 'agent-1', phase: 'title', title: '   ' },
+  }), [])
+})
+
 test('legacy migration bookkeeping is not a timeline entry', () => {
   assert.deepEqual(normalizeWorkHostTranscript([
     { id: 'legacy-migration-complete', kind: 'event', event: { type: 'legacy-migration-complete' }, timestampMs: 1 },

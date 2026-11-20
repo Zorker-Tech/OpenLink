@@ -10,6 +10,7 @@ import type { BotRuntimeBinding } from "./bot-runtime-store.ts";
 
 const PROMPT_CONNECT_TIMEOUT_MS = 60_000;
 const CANCEL_TIMEOUT_MS = 5_000;
+const TITLE_TIMEOUT_MS = 20_000;
 
 export interface PiWorkerPromptInput {
   readonly message: string;
@@ -75,6 +76,32 @@ export class PiWorkerClient {
       );
     }
     return response;
+  }
+
+  /**
+   * Ask the worker's model for a short task title. This is deliberately
+   * separate from the turn: a title failure must never fail or delay the work,
+   * so every failure (including an old worker without `/v1/title`) is null.
+   */
+  async title(message: string): Promise<string | null> {
+    const text = message.replace(/\s+/g, " ").trim();
+    if (!text) return null;
+    try {
+      const response = await fetch(`${this.binding.workerUrl}/v1/title`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ message: text.slice(0, 4000) }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(TITLE_TIMEOUT_MS),
+      });
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null) as { title?: unknown } | null;
+      if (typeof payload?.title !== "string") return null;
+      const title = payload.title.replace(/\s+/g, " ").trim();
+      return title.length > 0 ? Array.from(title).slice(0, 80).join("") : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Stop reading the turn stream. The worker is cancelled separately. */

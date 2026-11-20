@@ -11,6 +11,7 @@ export type BotTranscriptEntry = Extract<
 
 export type BotStreamUpdate =
   | { type: 'pending'; pending: PendingBeat | null }
+  | { type: 'title'; title: string }
   | { type: 'entry'; entry: BotTranscriptEntry }
   | { type: 'delta'; id: string; delta: string }
   | { type: 'confirmation'; request: BotConfirmationRequest }
@@ -63,6 +64,11 @@ export function reconcileOptimisticUserEntry(
 }
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+
+// Work-host stores routine/background prompts as user entries with this marker.
+// They are agent context, not something the person typed, so the Bot timeline
+// must not render them.
+const HIDDEN_PROMPT_PREFIX = '[SLATE_HIDDEN_PROMPT]'
 
 function safeId(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback
@@ -120,6 +126,7 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
   if (kind === 'message') {
     const content = text(entry.content)
     if (!content) return null
+    if (entry.role === 'user' && content.startsWith(HIDDEN_PROMPT_PREFIX)) return null
     const reactions = reactionsOf(entry.reactions)
     return entry.role === 'user'
       ? {

@@ -18,7 +18,6 @@ import {
 } from '@zorker/bot-demo/app'
 import { AgentAvatar, resolveColor } from '@zorker/avatar'
 import { MessageResponse } from '@/components/ai-elements/message'
-import { Loader2 } from 'lucide-react'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
 import { BotWorkspaceView } from '@/components/bot/bot-workspace-view'
@@ -234,7 +233,10 @@ export function BotWorkspace({
   const activeTranscript = activeDetail?.transcript ?? []
   const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
   const activePending = pendingMap[activeId] ?? null
-  const activeTaskTitle = taskTitleMap[activeId] || activePending?.label || ''
+  // The title is the LLM-written task summary, never a raw tool label. Until
+  // the host delivers one, the optimistic prompt excerpt (or "Working") keeps
+  // the row populated.
+  const activeTaskTitle = taskTitleMap[activeId] || ''
   const activeTaskState = taskStateMap[activeId] || (activePending ? taskAvatarState(activePending.label) : 'thinking')
   const activeWarming = activeId ? warmingMap[activeId] === true : false
   const activeSession = activeBot ? botToSession(activeBot, activeTranscript, activeDetail?.routines) : null
@@ -497,12 +499,12 @@ export function BotWorkspace({
           ...previous,
           [botId]: pending.state ?? (generic ? 'thinking' : taskAvatarState(label)),
         }))
-        const descriptive = label.length > 16 || /[\u4e00-\u9fff]/.test(label) || label.includes(' ')
-        if (!generic && descriptive) {
-          setTaskTitleMap((previous) => ({ ...previous, [botId]: label }))
-        }
       }
       setPendingMap((previous) => ({ ...previous, [botId]: pending }))
+      return
+    }
+    if (update.type === 'title') {
+      setTaskTitleMap((previous) => ({ ...previous, [botId]: update.title }))
       return
     }
     if (update.type === 'delta') {
@@ -582,6 +584,20 @@ export function BotWorkspace({
     }
   }, [])
 
+  // A Bot is not request-scoped. Keep the active Bot's projection open so a
+  // routine run, a channel reply, or any other turn started outside this tab
+  // lands in the timeline without a manual refresh.
+  useEffect(() => {
+    if (!workHostReady || !activeId) return
+    const source = new EventSource(`/api/bots/${encodeURIComponent(activeId)}/events`)
+    source.onmessage = (event) => {
+      try {
+        applyUpdate(activeId, JSON.parse(event.data) as BotStreamUpdate)
+      } catch {}
+    }
+    return () => source.close()
+  }, [activeId, applyUpdate, workHostReady])
+
   const resolveBotConfirmation = useCallback(async (
     botId: string,
     confirmationId: string,
@@ -639,7 +655,9 @@ export function BotWorkspace({
         [botId]: { ...detail, transcript: [...detail.transcript, optimisticUserEntry(optimisticId, content)] },
       }
     })
-    const taskTitle = content.slice(0, 160)
+    // A one-line excerpt is only the optimistic placeholder; Work-host
+    // replaces it with an LLM-written title as soon as the worker returns one.
+    const taskTitle = content.replace(/\s+/g, ' ').trim().slice(0, 72)
     setTaskTitleMap((previous) => ({ ...previous, [botId]: taskTitle }))
     setTaskStateMap((previous) => ({ ...previous, [botId]: 'thinking' }))
     setPendingMap((previous) => ({ ...previous, [botId]: { label: taskTitle, showLabel: true, state: 'thinking' } }))
@@ -941,31 +959,23 @@ export function BotWorkspace({
                       renderMessage={renderBotMarkdown}
                       status={activePending ? (
                         <>
-                          <span className="relative flex size-5 shrink-0 items-center justify-center">
+                          <span className="relative flex size-7 shrink-0 items-center justify-center">
                             <AgentAvatar
                               className="shrink-0"
                               color={activeBot.avatarColor}
                               renderer="complete"
                               shape={activeBot.avatarShape}
-                              size={20}
+                              size={28}
                               state={activeTaskState}
                               theme={activeTheme}
                             />
                             <span
                               aria-hidden="true"
-                              className="absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-[var(--app-background)]"
+                              className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-[var(--app-background)]"
                               style={{ background: resolveColor(activeBot.avatarColor, activeTheme) }}
                             />
                           </span>
-                          <Loader2
-                            aria-hidden="true"
-                            className="size-3.5 shrink-0 animate-spin"
-                            style={{ color: resolveColor(activeBot.avatarColor, activeTheme) }}
-                          />
-                          {activeTaskTitle.toLowerCase() !== activeTaskState ? (
-                            <span className="shrink-0 lowercase text-[var(--app-subtle-foreground)]">{activeTaskState}</span>
-                          ) : null}
-                          <span className="min-w-0 truncate">{activeTaskTitle || 'Working'}</span>
+                          <span className="min-w-0 truncate text-[13px] font-medium">{activeTaskTitle || 'Working'}</span>
                         </>
                       ) : null}
                       screen={END_SCREEN}
