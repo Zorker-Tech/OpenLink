@@ -176,6 +176,7 @@ async function createUbuntuRuntime(architecture, stateRoot) {
     sshKeygenCommand: process.env.OPENLINK_SSH_KEYGEN_COMMAND || '/usr/bin/ssh-keygen',
     mke2fsCommand: process.env.OPENLINK_MKE2FS_COMMAND || '/usr/sbin/mke2fs',
     gpu: architecture === 't2',
+    freePageReporting: process.env.OPENLINK_PROJECT_VM_FREE_PAGE_REPORTING !== '0',
     guestUser: 'openlink',
     bootstrap: true,
   })

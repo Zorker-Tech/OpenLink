@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { AgentHostError } from './errors.js'
-import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectGitPreviewSessionBinding, type ProjectGitVersion, type ProjectPreviewTarget, type ProjectRuntimeCloseOptions, type ProjectRuntimeDescriptor, type ProjectSupabaseManagementRequest, type ProjectSupabaseStudioProxyRequest, type ProjectSupabaseStudioProxyResponse } from './project-runtime.js'
+import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager, type ProjectDesktopControlResult, type ProjectGitPreviewSessionBinding, type ProjectGitVersion, type ProjectPreviewTarget, type ProjectRuntimeCloseOptions, type ProjectRuntimeDescriptor, type ProjectSupabaseManagementRequest, type ProjectSupabaseStudioProxyRequest, type ProjectSupabaseStudioProxyResponse } from './project-runtime.js'
 import type { ProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { ProjectVmManager } from './project-vm.js'
 import { RemoteQemuProjectVmDriver } from './remote-project-vm.js'
@@ -14,6 +14,12 @@ export interface ProjectRuntimeController {
   describeSupabase(projectId: string): Promise<ProjectRuntimeDescriptor['supabase'] | null>
   manageSupabase(projectId: string, request: ProjectSupabaseManagementRequest): Promise<Record<string, unknown>>
   proxySupabaseStudio(projectId: string, request: ProjectSupabaseStudioProxyRequest): Promise<ProjectSupabaseStudioProxyResponse>
+  /** Freeze the Project desktop while keeping the VM and its services live. */
+  suspendDesktop?(projectId: string): Promise<ProjectDesktopControlResult>
+  /** Unfreeze the Project desktop before serving a viewer or automation call. */
+  resumeDesktop?(projectId: string): Promise<ProjectDesktopControlResult>
+  /** Report whether the Project desktop is running, frozen or absent. */
+  desktopStatus?(projectId: string): Promise<ProjectDesktopControlResult>
   prepareSessionStorage(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<string>
   persistCodexThreadId(projectId: string, userId: string, workspaceId: string, sessionId: string, threadId: string): Promise<void>
   ensureProjectGitRepository(projectId: string): Promise<void>
@@ -269,6 +275,21 @@ export class ProjectRuntimeRouter implements ProjectRuntimeController {
 
   async ensure(projectIdValue: string, diskMode?: 'thin' | 'thick', scope?: 'all' | 'agent') {
     return (await this.manager(projectIdValue)).ensure(projectIdValue, diskMode, scope)
+  }
+
+  async suspendDesktop(projectIdValue: string): Promise<ProjectDesktopControlResult> {
+    const manager = await this.manager(projectIdValue)
+    return manager.suspendDesktop?.(projectIdValue) ?? { suspended: false, state: 'unsupported' }
+  }
+
+  async resumeDesktop(projectIdValue: string): Promise<ProjectDesktopControlResult> {
+    const manager = await this.manager(projectIdValue)
+    return manager.resumeDesktop?.(projectIdValue) ?? { suspended: false, state: 'unsupported' }
+  }
+
+  async desktopStatus(projectIdValue: string): Promise<ProjectDesktopControlResult> {
+    const manager = await this.manager(projectIdValue)
+    return manager.desktopStatus?.(projectIdValue) ?? { suspended: false, state: 'unsupported' }
   }
 
   async prepareSessionStorage(projectIdValue: string, userId: string, workspaceId: string, sessionId: string) {

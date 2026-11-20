@@ -175,6 +175,19 @@ export interface ProjectGitPreviewSessionBinding {
   dependenciesPath?: string
 }
 
+/**
+ * Lifecycle of the Project-level native desktop. `suspended` means the
+ * desktop cgroup is frozen: the VM, containers and agent work continue, while
+ * the desktop's CPU time drops to zero and a resume costs a scheduler wake-up
+ * rather than a GNOME boot.
+ */
+export type ProjectDesktopState = 'running' | 'suspended' | 'stopped' | 'failed' | 'unsupported'
+
+export interface ProjectDesktopControlResult {
+  suspended: boolean
+  state: ProjectDesktopState
+}
+
 /** A verified HTTP service running inside one of a Project's session sandboxes. */
 export interface ProjectPreviewTarget {
   id: string
@@ -1141,6 +1154,73 @@ export class ProjectRuntimeManager {
       })
       if (failure) throw failure
     })
+  }
+
+  /**
+   * Report whether the Project-level desktop is running or frozen. A missing
+   * unit (container runtimes, older bases) is reported as unsupported instead
+   * of failing a caller that only wants an optimization.
+   */
+  async desktopStatus(projectId: string): Promise<ProjectDesktopControlResult> {
+    if (!isProjectId(projectId)) throw new AgentHostError('INVALID_BODY', 'projectId is invalid')
+    const runInMachine = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runInMachine) return { suspended: false, state: 'unsupported' }
+    let output: string
+    try {
+      const result = await runInMachine(this.vmManager.machineName(projectId), 'sudo', [
+        '-n', 'systemctl', 'show', '-p', 'ActiveState,FreezerState', 'openlink-desktop.service',
+      ])
+      output = result.stdout
+    } catch {
+      return { suspended: false, state: 'unsupported' }
+    }
+    const values = new Map<string, string>()
+    for (const line of output.split('\n')) {
+      const separator = line.indexOf('=')
+      if (separator > 0) values.set(line.slice(0, separator).trim(), line.slice(separator + 1).trim())
+    }
+    if (values.get('FreezerState') === 'frozen') return { suspended: true, state: 'suspended' }
+    switch (values.get('ActiveState')) {
+      case 'active': return { suspended: false, state: 'running' }
+      case 'inactive': return { suspended: false, state: 'stopped' }
+      case 'failed': return { suspended: false, state: 'failed' }
+      default: return { suspended: false, state: 'unsupported' }
+    }
+  }
+
+  /**
+   * Freeze the desktop cgroup. The VM, its containers and agent work keep
+   * running; only the desktop process tree stops consuming CPU. Resuming is a
+   * scheduler wake-up, not a GNOME boot.
+   */
+  async suspendDesktop(projectId: string): Promise<ProjectDesktopControlResult> {
+    const current = await this.desktopStatus(projectId)
+    if (current.state !== 'running') return current
+    const runInMachine = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runInMachine) return { suspended: false, state: 'unsupported' }
+    try {
+      await runInMachine(this.vmManager.machineName(projectId), 'sudo', [
+        '-n', 'systemctl', 'freeze', 'openlink-desktop.service',
+      ])
+    } catch {
+      return { suspended: false, state: 'unsupported' }
+    }
+    return this.desktopStatus(projectId)
+  }
+
+  async resumeDesktop(projectId: string): Promise<ProjectDesktopControlResult> {
+    const current = await this.desktopStatus(projectId)
+    if (current.state !== 'suspended') return current
+    const runInMachine = this.machineDriver.runInMachine?.bind(this.machineDriver)
+    if (!runInMachine) return { suspended: false, state: 'unsupported' }
+    try {
+      await runInMachine(this.vmManager.machineName(projectId), 'sudo', [
+        '-n', 'systemctl', 'unfreeze', 'openlink-desktop.service',
+      ])
+    } catch {
+      return { suspended: false, state: 'unsupported' }
+    }
+    return this.desktopStatus(projectId)
   }
 
   async prepareSessionStorage(projectId: string, userId: string, workspaceId: string, sessionId: string): Promise<string> {
@@ -3098,12 +3178,21 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     const runner = this.machineDriver.runInMachine?.bind(this.machineDriver)
     if (!runner) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Project VM driver cannot execute services')
     return (name, command, args = []) => {
-      if (command === 'podman') {
-        if (this.engine === 'docker') return runner(name, 'docker', args)
-        if (this.rootful) return runner(name, 'sudo', ['-n', 'podman', ...args])
-      }
-      return runner(name, command, args)
+      const resolved = this.serviceCommand(command, args)
+      return runner(name, resolved.command, resolved.args)
     }
+  }
+
+  /**
+   * Translate the engine-neutral runtime command into the guest invocation
+   * used by both the exec runner and the stdin streamer.
+   */
+  private serviceCommand(command: string, args: string[]): { command: string; args: string[] } {
+    if (command === 'podman') {
+      if (this.engine === 'docker') return { command: 'docker', args }
+      if (this.rootful) return { command: 'sudo', args: ['-n', 'podman', ...args] }
+    }
+    return { command, args }
   }
 
   private async ensureImages(input: ProjectRuntimeServiceInput): Promise<void> {
@@ -3151,33 +3240,44 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       }
       if (!archive) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Image ' + image + ' is not loaded into project VM and no image archive is configured')
       if (loadedArchives.has(archive)) continue
-      const filename = '/var/tmp/openlink-image-' + image.replace(/[^A-Za-z0-9_.-]/g, '_') + '.tar'
-      if (archive.startsWith('remote:')) {
-        if (!copyRemoteToMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Remote image archive ' + archive + ' cannot be copied into project VM')
-        await copyRemoteToMachine(input.machineName, archive.slice('remote:'.length), filename)
-      } else {
-        if (!copyToMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Image ' + image + ' is not loaded into project VM and no local image copier is configured')
-        await copyToMachine(input.machineName, archive, filename)
-      }
+      const streamToMachine = this.machineDriver.streamToMachine?.bind(this.machineDriver)
       let loadedImageOutput = ''
-      try {
-        const loaded = await runInMachine(input.machineName, 'podman', ['load', '--input', filename])
-        loadedImageOutput = `${loaded.stdout}\n${loaded.stderr}`
-      } finally {
-        // Image archives are staging artifacts, not runtime state. Keeping all
-        // seven tarballs on the VM disk can exhaust a fresh Project VM before
-        // code-server is imported, even though the loaded layers still fit.
-        // Always remove complete and partial uploads immediately.
-        await runInMachine(input.machineName, 'rm', ['-f', filename]).catch(() => undefined)
+      if (!archive.startsWith('remote:') && streamToMachine) {
+        // Feed the archive to `podman load` over SSH stdin. The bytes never
+        // become a file on the Project disk, so a multi-gigabyte archive does
+        // not permanently consume thin-overlay clusters even before the engine
+        // starts storing the layers it actually needs.
+        const streamed = this.serviceCommand('podman', ['load'])
+        await streamToMachine(input.machineName, streamed.command, streamed.args, archive)
+      } else {
+        const filename = '/var/tmp/openlink-image-' + image.replace(/[^A-Za-z0-9_.-]/g, '_') + '.tar'
+        if (archive.startsWith('remote:')) {
+          if (!copyRemoteToMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Remote image archive ' + archive + ' cannot be copied into project VM')
+          await copyRemoteToMachine(input.machineName, archive.slice('remote:'.length), filename)
+        } else {
+          if (!copyToMachine) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Image ' + image + ' is not loaded into project VM and no local image copier is configured')
+          await copyToMachine(input.machineName, archive, filename)
+        }
+        try {
+          const loaded = await runInMachine(input.machineName, 'podman', ['load', '--input', filename])
+          loadedImageOutput = `${loaded.stdout}\n${loaded.stderr}`
+        } finally {
+          // Image archives are staging artifacts, not runtime state. Keeping all
+          // seven tarballs on the VM disk can exhaust a fresh Project VM before
+          // code-server is imported, even though the loaded layers still fit.
+          // Always remove complete and partial uploads immediately.
+          await runInMachine(input.machineName, 'rm', ['-f', filename]).catch(() => undefined)
+        }
       }
       // The project image archives are saved with short names, which Podman
       // imports as docker.io/<image>. A Project VM can also have an older
       // localhost/<image> alias from its base disk. Prefer the reference
       // reported by this load, then update all aliases so OpenSandbox cannot
-      // resolve the stale base-disk image on the next session.
+      // resolve the stale base-disk image on the next session. A streamed load
+      // reports nothing, so the short name is also a candidate.
       const loadedReferences = [...loadedImageOutput.matchAll(/Loaded image(?:\(s\))?:\s*([^\s,]+)/g)]
         .map((match) => match[1].trim())
-      const importedCandidates = [...new Set([...loadedReferences, `docker.io/${image}`, `localhost/${image}`])]
+      const importedCandidates = [...new Set([...loadedReferences, image, `docker.io/${image}`, `localhost/${image}`])]
       let importedImage: string | undefined
       for (const candidate of importedCandidates) {
         const existsArgs = this.engine === 'docker' ? ['image', 'inspect', candidate] : ['image', 'exists', candidate]

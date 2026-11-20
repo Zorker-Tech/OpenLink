@@ -558,7 +558,11 @@ printf '%s\\n' 'openlink ALL=(ALL) NOPASSWD:ALL' >/rootfs/etc/sudoers.d/90-openl
 chmod 0440 /rootfs/etc/sudoers.d/90-openlink
 
 cat >/rootfs/etc/fstab <<'OPENLINK_FSTAB'
-/dev/vda / ext4 defaults,noatime 0 1
+# discard=async returns deleted blocks to the thin qcow2 overlay without the
+# synchronous latency of the legacy discard mount option. The weekly
+# fstrim.timer below is the safety net for bulk deletes that outrun the async
+# queue and for blocks allocated before this option existed.
+/dev/vda / ext4 discard=async,noatime 0 1
 /dev/vdb /var/lib/cloud/seed/nocloud ext4 defaults,ro,nofail 0 0
 tmpfs /tmp tmpfs mode=1777 0 0
 OPENLINK_FSTAB
@@ -600,10 +604,32 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 OPENLINK_SUPABASE_IMAGES
 
+# A Project overlay created before discard support existed can carry blocks
+# that the guest already deleted. Trim once on the first boot of a new base so
+# an upgraded VM starts small instead of waiting for the weekly timer. The
+# marker lives on the overlay, so each Project runs this at most once per base
+# generation.
+cat >/rootfs/etc/systemd/system/openlink-reclaim.service <<'OPENLINK_RECLAIM'
+[Unit]
+Description=Return deleted Project disk blocks to the host
+After=local-fs.target
+ConditionPathExists=!/var/lib/openlink/.fstrim-complete
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'if command -v fstrim >/dev/null 2>&1; then fstrim -v / || true; fi; touch /var/lib/openlink/.fstrim-complete'
+Nice=19
+IOSchedulingClass=idle
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+OPENLINK_RECLAIM
+
 mkdir -p /rootfs/etc/systemd/system/multi-user.target.wants
 ln -sf /usr/lib/systemd/system/cloud-init.target /rootfs/etc/systemd/system/multi-user.target.wants/cloud-init.target
 systemctl --root=/rootfs set-default multi-user.target
-systemctl --root=/rootfs enable systemd-networkd systemd-resolved ssh podman.socket openlink-desktop.service openlink-project-supabase-images.service
+systemctl --root=/rootfs enable systemd-networkd systemd-resolved ssh podman.socket openlink-desktop.service openlink-project-supabase-images.service openlink-reclaim.service fstrim.timer
 systemctl --root=/rootfs disable gdm3 display-manager >/dev/null 2>&1 || true
 # The sandbox has no managed Wi-Fi device. Leaving wpa_supplicant enabled makes
 # every boot end in a failed unit and a "degraded" system state.

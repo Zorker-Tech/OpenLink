@@ -54,8 +54,15 @@ guest: google-chrome-stable --version
 guest: agent-desktop version
 guest: agent-desktop status
 guest: ls -l /run/user/1000/openlink-desktop-tool.sock
+guest: systemctl show -p ActiveState,FreezerState openlink-desktop
 host:  curl -sf http://127.0.0.1:<desktop-port>/vnc.html
 ```
+
+T2 uses the same disk reclaim and idle-freeze contract as T1: the root disk is
+attached with `discard=unmap`, the guest mounts it with `discard=async`, and
+the desktop unit is frozen when no chat in the Project has a viewer. See
+[ADR-0037](../../ADR-0037-project-runtime-resource-reclaim.md) and the
+[T1 resource reclaim section](../t1/operations.md#resource-reclaim).
 
 The RDP password is in `/var/lib/openlink/project-desktop/rdp/password` inside
 the guest. The TLS certificate/key are in the same directory, mode 0600. The

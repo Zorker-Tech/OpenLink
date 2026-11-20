@@ -1052,3 +1052,123 @@ test('falls back to another port window when the host reserves the preferred one
     await rm(stateRoot, { recursive: true, force: true })
   }
 })
+
+test('freezes and resumes the Project desktop without stopping the VM', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-desktop-'))
+  let frozen = false
+  let stopped = false
+  const calls: Array<{ command: string; args: string[] }> = []
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine: async (_machine, command, args = []) => {
+      calls.push({ command, args })
+      const line = args.join(' ')
+      if (command === 'sudo' && line.includes('systemctl show')) {
+        return { stdout: `ActiveState=active\nFreezerState=${frozen ? 'frozen' : 'running'}\n`, stderr: '' }
+      }
+      if (command === 'sudo' && line.includes('systemctl freeze')) {
+        frozen = true
+        return { stdout: '', stderr: '' }
+      }
+      if (command === 'sudo' && line.includes('systemctl unfreeze')) {
+        frozen = false
+        return { stdout: '', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    },
+    stopMachine: async () => { stopped = true },
+    removeMachine: async () => undefined,
+  }
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager: new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' }),
+    machineDriver,
+    serviceDriver: { ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined },
+    opensandboxImage: 'test/opensandbox', browserHostImage: 'test/browser', execdImage: 'test/execd',
+    egressImage: 'test/egress', agentWorkerImage: 'test/worker', hostPortAvailable: async () => true,
+  })
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  try {
+    assert.deepEqual(await runtime.desktopStatus(projectId), { suspended: false, state: 'running' })
+    assert.deepEqual(await runtime.suspendDesktop(projectId), { suspended: true, state: 'suspended' })
+    assert.ok(calls.some((call) => call.args.includes('freeze')))
+    assert.equal(stopped, false, 'freezing the desktop must keep the VM and its services running')
+    assert.deepEqual(await runtime.resumeDesktop(projectId), { suspended: false, state: 'running' })
+    assert.ok(calls.some((call) => call.args.includes('unfreeze')))
+    assert.equal(stopped, false)
+  } finally {
+    await runtime.close({ stopRuntimes: false })
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})
+
+test('streams image archives into the engine instead of staging them on the Project disk', async () => {
+  const streamed: Array<{ command: string; args: string[]; sourcePath: string }> = []
+  const copied: string[] = []
+  const loaded: string[][] = []
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    copyToMachine: async (_machine, source) => { copied.push(source) },
+    streamToMachine: async (_machine, command, args, sourcePath) => { streamed.push({ command, args, sourcePath }) },
+    runInMachine: async (_machine, command, args = []) => {
+      if (command === 'sudo' && args[0] === '-n' && args[1] === 'podman' && args[2] === 'image' && args[3] === 'exists') {
+        throw new Error('image not found')
+      }
+      if (command === 'sudo' && args[0] === '-n' && args[1] === 'podman' && args[2] === 'load') loaded.push(args)
+      return { stdout: '', stderr: '' }
+    },
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const serviceDriver = new PodmanProjectRuntimeServiceDriver(machineDriver, { rootful: true })
+  const images = ['test/opensandbox', 'test/browser', 'test/execd', 'test/egress', 'test/worker', 'test/rpc', 'test/code-server']
+  const input: ProjectRuntimeServiceInput = {
+    projectId: '2c51ca26-3cd0-4cb4-896d-2061de06098c',
+    machineName: 'olp-test',
+    workspacePath: '/var/lib/openlink/test-projects/2c51ca26-3cd0-4cb4-896d-2061de06098c/workspace',
+    sessionStorageRoot: '/var/lib/openlink/test-projects/2c51ca26-3cd0-4cb4-896d-2061de06098c/.openlink/sessions',
+    ports: { opensandbox: 51_000, browserHost: 51_001, codeServer: 51_002, supabaseGateway: 51_003, supabaseDatabase: 51_004, supabasePooler: 51_005, desktop: 51_006 },
+    opensandboxApiKey: 'key', browserApiToken: 'token', browserTokenSecret: 'secret',
+    browserAllowedOrigins: 'http://localhost:3000',
+    opensandboxImage: 'test/opensandbox', browserHostImage: 'test/browser', execdImage: 'test/execd',
+    egressImage: 'test/egress', agentWorkerImage: 'test/worker', agentRpcWorkerImage: 'test/rpc',
+    codeServerImage: 'test/code-server',
+    imageArchives: Object.fromEntries(images.map((image) => [image, `/tmp/${image.replaceAll('/', '-')}.tar`])),
+  }
+  await (serviceDriver as unknown as { ensureImages(input: ProjectRuntimeServiceInput): Promise<void> }).ensureImages(input)
+  assert.equal(streamed.length, images.length)
+  assert.deepEqual(streamed.map((call) => call.sourcePath), images.map((image) => `/tmp/${image.replaceAll('/', '-')}.tar`))
+  assert.ok(streamed.every((call) => call.command === 'sudo' && call.args.join(' ') === '-n podman load'))
+  assert.deepEqual(copied, [], 'a streamed archive must never be copied to the Project disk')
+  assert.deepEqual(loaded, [], 'a streamed archive must not use the file-based load path')
+})
+
+test('reports an absent Project desktop as unsupported instead of failing', async () => {
+  const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-desktop-absent-'))
+  const machineDriver: ProjectVmMachineDriver = {
+    ensureMachine: async () => undefined,
+    bootstrapToolchain: async () => undefined,
+    runInMachine: async () => { throw new Error('Unit openlink-desktop.service could not be found') },
+    stopMachine: async () => undefined,
+    removeMachine: async () => undefined,
+  }
+  const runtime = new ProjectRuntimeManager({
+    stateRoot,
+    vmManager: new ProjectVmManager({ stateRoot, machineDriver, machinePrefix: 'olp', guestWorkspaceRoot: '/var/lib/openlink/test-projects' }),
+    machineDriver,
+    serviceDriver: { ensureServices: async () => undefined, stopServices: async () => undefined, removeServices: async () => undefined },
+    opensandboxImage: 'test/opensandbox', browserHostImage: 'test/browser', execdImage: 'test/execd',
+    egressImage: 'test/egress', agentWorkerImage: 'test/worker', hostPortAvailable: async () => true,
+  })
+  const projectId = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
+  try {
+    assert.deepEqual(await runtime.desktopStatus(projectId), { suspended: false, state: 'unsupported' })
+    assert.deepEqual(await runtime.suspendDesktop(projectId), { suspended: false, state: 'unsupported' })
+    assert.deepEqual(await runtime.resumeDesktop(projectId), { suspended: false, state: 'unsupported' })
+  } finally {
+    await runtime.close({ stopRuntimes: false })
+    await rm(stateRoot, { recursive: true, force: true })
+  }
+})

@@ -1,9 +1,11 @@
-import { execFile as execFileCallback } from 'node:child_process'
+import { execFile as execFileCallback, spawn } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { chmod, lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
 import { AgentHostError } from './errors.js'
 import {
@@ -15,6 +17,8 @@ import {
 } from './project-vm.js'
 
 const execFile = promisify(execFileCallback)
+const STREAM_OUTPUT_LIMIT = 1024 * 1024
+const DEFAULT_STREAM_TIMEOUT_MS = 15 * 60_000
 const DEFAULT_START_TIMEOUT_MS = 180_000
 // The first T1 provisioning starts eleven Project Supabase containers from a
 // multi-gigabyte golden image set. That is a legitimate multi-minute operation;
@@ -40,6 +44,11 @@ export interface UbuntuQemuProjectVmDriverOptions {
   mke2fsCommand?: string
   /** Expose a virtio-gpu DRM device (required by T2's Wayland/RDP capture). */
   gpu?: boolean
+  /**
+   * Advertise virtio-balloon free page reporting. Defaults to enabled; set to
+   * false only for a host QEMU that predates the device property.
+   */
+  freePageReporting?: boolean
   /** Manifest fingerprint recorded with each project disk. */
   baseFingerprint?: string
   /** Durable per-project QEMU state (disk, SSH identity, seed identity). */
@@ -57,6 +66,8 @@ export interface UbuntuQemuProjectVmDriverOptions {
   hostPortAvailable?: (port: number) => Promise<boolean>
   /** Injectable process runner used by tests and embedded runtimes. */
   run?: (file: string, args: string[], options?: { timeout?: number; maxBuffer?: number; cwd?: string }) => Promise<{ stdout: string; stderr: string }>
+  /** Injectable stdin streaming runner used by tests and embedded runtimes. */
+  stream?: (file: string, args: string[], sourcePath: string, options?: { timeout?: number }) => Promise<{ stdout: string; stderr: string }>
   /** Injectable process liveness probe used by tests. */
   isProcessRunning?: (pid: number) => Promise<boolean>
   /** Override the short QMP socket directory (macOS sockaddr_un limits). */
@@ -121,6 +132,57 @@ async function atomicWrite(path: string, data: string, mode = 0o600): Promise<vo
   const temporary = `${path}.${process.pid}-${randomBytes(6).toString('hex')}.tmp`
   await writeFile(temporary, data, { mode })
   await rename(temporary, path)
+}
+
+/**
+ * Stream a host file into a child process. The SSH client carries the bytes
+ * straight to the guest command, so the Project disk never holds a staging
+ * copy of an image archive.
+ */
+function streamToCommand(
+  file: string,
+  args: string[],
+  sourcePath: string,
+  timeoutMs = DEFAULT_STREAM_TIMEOUT_MS,
+): Promise<ProjectVmCommandResult> {
+  return new Promise((resolveResult, rejectResult) => {
+    const child = spawn(file, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const settle = (error?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (error) rejectResult(error)
+      else resolveResult({ stdout, stderr })
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      settle(new Error(`stream timed out after ${timeoutMs} ms`))
+    }, timeoutMs)
+    timer.unref?.()
+    child.stdout?.on('data', (chunk: Buffer) => {
+      if (stdout.length < STREAM_OUTPUT_LIMIT) stdout += chunk.toString('utf8').slice(0, STREAM_OUTPUT_LIMIT - stdout.length)
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      if (stderr.length < STREAM_OUTPUT_LIMIT) stderr += chunk.toString('utf8').slice(0, STREAM_OUTPUT_LIMIT - stderr.length)
+    })
+    child.once('error', (error) => settle(error))
+    child.once('close', (code, signal) => {
+      if (code === 0) settle()
+      else settle(new Error(`exited with ${signal ?? code}${stderr ? `: ${stderr.slice(-500)}` : ''}`))
+    })
+    const stdin = child.stdin
+    if (!stdin) {
+      settle(new Error('stream command has no stdin'))
+      return
+    }
+    pipeline(createReadStream(sourcePath), stdin).catch((error) => {
+      child.kill('SIGKILL')
+      settle(error instanceof Error ? error : new Error(String(error)))
+    })
+  })
 }
 
 async function readJson<T>(path: string): Promise<T | undefined> {
@@ -231,6 +293,12 @@ export interface UbuntuProjectVmQemuArgumentsInput {
   pidFile: string
   qmpPath: string
   consoleLog: string
+  /**
+   * Let the guest hand free pages back to the host. The device stays inert
+   * until the guest virtio_balloon driver reports free page blocks, so this is
+   * a cap on host RSS rather than a guest-visible memory reduction.
+   */
+  freePageReporting?: boolean
 }
 
 export function ubuntuProjectVmQemuArguments(input: UbuntuProjectVmQemuArgumentsInput): string[] {
@@ -263,10 +331,19 @@ export function ubuntuProjectVmQemuArguments(input: UbuntuProjectVmQemuArguments
     '-kernel', input.kernelPath,
     '-initrd', input.initrdPath,
     '-append', `root=${input.rootDevice} rw rootfstype=ext4 console=ttyS0 panic=1`,
-    '-drive', `file=${input.diskPath},if=virtio,format=qcow2,cache=none`,
+    // The project disk is a thin qcow2 overlay. Without `discard=unmap` QEMU
+    // never advertises virtio-blk discard support, so the guest cannot return
+    // deleted blocks and the overlay grows until it reaches its virtual size.
+    // `detect-zeroes` is deliberately left off: with a backing file a zero
+    // write must stay an allocated zero cluster instead of falling through to
+    // the base image.
+    '-drive', `file=${input.diskPath},if=virtio,format=qcow2,cache=none,discard=unmap`,
     '-drive', `file=${input.seedImagePath},if=virtio,format=raw,readonly=on`,
     '-netdev', `user,id=net0,${hostfwd.join(',')}`,
     '-device', 'virtio-net-pci,netdev=net0',
+    ...(input.freePageReporting !== false
+      ? ['-device', 'virtio-balloon-pci,free-page-reporting=on']
+      : []),
     ...(input.gpu ? ['-vga', 'none', '-device', 'virtio-gpu-pci'] : []),
     '-display', 'none',
     '-serial', `file:${input.consoleLog}`,
@@ -305,6 +382,7 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
   private readonly mke2fs: string
   private readonly baseFingerprint: string
   private readonly gpu: boolean
+  private readonly freePageReporting: boolean
   private readonly stateRoot: string
   private readonly qemu: string
   private readonly qemuImg: string
@@ -317,6 +395,7 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
   private readonly commandTimeoutMs: number
   private readonly hostPortAvailable: (port: number) => Promise<boolean>
   private readonly run: NonNullable<UbuntuQemuProjectVmDriverOptions['run']>
+  private readonly stream: NonNullable<UbuntuQemuProjectVmDriverOptions['stream']>
   private readonly isProcessRunning: (pid: number) => Promise<boolean>
   private readonly socketRoot: string
 
@@ -345,10 +424,17 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
       cwd: runOptions?.cwd,
       encoding: 'utf8',
     }))
+    this.stream = options.stream ?? ((file, args, sourcePath, streamOptions) => streamToCommand(
+      file,
+      args,
+      sourcePath,
+      streamOptions?.timeout ?? DEFAULT_STREAM_TIMEOUT_MS,
+    ))
     this.isProcessRunning = options.isProcessRunning ?? defaultIsProcessRunning
     this.socketRoot = resolve(options.socketRoot || tmpdir())
     this.baseFingerprint = options.baseFingerprint?.trim() || 'unversioned'
     this.gpu = options.gpu === true
+    this.freePageReporting = options.freePageReporting !== false
   }
 
   async ensureMachine(name: string, spec: ProjectVmMachineSpec): Promise<void> {
@@ -416,6 +502,22 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
       throw new AgentHostError(
         'PROJECT_BACKEND_UNAVAILABLE',
         `Ubuntu Project VM ${name} command failed: ${error instanceof Error ? error.message : String(error)}`,
+        { retryable: true },
+      )
+    }
+  }
+
+  async streamToMachine(name: string, command: string, args: string[], sourcePath: string): Promise<void> {
+    const directory = stateDirectory(this.stateRoot, name)
+    const record = await this.requireRecord(directory)
+    try {
+      await this.stream(this.ssh, this.sshArgs(record, [command, ...args]), sourcePath, {
+        timeout: DEFAULT_STREAM_TIMEOUT_MS,
+      })
+    } catch (error) {
+      throw new AgentHostError(
+        'PROJECT_BACKEND_UNAVAILABLE',
+        `Ubuntu Project VM ${name} stream failed: ${error instanceof Error ? error.message : String(error)}`,
         { retryable: true },
       )
     }
@@ -692,6 +794,7 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     const args = ubuntuProjectVmQemuArguments({
       name: record.name,
       gpu: this.gpu,
+      freePageReporting: this.freePageReporting,
       diskPath: disk,
       cpus: record.cpus,
       memoryMb: record.memoryMb,

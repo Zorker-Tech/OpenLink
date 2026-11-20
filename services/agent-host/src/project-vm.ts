@@ -58,6 +58,12 @@ export interface ProjectVmMachineDriver {
   ensureMachine(name: string, spec: ProjectVmMachineSpec): Promise<void>
   bootstrapToolchain(name: string): Promise<void>
   runInMachine?(name: string, command: string, args?: string[]): Promise<ProjectVmCommandResult>
+  /**
+   * Feed a host file to a guest command's stdin. Provisioning uses this for
+   * image archives so a multi-gigabyte tar never lands on the thin Project
+   * disk before the engine consumes it.
+   */
+  streamToMachine?(name: string, command: string, args: string[], sourcePath: string): Promise<void>
   copyToMachine?(name: string, sourcePath: string, destinationPath: string): Promise<void>
   /** Copy a file out of the guest for backup/migration. */
   copyFromMachine?(name: string, sourcePath: string, destinationPath: string): Promise<void>

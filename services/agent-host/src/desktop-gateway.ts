@@ -133,12 +133,28 @@ export class DesktopGateway {
     clearTimeout(binding.cleanupTimer)
     this.bindings.delete(sessionId)
     for (const client of binding.clients) client.terminate()
+    const hadClients = binding.clients.size > 0
     binding.clients.clear()
+    // Session cleanup does not go through a WebSocket close event. Notify the
+    // owner so a Project-level idle policy can observe the drop to zero.
+    if (hadClients) binding.onClientCountChange?.(0)
   }
 
   hasActiveConnection(sessionId: string): boolean {
     const binding = this.bindings.get(sessionId)
     return Boolean(binding && binding.clients.size > 0)
+  }
+
+  /**
+   * True while any chat in the Project has a live desktop viewer. Several
+   * sessions share one Project desktop, so a Project-level idle decision must
+   * look across every binding instead of one chat's client count.
+   */
+  hasProjectConnections(projectId: string): boolean {
+    for (const binding of this.bindings.values()) {
+      if (binding.projectId === projectId && binding.clients.size > 0) return true
+    }
+    return false
   }
 
   async handleHttp(request: IncomingMessage, response: ServerResponse): Promise<void> {

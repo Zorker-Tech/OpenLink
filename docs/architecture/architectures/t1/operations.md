@@ -114,6 +114,43 @@ project-vms/
 QMP sockets live in a short `tmpdir()` path to stay within `sockaddr_un`
 limits.
 
+## Resource reclaim
+
+The Project disk is a thin qcow2 overlay. Three mechanisms keep it small:
+
+- QEMU attaches the root disk with `discard=unmap`, and the guest mounts it
+  with `discard=async,noatime`. Deleted files return their clusters to the
+  host instead of growing the overlay forever.
+- `fstrim.timer` trims the root filesystem weekly, and
+  `openlink-reclaim.service` trims once on the first boot of a new base so an
+  overlay that predates discard support shrinks without waiting a week.
+- Image archives are streamed into `podman load` over SSH stdin. The Project
+  disk never holds a staging tarball.
+
+Verify inside a Project VM:
+
+```bash
+cat /sys/block/vda/queue/discard_max_bytes   # 0 means discard is not wired
+fstrim -v /
+```
+
+and on the host:
+
+```bash
+qemu-img info --output=json disk.qcow2 | jq '{virtual:."virtual-size",actual:."actual-size"}'
+```
+
+`actual-size` falls after a large file is removed and trimmed; `virtual-size`
+remains the Project capacity. Rebuild the T1 base after changing the guest
+mount options or units.
+
+The native desktop is frozen with the systemd cgroup freezer when no chat in
+the Project has a desktop viewer. `systemctl show -p FreezerState
+openlink-desktop.service` reports `running` or `frozen`; the VM and its
+containers keep running while the desktop is frozen. The Desktop Gateway
+resumes it before proxying the next viewer, so opening the desktop does not
+wait for a GNOME boot.
+
 ## Backup and restore
 
 Back up, per project:

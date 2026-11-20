@@ -50,6 +50,25 @@ test('Ubuntu VM QEMU arguments expose only loopback forwards and a cloud-init se
   assert.ok(args.includes('-pidfile'))
   assert.match(args[args.indexOf('-append') + 1]!, /root=\/dev\/vda/)
   assert.ok(args.some((argument) => argument.includes('file=/state/seed.img')))
+  assert.ok(args.some((argument) => argument.includes('discard=unmap')), 'thin disks must accept guest discard')
+  assert.ok(args.includes('virtio-balloon-pci,free-page-reporting=on'), 'free page reporting bounds host RSS')
+  const withoutBalloon = ubuntuProjectVmQemuArguments({
+    name: 'olp-test',
+    diskPath: '/state/disk.qcow2',
+    cpus: 4,
+    memoryMb: 8_192,
+    sshPort: 52_101,
+    servicePorts: [51_000, 52_000, 53_000, 54_000, 55_000, 56_000],
+    kernelPath: '/state/vmlinuz',
+    initrdPath: '/state/initrd',
+    rootDevice: '/dev/vda',
+    seedImagePath: '/state/seed.img',
+    pidFile: '/state/qemu.pid',
+    qmpPath: '/tmp/qemu.sock',
+    consoleLog: '/state/console.log',
+    freePageReporting: false,
+  })
+  assert.ok(!withoutBalloon.some((argument) => argument.includes('virtio-balloon')))
   assert.throws(() => ubuntuProjectVmQemuArguments({
     name: 'olp-test',
     diskPath: '/state/disk.qcow2',
@@ -149,6 +168,7 @@ test('creates, reattaches, stops and removes a durable Ubuntu Project VM', async
   const initrd = join(root, 'initrd')
   await writeFile(kernel, 'kernel')
   await writeFile(initrd, 'initrd')
+  const streamed: Array<{ file: string; args: string[]; sourcePath: string }> = []
   const driver = new UbuntuQemuProjectVmDriver({
     projectBaseDisk: base,
     kernelPath: kernel,
@@ -157,6 +177,10 @@ test('creates, reattaches, stops and removes a durable Ubuntu Project VM', async
     stateRoot,
     socketRoot: join(root, 'sockets'),
     run,
+    stream: async (file, args, sourcePath) => {
+      streamed.push({ file, args, sourcePath })
+      return { stdout: '', stderr: '' }
+    },
     isProcessRunning: async () => running,
     hostPortAvailable: async () => true,
     startTimeoutMs: 5_000,
@@ -180,6 +204,12 @@ test('creates, reattaches, stops and removes a durable Ubuntu Project VM', async
 
     const result = await driver.runInMachine(name, 'echo', ['hello'])
     assert.equal(result.stdout, 'ok\n')
+    const archive = join(root, 'image.tar')
+    await writeFile(archive, 'archive')
+    await driver.streamToMachine(name, 'sudo', ['-n', 'podman', 'load'], archive)
+    assert.equal(streamed.length, 1)
+    assert.equal(streamed[0]!.sourcePath, archive)
+    assert.match(String(streamed[0]!.args.at(-1)), /podman.*load/)
     await driver.copyToMachine(name, '/tmp/source', '/var/tmp/target')
     await driver.copyFromMachine(name, '/var/tmp/source', '/tmp/target')
     assert.ok(calls.some((call) => call.file.endsWith('scp') && call.args.some((arg) => arg.endsWith('@127.0.0.1:/var/tmp/source'))))

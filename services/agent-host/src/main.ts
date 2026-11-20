@@ -141,6 +141,7 @@ if (projectRuntimeBackend === 'container') {
       sshKeygenCommand: env.OPENLINK_SSH_KEYGEN_COMMAND || 'ssh-keygen',
       mke2fsCommand: env.OPENLINK_MKE2FS_COMMAND || 'mke2fs',
       gpu: releaseArchitecture === 't2' || env.OPENLINK_PROJECT_VM_GPU === '1',
+      freePageReporting: env.OPENLINK_PROJECT_VM_FREE_PAGE_REPORTING !== '0',
       guestUser: env.OPENLINK_PROJECT_VM_GUEST_USER || 'openlink',
       bootstrap: env.OPENLINK_PROJECT_VM_BOOTSTRAP !== '0',
       ...(env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT ? { socketRoot: env.OPENLINK_PROJECT_VM_QMP_SOCKET_ROOT } : {}),
@@ -199,9 +200,15 @@ if (projectRuntimeBackend === 'container') {
     })
   }
 }
+// Eager provisioning boots one full Project VM for every queued Project as
+// soon as the Agent Host starts. Small hosts can opt into lazy provisioning:
+// a Project then boots the first time a chat opens it, which keeps the idle
+// footprint to the Projects actually in use. The on-demand ensure() path is
+// unchanged, so no capability is lost.
+const eagerProjectRuntimeProvisioning = env.OPENLINK_PROJECT_RUNTIME_EAGER !== '0'
 const provisioningQueue = createSupabaseProjectRuntimeProvisioningQueue(env)
 const provisionerId = env.OPENLINK_PROJECT_RUNTIME_PROVISIONER_ID?.trim()
-const projectRuntimeProvisioner = provisioningQueue
+const projectRuntimeProvisioner = provisioningQueue && eagerProjectRuntimeProvisioning
   ? new ProjectRuntimeProvisioner({
       queue: provisioningQueue,
       runtimeManager: projectRuntimeManager,
@@ -228,7 +235,7 @@ const sshRuntimeRouter = new ProjectRuntimeRouter(
       })
     : undefined,
 )
-const sshProjectRuntimeProvisioner = sshProvisioningQueue
+const sshProjectRuntimeProvisioner = sshProvisioningQueue && eagerProjectRuntimeProvisioning
   ? new ProjectRuntimeProvisioner({
       queue: sshProvisioningQueue,
       runtimeManager: sshRuntimeRouter,

@@ -1,6 +1,17 @@
 const GIB = 1024 ** 3
 
 const PROFILE_DEFINITIONS = Object.freeze({
+  // Small single-project hosts. The Project VM keeps the complete desktop and
+  // container surface; the profile lowers the VM's memory cap, disk capacity
+  // and the host floor rather than removing features. Pair it with
+  // OPENLINK_PROJECT_RUNTIME_EAGER=0 so only the Project being opened boots.
+  lite: Object.freeze({
+    name: 'lite',
+    revision: 'lite/v1',
+    components: Object.freeze({ knowledge: false, zero: false }),
+    host: Object.freeze({ logicalCpus: 4, memoryBytes: 8 * GIB, freeBytes: 60 * GIB }),
+    project: Object.freeze({ cpus: 2, memoryMb: 4_096, diskGb: 32 }),
+  }),
   core: Object.freeze({
     name: 'core',
     revision: 'core/v1',
@@ -63,6 +74,10 @@ export function profileEnvironment(profileValue, runtimeValue) {
     OPENLINK_MINIMUM_LOGICAL_CPUS: String(profile.host.logicalCpus),
     OPENLINK_MINIMUM_MEMORY_BYTES: String(profile.host.memoryBytes),
     OPENLINK_MINIMUM_FREE_BYTES: String(profile.host.freeBytes),
+    // The lite profile is defined by "only the Project in use is running".
+    // Operators can still override the generated config to re-enable eager
+    // provisioning when the host has spare memory.
+    ...(profile.name === 'lite' ? { OPENLINK_PROJECT_RUNTIME_EAGER: '0' } : {}),
   })
 }
 

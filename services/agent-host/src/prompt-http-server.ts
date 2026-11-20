@@ -272,6 +272,13 @@ interface SessionEntry {
   paused?: boolean
   userPaused?: boolean
   browserSessionId?: string
+  /** Project that owns this chat's VM and shared desktop. */
+  projectId?: string
+  /**
+   * True when every chat in the Project shares one native desktop inside the
+   * Project VM. Its idle policy is Project-scoped, not session-scoped.
+   */
+  projectDesktop?: boolean
   /**
    * A Bot-owned workload is not an idle chat. Its lifecycle is decided by the
    * Bot control plane, so the Code session reaper must never pause or release
@@ -878,6 +885,21 @@ export async function startPromptHttpServer(
   const desktopPrewarmSessions = new Set<string>()
   const desktopPrewarmMax = config.desktopPrewarmMax ?? 1
   const desktopIdleTimers = new Map<string, NodeJS.Timeout>()
+  const projectDesktopIdleTimers = new Map<string, NodeJS.Timeout>()
+  // Serialize freeze/resume transitions for one Project desktop. Without this
+  // a timer could freeze the desktop immediately after a viewer checked it as
+  // running, leaving the new WebSocket attached to a frozen websockify.
+  const projectDesktopLocks = new Map<string, Promise<unknown>>()
+
+  function withProjectDesktopLock<T>(projectId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = projectDesktopLocks.get(projectId) ?? Promise.resolve()
+    const next = previous.catch(() => undefined).then(operation)
+    projectDesktopLocks.set(projectId, next)
+    void next.finally(() => {
+      if (projectDesktopLocks.get(projectId) === next) projectDesktopLocks.delete(projectId)
+    })
+    return next
+  }
 
   function findSessionEntry(sessionId: string): SessionEntry | undefined {
     for (const entry of sessions.values()) {
@@ -894,9 +916,52 @@ export async function startPromptHttpServer(
     desktopPrewarmSessions.delete(sessionId)
   }
 
+  function projectBusy(projectId: string): boolean {
+    for (const entry of sessions.values()) {
+      if (entry.projectId === projectId && entry.busy) return true
+    }
+    return false
+  }
+
+  /**
+   * Idle policy for the single desktop shared by every chat in a Project.
+   * Freezing keeps the session (windows, browser tabs) in memory and costs a
+   * scheduler wake-up to resume, so the next viewer opens instantly without a
+   * GNOME boot. The VM and its containers keep running for agent work.
+   */
+  function scheduleProjectDesktopIdle(projectId: string | undefined): void {
+    if (!projectId || !config.desktopIdleTtlMs || !config.projectRuntimeManager?.suspendDesktop) return
+    if (desktopGateway.hasProjectConnections(projectId)) return
+    const existing = projectDesktopIdleTimers.get(projectId)
+    if (existing) clearTimeout(existing)
+    const timer = setTimeout(() => {
+      projectDesktopIdleTimers.delete(projectId)
+      void withProjectDesktopLock(projectId, async () => {
+        if (desktopGateway.hasProjectConnections(projectId)) return
+        // An agent may be driving the shared desktop through the in-guest
+        // automation bridge even when no viewer is connected. Never freeze a
+        // Project while any of its chats is working; retry after the task ends.
+        if (projectBusy(projectId)) {
+          scheduleProjectDesktopIdle(projectId)
+          return
+        }
+        await config.projectRuntimeManager!.suspendDesktop!(projectId)
+      }).catch((error) => {
+        console.warn(`OpenLink Project desktop idle suspend failed for ${projectId}: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }, config.desktopIdleTtlMs)
+    timer.unref()
+    projectDesktopIdleTimers.set(projectId, timer)
+  }
+
   function scheduleDesktopIdle(sessionId: string | undefined): void {
     if (!sessionId) return
     if (!config.desktopIdleTtlMs || desktopGateway.hasActiveConnection(sessionId)) return
+    const candidate = findSessionEntry(sessionId)
+    if (candidate?.projectDesktop) {
+      scheduleProjectDesktopIdle(candidate.projectId)
+      return
+    }
     const existing = desktopIdleTimers.get(sessionId)
     if (existing) clearTimeout(existing)
     const timer = setTimeout(() => {
@@ -905,6 +970,7 @@ export async function startPromptHttpServer(
         scheduleDesktopIdle(sessionId)
         return
       }
+      // The session may have been replaced while this timer was pending.
       const entry = findSessionEntry(sessionId)
       if (!entry?.runtime.suspendDesktop) return
       void entry.runtime.suspendDesktop()
@@ -1119,7 +1185,17 @@ export async function startPromptHttpServer(
           { agent: request.agent, accessMode: request.accessMode },
         )
         if (recoveredRuntime) {
-          const entry: SessionEntry = { runtime: recoveredRuntime, sessionId: request.sessionId, lastUsedAt: Date.now(), busy: false, paused: false, userPaused: await readUserPause(request), browserSessionId: autoBrowser?.state.id ?? request.browserSessionId }
+          const entry: SessionEntry = {
+            runtime: recoveredRuntime,
+            sessionId: request.sessionId,
+            lastUsedAt: Date.now(),
+            busy: false,
+            paused: false,
+            userPaused: await readUserPause(request),
+            browserSessionId: autoBrowser?.state.id ?? request.browserSessionId,
+            projectId: request.projectId,
+            projectDesktop: request.projectRuntime?.desktopEndpoint !== undefined,
+          }
           sessions.set(request.key, entry)
           prewarmDesktop(entry)
           return { entry, created: false }
@@ -1145,6 +1221,8 @@ export async function startPromptHttpServer(
           paused: false,
           userPaused: await readUserPause(request),
           browserSessionId: autoBrowser?.state.id ?? request.browserSessionId,
+          projectId: request.projectId,
+          projectDesktop: request.projectRuntime?.desktopEndpoint !== undefined,
         }
         sessions.set(request.key, entry)
         prewarmDesktop(entry)
@@ -1722,13 +1800,44 @@ export async function startPromptHttpServer(
     identity: { ownerId: string; workspaceId: string; projectId: string; botKey: string },
   ): Promise<Record<string, unknown>> {
     if (!entry.runtime.desktopEndpoint) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'This Bot runtime does not provide a desktop session')
+    const projectManager = config.projectRuntimeManager
     const endpoint = await entry.runtime.desktopEndpoint()
-    const binding = desktopGateway.register({
+    const onClientCountChange = (count: number) => {
+      if (count > 0) {
+        const timer = projectDesktopIdleTimers.get(identity.projectId)
+        if (timer) clearTimeout(timer)
+        projectDesktopIdleTimers.delete(identity.projectId)
+        const resume = projectManager?.resumeDesktop
+        if (entry.projectDesktop && projectManager && resume) {
+          void withProjectDesktopLock(identity.projectId, async () => {
+            await resume.call(projectManager, identity.projectId)
+          }).catch((error) => {
+            console.warn(`OpenLink Project desktop resume failed for ${identity.projectId}: ${error instanceof Error ? error.message : String(error)}`)
+          })
+        }
+      } else {
+        scheduleProjectDesktopIdle(identity.projectId)
+      }
+    }
+    const register = () => desktopGateway.register({
       ownerId: identity.ownerId,
       workspaceId: identity.workspaceId,
       projectId: identity.projectId,
       sessionId: identity.botKey,
-    }, endpoint)
+    }, endpoint, undefined, onClientCountChange)
+    const binding = entry.projectDesktop
+      ? await withProjectDesktopLock(identity.projectId, async () => {
+          if (projectManager?.resumeDesktop) {
+            try {
+              await projectManager.resumeDesktop(identity.projectId)
+            } catch (error) {
+              console.warn(`OpenLink Project desktop resume failed for ${identity.projectId}: ${error instanceof Error ? error.message : String(error)}`)
+            }
+          }
+          return register()
+        })
+      : register()
+    if (entry.projectDesktop) scheduleProjectDesktopIdle(identity.projectId)
     const worker = entry.runtime.workerEndpoint === undefined ? undefined : await entry.runtime.workerEndpoint()
     return {
       ok: true,
@@ -1853,30 +1962,70 @@ export async function startPromptHttpServer(
       scheduleDesktopIdle(entry.sessionId)
     }
     entry.lastUsedAt = Date.now()
+    const projectManager = config.projectRuntimeManager
     const endpoint = await entry.runtime.desktopEndpoint()
-    const binding = desktopGateway.register({
-      ownerId: body.userId,
-      workspaceId: body.workspaceId,
-      projectId: body.projectId,
-      sessionId: body.sessionId,
-    }, endpoint, () => {
+    const onActivity = () => {
       for (const [key, candidate] of sessions) {
         if (key.startsWith(`${baseKey}:`)) candidate.lastUsedAt = Date.now()
       }
-    }, (count) => {
+    }
+    const onClientCountChange = (count: number) => {
       const current = findSessionEntry(body.sessionId) ?? entry
       if (count > 0) {
         const timer = desktopIdleTimers.get(body.sessionId)
         if (timer) clearTimeout(timer)
         desktopIdleTimers.delete(body.sessionId)
+        if (current.projectId) {
+          const projectTimer = projectDesktopIdleTimers.get(current.projectId)
+          if (projectTimer) clearTimeout(projectTimer)
+          projectDesktopIdleTimers.delete(current.projectId)
+        }
         current.lastUsedAt = Date.now()
-        void current.runtime.resumeDesktop?.().catch((error) => {
-          console.warn(`OpenLink desktop resume failed for ${body.sessionId}: ${error instanceof Error ? error.message : String(error)}`)
-        })
+        const activeProjectManager = config.projectRuntimeManager
+        const resume = activeProjectManager?.resumeDesktop
+        if (current.projectDesktop && current.projectId && activeProjectManager && resume) {
+          const projectId = current.projectId
+          void withProjectDesktopLock(projectId, async () => {
+            await resume.call(activeProjectManager, projectId)
+          }).catch((error) => {
+            console.warn(`OpenLink Project desktop resume failed for ${projectId}: ${error instanceof Error ? error.message : String(error)}`)
+          })
+        } else {
+          void current.runtime.resumeDesktop?.().catch((error) => {
+            console.warn(`OpenLink desktop resume failed for ${body.sessionId}: ${error instanceof Error ? error.message : String(error)}`)
+          })
+        }
       } else {
         scheduleDesktopIdle(body.sessionId)
       }
-    })
+    }
+    const register = () => desktopGateway.register({
+      ownerId: body.userId,
+      workspaceId: body.workspaceId,
+      projectId: body.projectId,
+      sessionId: body.sessionId,
+    }, endpoint, onActivity, onClientCountChange)
+    // A Project desktop may be frozen from its last idle period. Unfreeze and
+    // register under the Project lock so an idle freeze cannot interleave
+    // between the status check and the viewer's first WebSocket. A frozen
+    // websockify would otherwise hold the viewer on a blank frame.
+    const binding = entry.projectDesktop
+      ? await withProjectDesktopLock(body.projectId, async () => {
+          if (projectManager?.resumeDesktop) {
+            try {
+              await projectManager.resumeDesktop(body.projectId)
+            } catch (error) {
+              console.warn(`OpenLink Project desktop resume failed for ${body.projectId}: ${error instanceof Error ? error.message : String(error)}`)
+            }
+          }
+          return register()
+        })
+      : register()
+    // Arm the Project idle policy as soon as the binding exists. The viewer's
+    // first WebSocket clears it; if the browser never completes the connect,
+    // the desktop still returns to the frozen state after the TTL instead of
+    // staying warm forever.
+    if (entry.projectDesktop) scheduleProjectDesktopIdle(body.projectId)
     json(response, 200, binding)
   }
 
@@ -2466,6 +2615,8 @@ export async function startPromptHttpServer(
       await Promise.allSettled([...cleanupOperations])
     }
     sessions.clear()
+    for (const timer of projectDesktopIdleTimers.values()) clearTimeout(timer)
+    projectDesktopIdleTimers.clear()
     codeServerGateway.close()
     desktopGateway.close()
     browserGateway.close()
