@@ -30,6 +30,8 @@ export interface PiBotRunStepOptions {
   readonly emitGatewayEvent?: (event: unknown) => void;
   /** A group member turn must not drive the member's own DM stream. */
   readonly groupMember?: boolean;
+  /** Hand a specific focus to a sibling Bot's inspiration subscription. */
+  readonly nominateInspiration?: (target: string, task: string) => Promise<{ ok: boolean; reason?: string }>;
   readonly idleTimeoutMs?: number;
   readonly totalTimeoutMs?: number;
   readonly now?: () => number;
@@ -219,6 +221,28 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
           }
           continue;
         }
+        if (type === "nominate-inspiration") {
+          const target = typeof event.target === "string" ? event.target.trim() : "";
+          const task = typeof event.task === "string" ? event.task.trim() : "";
+          if (target && task && options.nominateInspiration !== undefined) {
+            try {
+              const result = await options.nominateInspiration(target, task);
+              if (!result.ok) {
+                emit({
+                  type: "send-message",
+                  message: {
+                    type: "bot-activity",
+                    activity: { label: `Could not hand off to ${target}: ${result.reason ?? "unknown reason"}`, status: "failed", tool: "status" },
+                  },
+                  timestampMs: now(),
+                });
+              }
+            } catch {
+              // A failed hand-off must not fail the current turn.
+            }
+          }
+          continue;
+        }
         if (type === "tool_execution_start") {
           emitToolCall(toolIdOf(event), toolNameOf(event), "pending");
           continue;
@@ -297,22 +321,28 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
     throw new Error(error);
   }
 
-  if (finalText.trim().length > 0) {
-    emit({
-      type: "send-message",
-      message: { type: "text", content: finalText },
-      timestampMs: now(),
-      ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
-    });
-  } else {
-    // A tool-only turn still needs a durable completion marker. It is an
-    // activity card, not an invented assistant reply.
-    emit({
-      type: "send-message",
-      message: { type: "bot-activity", activity: { label: "Finished", status: "done", tool: "status" } },
-      timestampMs: now(),
-      ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
-    });
+  // Inspiration turns are silent by default: only explicit SendMessage calls
+  // reach the user. The final assistant text is context for the Bot, not a
+  // message the user asked for.
+  const suppressFinalMessage = context.runOptions.suppressFinalMessage === true;
+  if (!suppressFinalMessage) {
+    if (finalText.trim().length > 0) {
+      emit({
+        type: "send-message",
+        message: { type: "text", content: finalText },
+        timestampMs: now(),
+        ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
+      });
+    } else {
+      // A tool-only turn still needs a durable completion marker. It is an
+      // activity card, not an invented assistant reply.
+      emit({
+        type: "send-message",
+        message: { type: "bot-activity", activity: { label: "Finished", status: "done", tool: "status" } },
+        timestampMs: now(),
+        ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
+      });
+    }
   }
   if (usage !== undefined) emit({ type: "turn-ended", usage });
   emitGateway({ phase: "ended", ok: true });

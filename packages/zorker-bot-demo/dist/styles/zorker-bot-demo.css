@@ -627,19 +627,23 @@
 .zbd-transcript-inner {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
 }
 
 .zbd-entry {
-  animation: zbd-entry-enter 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  animation: zbd-entry-enter var(--ui-duration-slow, 0.2s) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .zbd-entry + .zbd-entry {
-  margin-top: 12px;
+  margin-top: var(--ui-spacing-3, 12px);
+}
+
+.zbd-entry[data-same-group] {
+  margin-top: var(--ui-spacing-1, 4px);
 }
 
 .zbd-entry:first-child + .zbd-entry {
-  margin-top: 24px;
+  margin-top: var(--ui-spacing-5, 20px);
 }
 
 .zbd-time-separator {
@@ -664,23 +668,31 @@
 
 .zbd-bubble-wrap {
   position: relative;
-  max-width: min(560px, 92%);
+  min-width: 0;
+  max-width: min(467.2px, 100%);
 }
 
 .zbd-bubble-wrap-user {
-  max-width: min(420px, 85%);
+  min-width: 0;
+  max-width: min(467.2px, 100%);
 }
 
 .zbd-bubble {
-  padding: 8px 12px;
-  /* Concentric with the composer's 24px outer radius: 24px - 8px padding
-     leaves 16px for the message surface at every content length. */
-  border-radius: 16px;
-  font-size: 14px;
-  line-height: 20px;
-  letter-spacing: -0.15px;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--ui-spacing-1-75, 7px) var(--ui-spacing-3, 12px);
+  border-radius: var(--design-transcript-prose-bubble-radius, 18px);
+  font-size: var(--ui-font-size-transcript, 15px);
+  line-height: var(--design-transcript-prose-line-height, 22px);
+  letter-spacing: var(--ui-letter-spacing-base, -0.08px);
   white-space: pre-wrap;
 }
+
+.zbd-bubble-user {
+  min-width: 0;
+}
+
 
 .zbd-bubble-agent {
   background: var(--zbd-bubble-agent);
@@ -693,19 +705,41 @@
 }
 
 .zbd-bubble-markdown .zbd-app-markdown {
-  font-size: 14px;
-  line-height: 20px;
-  letter-spacing: -0.15px;
+  font-size: var(--ui-font-size-transcript, 15px);
+  line-height: var(--design-transcript-prose-line-height, 22px);
+  letter-spacing: var(--ui-letter-spacing-base, -0.08px);
 }
 
-/* Markdown defaults are document-sized; inside a message the hierarchy must
-   stay on the 14px message scale with compact block spacing. */
-.zbd-bubble-markdown .zbd-app-markdown :where(h1, h2, h3, h4, h5, h6) {
+/* Markdown defaults are document-sized; inside a message the hierarchy follows
+   the transcript scale with compact block spacing. */
+.zbd-bubble-markdown .zbd-app-markdown :where(h1) {
+  margin: 16px 0 6px !important;
+  font-size: var(--ui-font-size-3xl, 22px) !important;
+  line-height: var(--design-line-height-xxl, 28px) !important;
+  font-weight: var(--ui-font-weight-semibold, 600) !important;
+  letter-spacing: var(--ui-letter-spacing-3xl, -0.26px) !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(h2) {
+  margin: 14px 0 5px !important;
+  font-size: var(--ui-font-size-2xl, 20px) !important;
+  line-height: var(--ui-line-height-3xl, 26px) !important;
+  font-weight: var(--ui-font-weight-semibold, 600) !important;
+  letter-spacing: var(--ui-letter-spacing-3xl, -0.26px) !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(h3) {
   margin: 12px 0 4px !important;
-  font-size: 14px !important;
-  line-height: 20px !important;
-  font-weight: 600 !important;
-  letter-spacing: -0.15px !important;
+  font-size: var(--ui-font-size-xl, 17px) !important;
+  line-height: var(--ui-line-height-xl, 21px) !important;
+  font-weight: var(--ui-font-weight-semibold, 600) !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(h4, h5, h6) {
+  margin: 12px 0 4px !important;
+  font-size: var(--ui-font-size-transcript, 15px) !important;
+  line-height: var(--design-transcript-prose-line-height, 22px) !important;
+  font-weight: var(--ui-font-weight-semibold, 600) !important;
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(h1, h2, h3, h4, h5, h6):first-child {
@@ -713,7 +747,7 @@
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(p, ul, ol, blockquote, pre, table) {
-  margin: 0 0 8px !important;
+  margin: 0 0 var(--ui-spacing-3, 12px) !important;
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(p, ul, ol, blockquote, pre, table):last-child {
@@ -721,26 +755,26 @@
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(ul, ol) {
-  padding-inline-start: 18px !important;
+  padding-inline-start: var(--ui-spacing-5, 20px) !important;
 }
 
 .zbd-bubble-markdown .zbd-app-markdown li {
-  margin: 2px 0 !important;
+  margin: var(--ui-spacing-1, 4px) 0 !important;
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(code) {
-  padding: 1px 4px !important;
-  border-radius: 4px !important;
-  background: var(--zbd-bg-active) !important;
-  font-size: 12px !important;
+  padding: 1px var(--ui-spacing-1, 4px) !important;
+  border-radius: var(--ui-radius-sm, 4px) !important;
+  background: var(--ui-bg-tertiary, var(--zbd-bg-active)) !important;
+  font-size: var(--ui-font-size-sm, 12px) !important;
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(pre) {
-  padding: 8px 10px !important;
-  border-radius: 10px !important;
-  background: var(--zbd-bg-active) !important;
-  font-size: 12px !important;
-  line-height: 18px !important;
+  padding: var(--ui-spacing-2, 8px) var(--ui-spacing-2-5, 10px) !important;
+  border-radius: var(--ui-radius-lg, 8px) !important;
+  background: var(--ui-bg-tertiary, var(--zbd-bg-active)) !important;
+  font-size: var(--ui-font-size-base, 13px) !important;
+  line-height: var(--ui-line-height-base, 18px) !important;
   overflow-x: auto;
 }
 
@@ -751,23 +785,31 @@
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(table) {
-  font-size: 12px !important;
-  line-height: 18px !important;
+  font-size: var(--ui-font-size-base, 13px) !important;
+  line-height: var(--ui-line-height-base, 18px) !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(th, td) {
+  padding: var(--ui-spacing-2, 8px) var(--ui-spacing-3, 12px) !important;
+}
+
+.zbd-bubble-markdown .zbd-app-markdown :where(th) {
+  background: var(--ui-bg-secondary, var(--zbd-bg-active)) !important;
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(hr) {
-  margin: 10px 0 !important;
-  border-color: var(--zbd-border-default) !important;
+  margin: var(--ui-spacing-4, 16px) 0 !important;
+  border-color: var(--ui-border-color, var(--zbd-border-default)) !important;
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(blockquote) {
-  padding-inline-start: 10px !important;
-  border-inline-start: 2px solid var(--zbd-border-default) !important;
+  padding-inline-start: var(--ui-spacing-3, 12px) !important;
+  border-inline-start: 2px solid var(--ui-border-color, var(--zbd-border-default)) !important;
   color: var(--zbd-text-secondary);
 }
 
 .zbd-bubble-markdown .zbd-app-markdown :where(a) {
-  color: var(--zbd-current-accent);
+  color: var(--ui-text-link, var(--zbd-current-accent));
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -793,31 +835,376 @@
   margin-top: -1px;
 }
 
+.zbd-bubble-wrap:has(.zbd-reactions) {
+  padding-bottom: 9px;
+}
+
 .zbd-reactions {
-  position: absolute;
-  top: calc(100% - 6px);
+  position: relative;
+  z-index: 1;
   display: flex;
-  gap: 2px;
+  width: max-content;
+  gap: 3px;
+  margin-top: -6px;
 }
 
 .zbd-reactions-agent {
-  left: 10px;
+  margin-left: 10px;
 }
 
 .zbd-reactions-user {
-  right: 10px;
+  margin-left: auto;
+  margin-right: 10px;
 }
 
 .zbd-reaction {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  gap: 3px;
+  min-width: 22px;
   height: 20px;
+  padding: 0 5px;
+  border: 0.5px solid var(--zbd-border-default);
   border-radius: 999px;
-  background: var(--zbd-bubble-agent);
-  font-size: 11px;
+  background: var(--zbd-bg-elevated);
+  box-shadow: var(--design-shadow-card, 0 1px 2px rgb(0 0 0 / 0.06));
+  color: var(--zbd-text-secondary);
+  font-size: var(--design-font-size-xxs, 11px);
   line-height: 1;
+  cursor: pointer;
+  animation: zbd-reaction-pop var(--ui-reaction-pop-duration, 240ms) cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition:
+    background-color var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    border-color var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    transform var(--ui-duration-instant, 50ms) var(--ease, ease);
+}
+
+.zbd-reaction:hover {
+  background: var(--zbd-bg-hover);
+}
+
+.zbd-reaction:active {
+  transform: scale(var(--ui-press-scale, 0.98));
+}
+
+@keyframes zbd-reaction-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.zbd-reaction[data-leaving] {
+  pointer-events: none;
+  animation: zbd-reaction-exit 200ms ease-in both;
+}
+
+@keyframes zbd-reaction-exit {
+  to {
+    opacity: 0;
+    transform: translateY(3px) scale(0.72);
+  }
+}
+
+.zbd-reaction[aria-pressed='false']:not([data-leaving]) {
+  animation-name: zbd-reaction-release;
+}
+
+@keyframes zbd-reaction-release {
+  from { transform: scale(1.13); }
+  to { transform: scale(1); }
+}
+
+.zbd-reaction-mine {
+  border-color: color-mix(in srgb, var(--zbd-current-accent) 46%, transparent);
+  background: color-mix(in srgb, var(--zbd-current-accent) 10%, var(--zbd-bg-elevated));
+  color: var(--zbd-current-accent);
+}
+
+.zbd-reaction-emoji {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.zbd-reaction-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.zbd-message-actions {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border: 0.5px solid var(--zbd-border-default);
+  border-radius: var(--ui-radius-base, 6px);
+  background: var(--zbd-bg-elevated);
+  box-shadow: var(--design-shadow-inline, 0 4px 14px rgb(0 0 0 / 0.09));
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(-50% + 2px));
+  transition:
+    opacity var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    transform var(--ui-duration-fast, 0.1s) var(--ease, ease);
+}
+
+.zbd-message-actions[data-side='agent'] {
+  left: calc(100% + var(--ui-spacing-1, 4px));
+}
+
+.zbd-message-actions[data-side='user'] {
+  right: calc(100% + var(--ui-spacing-1, 4px));
+}
+
+.zbd-bubble-wrap:hover .zbd-message-actions,
+.zbd-bubble-wrap:focus-within .zbd-message-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%);
+}
+
+.zbd-message-action {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--zbd-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.zbd-message-action:hover {
+  background: var(--zbd-bg-hover);
+  color: var(--zbd-text-primary);
+}
+
+.zbd-message-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (hover: none) {
+  .zbd-message-actions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
+/* The reaction picker is portalled to the body, so it cannot inherit the
+   transcript's scoped tokens. Read the shared semantic tokens instead, with
+   the standalone-demo values as fallback. */
+.zbd-emoji-picker {
+  --zbd-text-primary: var(--design-text-primary, var(--app-foreground, #0a0a0a));
+  --zbd-text-secondary: var(--design-text-secondary, color-mix(in srgb, var(--app-foreground, #0a0a0a) 64%, transparent));
+  --zbd-text-tertiary: var(--design-text-tertiary, color-mix(in srgb, var(--app-foreground, #0a0a0a) 44%, transparent));
+  --zbd-bg-editor: var(--design-bg-pane, var(--app-background, #fcfcfc));
+  --zbd-bg-elevated: var(--design-bg-elevated, var(--app-background, #fcfcfc));
+  --zbd-bg-tertiary: var(--design-bg-secondary, var(--app-surface, #0000000d));
+  --zbd-bg-hover: var(--design-bg-hover, var(--app-hover, #0000000a));
+  --zbd-border-default: var(--design-border-secondary-translucent, var(--app-border, #0000001a));
+  --zbd-current-accent: var(--design-bg-accent-primary, var(--app-brand, #885a07));
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  height: 384px;
+  overflow: hidden;
+  border: 0.5px solid var(--zbd-border-default);
+  border-radius: var(--bot-radius-popover, 14px);
+  background: color-mix(in srgb, var(--zbd-bg-elevated) 97%, transparent);
+  box-shadow:
+    var(--bot-shadow-popover, 0 18px 48px rgb(0 0 0 / 0.18)),
+    0 0 0 0.5px rgb(0 0 0 / 0.05);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  color: var(--zbd-text-primary);
+  font-family: inherit;
+}
+
+.zbd-emoji-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin: 8px 8px 0;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--zbd-bg-tertiary);
+  color: var(--zbd-text-tertiary);
+}
+
+.zbd-emoji-search-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.zbd-emoji-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--zbd-text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.zbd-emoji-search input::placeholder {
+  color: var(--zbd-text-tertiary);
+}
+
+.zbd-emoji-quick {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  padding: 6px 8px 2px;
+}
+
+.zbd-emoji-quick-cell {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.zbd-emoji-quick-cell:hover {
+  background: var(--zbd-bg-hover);
+  transform: scale(1.1);
+}
+
+.zbd-emoji-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 0 8px 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.zbd-emoji-section + .zbd-emoji-section {
+  margin-top: 2px;
+}
+
+.zbd-emoji-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 2px 4px;
+  background: color-mix(in srgb, var(--zbd-bg-elevated) 97%, transparent);
+  color: var(--zbd-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.zbd-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.zbd-emoji-cell {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 7px;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.zbd-emoji-cell:hover {
+  background: var(--zbd-bg-hover);
+  transform: scale(1.1);
+}
+
+.zbd-emoji-empty {
+  margin: 0;
+  padding: 28px 8px;
+  color: var(--zbd-text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.zbd-emoji-footer {
+  display: flex;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-spacing-2, 8px);
+  padding: 0 var(--ui-spacing-2-5, 10px);
+  border-top: 0.5px solid var(--zbd-border-default);
+  color: var(--zbd-text-secondary);
+  font-size: var(--design-font-size-xxs, 11px);
+  line-height: 16px;
+}
+.zbd-emoji-footer-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.zbd-emoji-footer-hint {
+  flex: none;
+  color: var(--zbd-text-tertiary);
+  font-size: var(--design-font-size-2xs, 10px);
+}
+.zbd-emoji-quick-more svg {
+  width: 18px;
+  height: 18px;
+}
+.zbd-emoji-tabs {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  border-top: 0.5px solid var(--zbd-border-default);
+  background: color-mix(in srgb, var(--zbd-bg-elevated) 94%, transparent);
+}
+
+.zbd-emoji-tab {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.55;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.zbd-emoji-tab:hover {
+  background: var(--zbd-bg-hover);
+  opacity: 1;
 }
 
 .zbd-system-line {
@@ -1065,21 +1452,6 @@
   animation: zbd-pending-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
 }
 
-.zbd-composer-fade {
-  position: absolute;
-  right: 0;
-  bottom: 100%;
-  left: 0;
-  height: 48px;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--zbd-bg-elevated) 92%, transparent) 0%,
-    color-mix(in srgb, var(--zbd-bg-elevated) 62%, transparent) 36%,
-    color-mix(in srgb, var(--zbd-bg-elevated) 22%, transparent) 68%,
-    transparent 100%
-  );
-  pointer-events: none;
-}
 
 .zbd-composer {
   display: flex;
@@ -1137,8 +1509,8 @@
   min-height: 0;
   overflow: hidden;
   border-left: 0.5px solid var(--zbd-border-default);
-  background: color-mix(in srgb, var(--zbd-bg-editor) 86%, transparent);
-  animation: zbd-side-pane-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  background: var(--zbd-bg-editor);
+  animation: zbd-side-pane-in var(--ui-duration-slower, 0.3s) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .zbd-side-pane-inner {
@@ -2209,49 +2581,114 @@
 
 .zbd-app-composer-wrap {
   width: 100%;
-  max-width: 936px;
+  max-width: 640px;
   margin-inline: auto;
-  padding: 0 28px 18px;
+  padding: 0 var(--ui-spacing-7, 28px) var(--ui-spacing-4-5, 18px);
 }
 
 .zbd-app-composer {
-  border-radius: 24px;
+  min-height: 44px;
+  padding: var(--ui-spacing-2, 8px) var(--ui-spacing-2-5, 10px);
+  border: 1px solid var(--design-border-secondary-translucent, var(--zbd-border-default));
+  border-radius: 22px;
+  background: var(--zbd-bg-elevated);
+  box-shadow: var(--design-shadow-inline, 0 4px 12px -1px rgb(0 0 0 / 0.06));
   transition:
-    border-color 0.16s,
-    box-shadow 0.16s;
+    border-color var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    box-shadow var(--ui-duration-fast, 0.1s) var(--ease, ease);
 }
 
 .zbd-app-composer:focus-within {
-  border-color: color-mix(in srgb, var(--zbd-text-primary) 18%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zbd-text-primary) 4%, transparent);
+  border-color: var(--design-border-focus-primary, var(--zbd-border-default));
+  box-shadow: var(--design-shadow-inline, 0 4px 12px -1px rgb(0 0 0 / 0.06));
+}
+
+.zbd-app-composer[data-replying] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px 8px;
+  padding: 8px;
+}
+
+.zbd-app-reply-preview {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 4px;
+  padding-inline: 8px 3px;
+  border: 1px solid var(--zbd-border-default);
+  border-radius: 11px;
+  background: var(--zbd-bg-card);
+  font-size: 12px;
+}
+
+.zbd-app-reply-excerpt {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--zbd-text-primary);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zbd-app-reply-cancel {
+  display: grid;
+  width: 24px;
+  height: 25px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--zbd-text-secondary);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.zbd-app-reply-cancel:hover {
+  background: var(--zbd-bg-hover);
+  color: var(--zbd-text-primary);
+}
+
+.zbd-app-composer[data-replying] .zbd-app-composer-field {
+  grid-area: 2 / 1 / 3 / -1;
+  padding-inline: 3px;
+}
+
+.zbd-app-composer[data-replying] .zbd-app-composer-plus-wrap {
+  grid-row: 3;
+}
+
+.zbd-app-composer[data-replying] .zbd-app-composer-actions {
+  grid-area: 3 / 3;
 }
 
 .zbd-app-composer-field {
   display: flex;
   align-items: center;
-  min-height: 28px;
+  min-height: var(--ui-line-height-transcript, 24px);
+  padding: 0;
 }
 
 .zbd-app-composer-input {
   display: block;
   width: 100%;
-  max-height: 112px;
-  padding: 4px 0;
+  max-height: 40vh;
+  padding: 0;
   overflow-y: auto;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--zbd-text-primary);
   font: inherit;
-  font-size: 14px;
-  line-height: 20px;
-  letter-spacing: -0.15px;
+  font-size: var(--ui-font-size-transcript, 15px);
+  line-height: var(--ui-line-height-transcript, 24px);
+  letter-spacing: var(--ui-letter-spacing-base, -0.08px);
   resize: none;
   scrollbar-width: thin;
 }
 
 .zbd-app-composer-input::placeholder {
-  color: var(--zbd-text-tertiary);
+  color: var(--ui-input-placeholder-foreground, var(--zbd-text-tertiary));
 }
 
 .zbd-app-composer-input:disabled {
@@ -2265,9 +2702,11 @@
 }
 
 .zbd-app-composer-plus {
+  width: 26px;
+  height: 26px;
   transition:
-    background-color 0.12s,
-    color 0.12s;
+    background-color var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    color var(--ui-duration-fast, 0.1s) var(--ease, ease);
 }
 
 .zbd-app-composer-plus:hover {
@@ -2279,6 +2718,47 @@
   opacity: 0.38;
 }
 
+.zbd-app-composer-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--ui-spacing-1, 4px);
+}
+
+.zbd-app-composer-mic {
+  width: 26px;
+  height: 26px;
+  color: var(--zbd-text-secondary);
+  transition:
+    background-color var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    color var(--ui-duration-fast, 0.1s) var(--ease, ease);
+}
+
+.zbd-app-composer-mic:hover {
+  background: var(--zbd-bg-hover);
+  color: var(--zbd-text-primary);
+}
+
+.zbd-app-composer-send {
+  width: 26px;
+  height: 26px;
+  background: var(--zbd-bg-tertiary);
+  color: var(--zbd-text-secondary);
+  transition:
+    background-color var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    color var(--ui-duration-fast, 0.1s) var(--ease, ease),
+    transform var(--ui-duration-instant, 50ms) var(--ease, ease);
+}
+
+.zbd-app-composer-send[data-ready] {
+  background: var(--ui-blue-fill, var(--zbd-fill-emphasis));
+  color: var(--design-text-on-primary, #fff);
+}
+
+.zbd-app-composer-send:active {
+  transform: scale(var(--ui-press-scale, 0.98));
+}
+
 .zbd-app-composer-send[data-working] {
   cursor: default;
   opacity: 0.36;
@@ -2286,31 +2766,27 @@
 
 .zbd-app-composer-menu {
   position: absolute;
-  bottom: calc(100% + 10px);
-  left: -6px;
+  bottom: calc(100% + var(--ui-spacing-2-5, 10px));
+  left: calc(var(--ui-spacing-ne-1-5, -6px));
   z-index: 8;
   width: 260px;
-  padding: 6px;
+  padding: var(--ui-spacing-1-5, 6px);
   border: 0.5px solid var(--zbd-border-default);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--zbd-bg-elevated) 94%, transparent);
-  box-shadow:
-    0 18px 42px -14px rgba(0, 0, 0, 0.3),
-    0 0 0 0.5px rgba(0, 0, 0, 0.04);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  backdrop-filter: blur(20px) saturate(160%);
-  animation: zbd-app-pop 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  border-radius: var(--ui-radius-2xl, 14px);
+  background: var(--zbd-bg-elevated);
+  box-shadow: var(--design-shadow-popover, 0 10px 20px -3px rgb(0 0 0 / 0.1));
+  animation: zbd-app-pop var(--ui-duration-normal, 0.15s) cubic-bezier(0.2, 0, 0, 1) both;
 }
 
 .zbd-app-composer-menu button {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--ui-spacing-2-5, 10px);
   width: 100%;
-  padding: 9px 10px;
-  border-radius: 9px;
+  padding: var(--ui-spacing-2-25, 9px) var(--ui-spacing-2-5, 10px);
+  border-radius: var(--ui-radius-base, 6px);
   text-align: left;
-  transition: background-color 0.12s;
+  transition: background-color var(--ui-duration-fast, 0.1s) var(--ease, ease);
 }
 
 .zbd-app-composer-menu button:hover {
@@ -2326,15 +2802,15 @@
 
 .zbd-app-composer-menu strong {
   color: var(--zbd-text-primary);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 18px;
+  font-size: var(--design-font-size-sm, 13px);
+  font-weight: var(--design-font-weight-medium, 500);
+  line-height: var(--design-line-height-sm, 18px);
 }
 
 .zbd-app-composer-menu small {
   color: var(--zbd-text-tertiary);
-  font-size: 11.5px;
-  line-height: 16px;
+  font-size: var(--design-font-size-xxs, 11px);
+  line-height: var(--design-line-height-xxs, 16px);
 }
 
 .zbd-app-menu-glyph {

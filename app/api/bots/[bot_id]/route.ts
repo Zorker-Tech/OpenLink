@@ -57,11 +57,13 @@ export async function PATCH(
     const updated = await updateBot(supabase, user.id, bot, {
       name: body.name,
       description: body.description,
+      instructions: body.instructions,
       avatarShape: body.avatarShape,
       avatarColor: body.avatarColor,
       avatarPngBase64: body.avatarPngBase64,
       model: body.model,
       memberIds: body.memberIds,
+      inspirationBudgetUsd: body.inspirationBudgetUsd,
     })
     return Response.json({ bot: updated }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

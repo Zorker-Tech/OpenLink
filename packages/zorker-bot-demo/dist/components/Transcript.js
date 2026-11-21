@@ -5,9 +5,9 @@ import { ConfirmationCard } from './ConfirmationCard';
 import { MessageBubble } from './MessageBubble';
 import { PendingRow } from './PendingRow';
 import { SystemEntry } from './SystemEntry';
-export function Transcript({ entries, pending, screen, cardStatus, assetBase, transcriptRef, onOpenComputer, onTakeOver, onFinishComputer, }) {
+export function Transcript({ entries, pending, screen, cardStatus, assetBase, transcriptRef, onOpenComputer, onTakeOver, onFinishComputer, onReact, }) {
     const firstMessageId = entries.find((entry) => entry.kind === 'agent-message' || entry.kind === 'user-message')?.id;
-    return (_jsx("div", { className: "zbd-transcript", ref: transcriptRef, children: _jsxs("div", { className: "zbd-transcript-inner", children: [entries.map((entry) => {
+    return (_jsx("div", { className: "zbd-transcript", ref: transcriptRef, children: _jsxs("div", { className: "zbd-transcript-inner", children: [entries.map((entry, index) => {
                     if (entry.kind === 'system') {
                         return (_jsx("div", { className: "zbd-entry", children: _jsx(SystemEntry, { assetBase: assetBase, entry: entry }) }, entry.id));
                     }
@@ -20,6 +20,20 @@ export function Transcript({ entries, pending, screen, cardStatus, assetBase, tr
                     if (entry.kind === 'confirmation') {
                         return (_jsx("div", { className: "zbd-entry", children: _jsx(ConfirmationCard, { entry: entry }) }, entry.id));
                     }
-                    return (_jsx("div", { className: "zbd-entry", children: _jsx(MessageBubble, { assetBase: assetBase, entry: entry, showTimestamp: entry.id === firstMessageId }) }, entry.id));
+                    const previous = entries[index - 1];
+                    const next = entries[index + 1];
+                    const sameAuthor = (left, right) => {
+                        if (left?.kind === 'user-message' && right?.kind === 'user-message')
+                            return true;
+                        if (left?.kind !== 'agent-message' || right?.kind !== 'agent-message')
+                            return false;
+                        return (left.author?.id ?? '') === (right.author?.id ?? '');
+                    };
+                    const joinsPrevious = sameAuthor(previous, entry);
+                    const joinsNext = sameAuthor(entry, next);
+                    const groupPosition = joinsPrevious
+                        ? joinsNext ? 'middle' : 'end'
+                        : joinsNext ? 'start' : 'single';
+                    return (_jsx("div", { className: "zbd-entry", "data-same-group": joinsPrevious ? '' : undefined, children: _jsx(MessageBubble, { assetBase: assetBase, entry: entry, groupPosition: groupPosition, onReact: onReact, showTimestamp: entry.id === firstMessageId }) }, entry.id));
                 }), pending ? (_jsx("div", { className: "zbd-entry", children: _jsx(PendingRow, { assetBase: assetBase, pending: pending }) })) : null] }) }));
 }

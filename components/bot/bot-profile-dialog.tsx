@@ -34,6 +34,8 @@ function friendlyError(code: string): string {
   const messages: Record<string, string> = {
     BOT_NAME_INVALID: 'Use a name between 1 and 64 characters.',
     BOT_DESCRIPTION_INVALID: 'The description is too long.',
+    BOT_INSTRUCTIONS_INVALID: 'Instructions must be 4,000 characters or fewer.',
+    BOT_BUDGET_INVALID: 'The daily budget must be a non-negative amount.',
     BOT_AVATAR_INVALID: 'The selected avatar could not be rendered.',
     BOT_MODEL_REQUIRED: 'Choose an enabled model.',
     BOT_GROUP_MEMBER_REQUIRED: 'A group needs at least one member.',
@@ -59,6 +61,8 @@ export function BotProfileDialog({
 }: BotProfileDialogProps) {
   const [name, setName] = useState(bot.name)
   const [description, setDescription] = useState(bot.description)
+  const [instructions, setInstructions] = useState(bot.instructions)
+  const [budget, setBudget] = useState(bot.inspirationBudgetUsd === null ? '' : String(bot.inspirationBudgetUsd))
   const [shape, setShape] = useState(bot.avatarShape)
   const [color, setColor] = useState(bot.avatarColor)
   const isGroup = bot.kind === 'group'
@@ -109,6 +113,8 @@ export function BotProfileDialog({
         body: JSON.stringify({
           name,
           description,
+          instructions,
+          inspirationBudgetUsd: budget.trim() === '' ? null : Number(budget),
           avatarShape: shape,
           avatarColor: color,
           ...(png ? { avatarPngBase64: png.replace(/^data:image\/png;base64,/, '') } : {}),
@@ -134,7 +140,7 @@ export function BotProfileDialog({
     } finally {
       setSaving(false)
     }
-  }, [bot.id, color, description, isGroup, memberIds, name, onClose, onSaved, saving, selectedModelOption, shape])
+  }, [bot.id, budget, color, description, instructions, isGroup, memberIds, name, onClose, onSaved, saving, selectedModelOption, shape])
 
   const remove = useCallback(async () => {
     if (deleting) return
@@ -226,6 +232,30 @@ export function BotProfileDialog({
                   value={description}
                 />
               </label>
+              <label className="zbd-app-create-field">
+                <span>Instructions</span>
+                <textarea
+                  maxLength={4000}
+                  onChange={(event) => setInstructions(event.target.value)}
+                  placeholder="How this Bot thinks, what it cares about, and how it should act when it explores on its own"
+                  value={instructions}
+                />
+              </label>
+              {!isGroup ? (
+                <label className="zbd-app-create-field">
+                  <span>Daily inspiration budget (USD)</span>
+                  <input
+                    inputMode="decimal"
+                    min={0}
+                    onChange={(event) => setBudget(event.target.value)}
+                    placeholder="Unlimited"
+                    step="0.01"
+                    type="number"
+                    value={budget}
+                  />
+                  <small className="text-[11px] leading-4 text-[var(--app-muted)]">Leave empty for no cap.</small>
+                </label>
+              ) : null}
               {isGroup ? (
                 <div className="zbd-app-create-field">
                   <span>Members</span>

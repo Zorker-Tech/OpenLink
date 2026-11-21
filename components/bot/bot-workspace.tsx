@@ -6,6 +6,7 @@ import {
   END_SCREEN,
   useAutoScroll,
   type PendingBeat,
+  type MessageReaction,
   type TranscriptEntry,
 } from '@zorker/bot-demo'
 import {
@@ -22,6 +23,7 @@ import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
 import { BotWorkspaceView } from '@/components/bot/bot-workspace-view'
 import { BotDetailsPane } from '@/components/bot/bot-details-pane'
+import { BotMessageContextMenu } from '@/components/bot/bot-message-context-menu'
 import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
 import { BotOnboarding } from '@/components/bot/bot-onboarding'
 import { BotProfileDialog } from '@/components/bot/bot-profile-dialog'
@@ -40,12 +42,55 @@ import {
   type BotStreamUpdate,
   type BotTranscriptEntry,
 } from '@/lib/bot-transcript'
-import { useT } from '@/lib/i18n/client'
+import { useLocale } from '@/lib/i18n/client'
 import type { OrganizationSummary } from '@/lib/organizations'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDown } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 const ASSET_BASE = '/zorker-bot-demo'
+
+function replyExcerpt(content: string) {
+  return content.replace(/\s+/g, ' ').trim().slice(0, 320)
+}
+
+function ComposerFloat({ children, transcriptRef }: {
+  children: ReactNode
+  transcriptRef: RefObject<HTMLDivElement | null>
+}) {
+  const floatRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const node = floatRef.current
+    const chat = node?.parentElement
+    if (!node || !chat) return
+
+    let previousHeight = 0
+    const sync = () => {
+      const height = node.offsetHeight
+      if (height === previousHeight) return
+      previousHeight = height
+      const transcript = transcriptRef.current
+      const pinned = transcript && transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32
+      chat.style.setProperty('--bot-composer-float-height', `${height}px`)
+      if (pinned && transcript) transcript.scrollTop = transcript.scrollHeight
+    }
+
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(node, { box: 'border-box' })
+    return () => {
+      observer.disconnect()
+      chat.style.removeProperty('--bot-composer-float-height')
+    }
+  }, [transcriptRef])
+
+  return (
+    <div className="bot-chat-composer-float" ref={floatRef}>
+      {children}
+    </div>
+  )
+}
 
 type BotWorkspaceProps = {
   activeWorkspace: ActiveWorkspaceSummary
@@ -98,6 +143,22 @@ function taskAvatarState(label: string | null | undefined): string {
   if (/browser|chrome|navigate|web|打开|浏览|网页/.test(value)) return 'controlling'
   if (/computer|desktop|屏幕|桌面/.test(value)) return 'computing'
   return 'working'
+}
+
+/**
+ * Mirror Work-host's reaction toggle locally. The server remains authoritative;
+ * this only makes the chip respond on the same frame as the click.
+ */
+function toggleReactionRows(
+  reactions: readonly MessageReaction[] | undefined,
+  emoji: string,
+  by = 'me',
+): MessageReaction[] {
+  const rows = reactions ?? []
+  const exists = rows.some((reaction) => reaction.emoji === emoji && reaction.by === by)
+  return exists
+    ? rows.filter((reaction) => !(reaction.emoji === emoji && reaction.by === by))
+    : [...rows, { emoji, by }]
 }
 
 function renderBotMarkdown(content: string) {
@@ -160,6 +221,7 @@ function friendlyRuntimeError(value: string): string {
     BOT_PROJECTION_RECOVERY_FAILED: 'The Bot project could not be recovered.',
     BOT_GROUP_MEMBERS_UNAVAILABLE: 'No group member computer is available yet.',
     BOT_CONFIRMATION_FAILED: 'The answer could not be delivered to the Bot.',
+    BOT_REACTION_FAILED: 'The reaction could not be saved.',
     BOT_TRANSCRIPT_WRITE_FAILED: 'The Bot transcript could not be saved.',
     BOT_ROUTINE_WRITE_FAILED: 'The routine could not be saved.',
     BOT_ROUTINE_RUN_FAILED: 'The routine could not run.',
@@ -192,7 +254,7 @@ export function BotWorkspace({
   workspaceSlug,
   workHostReady,
 }: BotWorkspaceProps) {
-  const t = useT()
+  const locale = useLocale()
   const transcriptRef = useRef<HTMLDivElement>(null)
   const loadedRef = useRef(new Set<string>())
   const warmingRef = useRef(new Set<string>())
@@ -203,6 +265,7 @@ export function BotWorkspace({
   const [systemLight, setSystemLight] = useState(false)
   const [bots, setBots] = useState<BotSummary[]>(initialBots)
   const [activeId, setActiveId] = useState(initialBot?.id ?? initialBots[0]?.id ?? '')
+  const activeIdRef = useRef(activeId)
   const [details, setDetails] = useState<Record<string, BotDetail>>(
     initialBot ? { [initialBot.id]: initialBot } : {},
   )
@@ -212,6 +275,8 @@ export function BotWorkspace({
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
   const [warmingMap, setWarmingMap] = useState<Record<string, boolean>>({})
   const [draft, setDraft] = useState('')
+  const [replyTarget, setReplyTarget] = useState<{ botId: string; id: string; excerpt: string } | null>(null)
+  const [awayFromLatest, setAwayFromLatest] = useState(false)
   const [sending, setSending] = useState(false)
   const [creating, setCreating] = useState(initialBots.length === 0)
   const [onboardingName, setOnboardingName] = useState('')
@@ -231,6 +296,10 @@ export function BotWorkspace({
   const activeBotStatus = activeBot?.runtimeStatus ?? null
   const activeDetail = activeBot ? details[activeBot.id] ?? null : null
   const activeTranscript = activeDetail?.transcript ?? []
+  const transcriptById = useMemo(() => new Map(
+    activeDetail?.transcript.map((entry) => [entry.id, entry] as const),
+  ), [activeDetail?.transcript])
+  const activeReply = replyTarget?.botId === activeId ? replyTarget : null
   const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
   const activePending = pendingMap[activeId] ?? null
   // The title is the LLM-written task summary, never a raw tool label. Until
@@ -257,6 +326,10 @@ export function BotWorkspace({
   const paletteSessions = rows.map(({ session, name }) => ({ session, name }))
 
   useAutoScroll(transcriptRef, [activeId, activeTranscript.length, activePending, activeConfirmations.length, activeBot?.name])
+
+  useLayoutEffect(() => {
+    activeIdRef.current = activeId
+  }, [activeId])
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('openlink-theme') as ThemeMode | null
@@ -408,6 +481,8 @@ export function BotWorkspace({
     setActiveId(botId)
     setError(null)
     setDraft('')
+    setReplyTarget(null)
+    setAwayFromLatest(false)
     setComputerOpen(false)
     setDetailsOpen(false)
     setProfileOpen(false)
@@ -584,6 +659,38 @@ export function BotWorkspace({
     }
   }, [])
 
+  const reactToBotMessage = useCallback(async (
+    botId: string,
+    entryId: string,
+    emoji: string,
+  ) => {
+    const applyToggle = () => {
+      setDetails((previous) => {
+        const detail = previous[botId]
+        if (!detail) return previous
+        const index = detail.transcript.findIndex((entry) => entry.id === entryId)
+        if (index === -1) return previous
+        const entry = detail.transcript[index]
+        if (entry.kind !== 'agent-message' && entry.kind !== 'user-message') return previous
+        const transcript = [...detail.transcript]
+        transcript[index] = { ...entry, reactions: toggleReactionRows(entry.reactions, emoji) }
+        return { ...previous, [botId]: { ...detail, transcript } }
+      })
+    }
+    applyToggle()
+    const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/reactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entryId, emoji }),
+      cache: 'no-store',
+    }).catch(() => null)
+    if (response?.ok) return
+    // Work-host owns the toggle. If it refused, put the chip back where it was.
+    applyToggle()
+    const payload = await response?.json().catch(() => null) as { error?: { message?: string } } | null
+    setError(friendlyRuntimeError(payload?.error?.message || 'BOT_REACTION_FAILED'))
+  }, [])
+
   // A Bot is not request-scoped. Keep the active Bot's projection open so a
   // routine run, a channel reply, or any other turn started outside this tab
   // lands in the timeline without a manual refresh.
@@ -639,9 +746,11 @@ export function BotWorkspace({
     const content = draft.trim()
     if (!content || sending || activeWarming || !activeBot || !activeDetail?.runtimeReady) return
     const botId = activeBot.id
+    const sentReply = activeReply
     let accepted = false
     setSending(true)
     setDraft('')
+    setReplyTarget(null)
     setError(null)
     const clientNonce = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
@@ -652,7 +761,7 @@ export function BotWorkspace({
       if (!detail) return previous
       return {
         ...previous,
-        [botId]: { ...detail, transcript: [...detail.transcript, optimisticUserEntry(optimisticId, content)] },
+        [botId]: { ...detail, transcript: [...detail.transcript, optimisticUserEntry(optimisticId, content, sentReply?.id)] },
       }
     })
     // A one-line excerpt is only the optimistic placeholder; Work-host
@@ -665,7 +774,7 @@ export function BotWorkspace({
       const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/prompt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, clientNonce }),
+        body: JSON.stringify({ message: content, clientNonce, replyToId: sentReply?.id }),
       })
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
@@ -693,7 +802,10 @@ export function BotWorkspace({
       }
     } catch (sendError) {
       if (!accepted) {
-        setDraft((current) => current || content)
+        if (activeIdRef.current === botId) {
+          setDraft((current) => current || content)
+          setReplyTarget((current) => current ?? sentReply)
+        }
         setDetails((previous) => {
           const detail = previous[botId]
           if (!detail) return previous
@@ -709,7 +821,7 @@ export function BotWorkspace({
       setPendingMap((previous) => ({ ...previous, [botId]: null }))
       void loadBot(botId, true)
     }
-  }, [activeBot, activeDetail?.runtimeReady, activeWarming, applyUpdate, draft, loadBot, sending])
+  }, [activeBot, activeDetail?.runtimeReady, activeReply, activeWarming, applyUpdate, draft, loadBot, sending])
 
   const openPalette = useCallback(() => {
     setComputerOpen(false)
@@ -741,12 +853,31 @@ export function BotWorkspace({
     setComputerOpen(false)
   }, [activeBot])
 
+  const jumpToMessage = useCallback((entryId: string) => {
+    window.requestAnimationFrame(() => {
+      transcriptRef.current?.querySelector(`[data-entry-id="${CSS.escape(entryId)}"]`)
+        ?.scrollIntoView({ block: 'center' })
+    })
+  }, [])
+
+  const showAttachment = useCallback((entryId: string) => {
+    if (window.matchMedia('(max-width: 767px)').matches) setDetailsOpen(false)
+    jumpToMessage(entryId)
+  }, [jumpToMessage])
+
   const useSuggestion = useCallback((suggestion: string) => {
     setDraft(suggestion)
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLTextAreaElement>('.zbd-app-composer-input')?.focus()
     })
   }, [])
+
+  const startReply = useCallback((entryId: string, content: string) => {
+    setReplyTarget({ botId: activeId, id: entryId, excerpt: replyExcerpt(content) })
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLTextAreaElement>('.zbd-app-composer-input')?.focus({ preventScroll: true })
+    })
+  }, [activeId])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -756,7 +887,6 @@ export function BotWorkspace({
       }
       if (event.key === 'Escape') {
         setPaletteOpen(false)
-        setLightboxOpen(false)
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -870,12 +1000,8 @@ export function BotWorkspace({
           onSelect={selectBot}
           onThemeChange={handleThemeChange}
           onToggle={() => {
-            if (mobileOpen) {
-              setMobileOpen(false)
-              setCollapsed(true)
-            } else {
-              setCollapsed((value) => !value)
-            }
+            if (window.matchMedia('(min-width: 768px)').matches) setCollapsed((value) => !value)
+            else setMobileOpen((value) => !value)
           }}
           organizations={organizations}
           personalWorkspace={personalWorkspace}
@@ -886,28 +1012,13 @@ export function BotWorkspace({
 
         <PageTransition className="flex min-w-0 flex-1">
           <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--app-background)]">
-            <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--app-border)] px-3 md:hidden">
-              <button
-                aria-label={t('打开侧边栏')}
-                className="flex size-8 items-center justify-center rounded-md hover:bg-[var(--app-surface)]"
-                onClick={() => {
-                  setCollapsed(false)
-                  setMobileOpen(true)
-                }}
-                type="button"
-              >
-                <span className="flex w-4 flex-col gap-1"><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /><i className="h-px w-4 bg-[var(--app-muted)]" /></span>
-              </button>
-              <span className="truncate text-sm font-medium text-[var(--app-foreground)]">{activeWorkspace.name}</span>
-            </div>
-
             <div className="bot-chat-root zbd-root relative flex min-h-0 min-w-0 flex-1" data-sidebar-collapsed={collapsed ? '' : undefined}>
               <section className="zbd-chat zbd-app-chat flex min-h-0 min-w-0 flex-1 flex-col">
                 <button
                   aria-label={`Open ${activeBot.name} details`}
-                  className="absolute left-1/2 top-3 z-20 flex h-8 w-fit max-w-[min(320px,calc(100%-24px))] min-w-0 -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--app-border)] pl-[3px] pr-[3px] text-[13px] font-medium tracking-[-0.0762px] text-[var(--app-foreground)] shadow-[0_6px_20px_var(--app-shadow)] backdrop-blur-md transition-colors"
+                  aria-expanded={detailsOpen}
+                  className="bot-chat-profile-trigger"
                   onClick={toggleDetails}
-                  style={{ background: 'color-mix(in srgb, var(--app-elevated) 82%, transparent)' }}
                   type="button"
                 >
                   <AgentAvatar
@@ -915,7 +1026,7 @@ export function BotWorkspace({
                     color={activeBot.avatarColor}
                     renderer="complete"
                     shape={activeBot.avatarShape}
-                    size={26}
+                    size={32}
                     state="idle"
                     theme={activeTheme}
                   />
@@ -950,13 +1061,40 @@ export function BotWorkspace({
                       cardStatus="done"
                       displayName={activeBot.name}
                       entries={activeTranscript as TranscriptEntry[]}
+                      getReplyAction={(entry) => entry.id.startsWith(OPTIMISTIC_USER_ENTRY_PREFIX)
+                        ? undefined : () => startReply(entry.id, entry.content)}
                       key={activeId}
+                      locale={locale}
                       onFinishComputer={() => undefined}
                       onOpenComputer={openComputer}
+                      onReact={(entry, emoji) => {
+                        void reactToBotMessage(activeId, entry.id, emoji)
+                      }}
+                      onScroll={({ currentTarget: transcript }) => {
+                        setAwayFromLatest(transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight > 100)
+                      }}
                       onSuggestion={useSuggestion}
                       onTakeOver={openComputer}
                       pending={null}
                       renderMessage={renderBotMarkdown}
+                      renderMessageMenu={(bubble, actions) => {
+                        const message = transcriptById.get(actions.entry.id)
+                        const target = message?.replyTo ? transcriptById.get(message.replyTo) : undefined
+                        const excerpt = target?.kind === 'agent-message' || target?.kind === 'user-message'
+                          ? replyExcerpt(target.content) : 'Earlier message'
+                        return (
+                          <BotMessageContextMenu
+                            actions={actions}
+                            bubble={bubble}
+                            replyReference={message?.replyTo ? {
+                              excerpt,
+                              onJump: target ? () => jumpToMessage(target.id) : undefined,
+                            } : undefined}
+                            requestId={message?.requestId}
+                          />
+                        )
+                      }}
+                      replyTargetId={activeReply?.id}
                       status={activePending ? (
                         <>
                           <span className="relative flex size-7 shrink-0 items-center justify-center">
@@ -984,32 +1122,58 @@ export function BotWorkspace({
                     />
                   </>
                 )}
-                <ChatConfirmationDock
-                  onResolve={(id, approved, value) => resolveBotConfirmation(activeBot.id, id, approved, value)}
-                  requests={activeConfirmations}
-                />
-                <AppComposer
-                  disabled={sending || activeWarming || !activeDetail?.runtimeReady}
-                  displayName={activeBot.name}
-                  onChange={setDraft}
-                  onCreateRoutine={() => setRoutineEditor({ routine: null })}
-                  onSend={() => {
-                    void sendMessage()
-                  }}
-                  showRoutine
-                  value={draft}
-                />
+                <ComposerFloat transcriptRef={transcriptRef}>
+                  {awayFromLatest ? (
+                    <button
+                      aria-label="Jump to latest message"
+                      className="bot-jump-latest"
+                      onClick={() => {
+                        const transcript = transcriptRef.current
+                        if (!transcript) return
+                        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                        transcript.scrollTo({ top: transcript.scrollHeight, behavior: reducedMotion ? 'auto' : 'smooth' })
+                      }}
+                      type="button"
+                    >
+                      <ArrowDown aria-hidden="true" size={16} />
+                    </button>
+                  ) : null}
+                  <ChatConfirmationDock
+                    onResolve={(id, approved, value) => resolveBotConfirmation(activeBot.id, id, approved, value)}
+                    requests={activeConfirmations}
+                  />
+                  <AppComposer
+                    disabled={sending || activeWarming || !activeDetail?.runtimeReady}
+                    displayName={activeBot.name}
+                    onChange={setDraft}
+                    onCreateRoutine={() => setRoutineEditor({ routine: null })}
+                    onSend={() => {
+                      void sendMessage()
+                    }}
+                    reply={activeReply ? {
+                      excerpt: activeReply.excerpt,
+                      onCancel: () => setReplyTarget(null),
+                      onJump: () => jumpToMessage(activeReply.id),
+                    } : undefined}
+                    replyPlaceholder={locale.startsWith('zh') ? '回复…' : 'Reply…'}
+                    showRoutine
+                    value={draft}
+                  />
+                </ComposerFloat>
               </section>
 
               {detailsOpen ? (
                 <BotDetailsPane
                   bot={activeBot}
+                  key={activeBot.id}
                   theme={activeTheme}
                   routines={activeDetail?.routines ?? []}
+                  transcript={activeTranscript}
                   onClose={() => setDetailsOpen(false)}
                   onEditProfile={() => setProfileOpen(true)}
                   onEditRoutine={(routine) => setRoutineEditor({ routine })}
                   onOpenComputer={openComputer}
+                  onShowAttachment={showAttachment}
                   onToggleRoutine={(routine, isEnabled) => { void toggleRoutine(routine, isEnabled) }}
                 />
               ) : computerOpen && activeBot.kind !== 'group' ? (

@@ -150,7 +150,17 @@ export class SlateAgentSessionStore {
   agentDirExists(agentId: string): boolean { return existsSync(this.getAgentDir(agentId)); }
   writeAgentProfileFile(agentId: string, profile: Partial<SlateAgentProfile> & { name: string; description: string }): void {
     const path = getSlateProfilePath(this.getAgentDir(agentId)), current = readSlateProfileFile(path), name = resolveProfileName(profile.name.trim(), current);
-    writeSlateProfileFile(path, { name, description: profile.description.trim(), title: profile.title?.trim() ?? current?.title ?? "", avatarShape: profile.avatarShape?.trim() ?? current?.avatarShape ?? "", avatarColor: profile.avatarColor?.trim() ?? current?.avatarColor ?? "" });
+    writeSlateProfileFile(path, {
+      name,
+      description: profile.description.trim(),
+      title: profile.title?.trim() ?? current?.title ?? "",
+      avatarShape: profile.avatarShape?.trim() ?? current?.avatarShape ?? "",
+      avatarColor: profile.avatarColor?.trim() ?? current?.avatarColor ?? "",
+      instructions: profile.instructions?.trim() ?? current?.instructions ?? "",
+      inspirationBudgetUsd: profile.inspirationBudgetUsd === undefined
+        ? current?.inspirationBudgetUsd ?? null
+        : profile.inspirationBudgetUsd,
+    });
   }
   async withAgentDb<Result>(agentId: string, operation: (db: SlateAgentDb, dbPath: string) => Result | Promise<Result>): Promise<Result> { const dbPath = getAgentDbPath(this.rootDir, agentId), db = new SlateAgentDb(dbPath); try { return await operation(db, dbPath); } finally { db.close(); } }
 

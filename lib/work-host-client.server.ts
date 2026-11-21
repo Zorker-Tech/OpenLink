@@ -196,6 +196,8 @@ export async function updateBotAgent(input: {
   id: string
   name: string
   description: string
+  instructions?: string
+  inspirationBudgetUsd?: number | null
   avatarShape?: string
   avatarColor?: string
 }): Promise<WorkHostAgent | null> {
@@ -204,6 +206,8 @@ export async function updateBotAgent(input: {
     profile: {
       name: input.name,
       description: input.description,
+      ...(input.instructions === undefined ? {} : { instructions: input.instructions }),
+      ...(input.inspirationBudgetUsd === undefined ? {} : { inspirationBudgetUsd: input.inspirationBudgetUsd }),
       ...(input.avatarShape === undefined ? {} : { avatarShape: input.avatarShape }),
       ...(input.avatarColor === undefined ? {} : { avatarColor: input.avatarColor }),
     },
@@ -232,6 +236,40 @@ export async function getBotAgentTranscript(agentId: string): Promise<Record<str
     }
   }
   throw lastError
+}
+
+export interface WorkHostMemory {
+  id: string
+  content: string
+  createdAt: number
+  kind: 'profile' | 'log'
+}
+
+export async function getBotAgentMemories(agentId: string): Promise<WorkHostMemory[]> {
+  const result = await request<unknown>('getAgentMemories', { id: agentId }, { timeoutMs: 20_000 })
+  return Array.isArray(result)
+    ? result.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+        const record = entry as Record<string, unknown>
+        const id = typeof record.id === 'string' ? record.id : ''
+        const content = typeof record.content === 'string' ? record.content : ''
+        if (!id || !content) return []
+        return [{
+          id,
+          content,
+          createdAt: typeof record.createdAt === 'number' && Number.isFinite(record.createdAt) ? record.createdAt : 0,
+          kind: record.kind === 'profile' ? 'profile' as const : 'log' as const,
+        }]
+      })
+    : []
+}
+
+export async function deleteBotAgentMemory(agentId: string, memoryId: string): Promise<void> {
+  await request('deleteAgentMemory', { id: agentId, memoryId }, { timeoutMs: 20_000 })
+}
+
+export async function clearBotAgentMemories(agentId: string): Promise<void> {
+  await request('clearAgentMemories', { id: agentId }, { timeoutMs: 20_000 })
 }
 
 export async function getBotAgentAutomations(agentId: string): Promise<WorkHostAutomation[]> {
@@ -287,6 +325,98 @@ export async function runBotAgentAutomationNow(
   automationId: string,
 ): Promise<void> {
   await request('runAgentAutomationNow', { id: agentId, automationId }, { timeoutMs: 120_000 })
+}
+
+export interface WorkHostInspirationCadence {
+  meanIntervalMs: number
+  minIntervalMs: number
+  maxIntervalMs: number
+  dailyCap: number
+  burstChance: number
+}
+
+export interface WorkHostInspirationConfig {
+  enabled: boolean
+  cadence: WorkHostInspirationCadence
+  quietHours: { startHour: number; endHour: number }
+  budgetUsdPerDay: number | null
+  lenses: string[]
+  topics: string[]
+}
+
+export interface WorkHostInspirationRecord {
+  id: string
+  createdAt: number
+  trigger: 'stochastic' | 'manual' | 'nomination' | 'event'
+  lens: string
+  candidate: {
+    title: string
+    whyNow: string
+    firstAction: string
+    expectedValue: number
+    estimatedCost: number
+    novelty: number
+    lens: string
+  } | null
+  decision: 'woke' | 'skipped' | 'duplicate' | 'budget' | 'quiet' | 'cap' | 'unavailable' | 'error'
+  detail?: string
+  outcome?: 'acted' | 'silent' | 'failed'
+  messageCount: number
+  costUsd: number
+  tokens: number
+  feedback?: 'useful' | 'not-useful' | 'dismissed'
+}
+
+export interface WorkHostInspirationState {
+  version: number
+  agentId: string
+  config: WorkHostInspirationConfig
+  nextFireAt: number | null
+  lastFiredAt: number | null
+  ledger: WorkHostInspirationRecord[]
+  nominations: Array<{ id: string; fromAgentId: string; task: string; createdAt: number }>
+  feedback: { useful: number; notUseful: number; dismissed: number }
+  usage: { dayKey: string; usd: number; tokens: number; runs: number }
+}
+
+export async function getBotInspiration(agentId: string): Promise<WorkHostInspirationState | null> {
+  const result = await request<WorkHostInspirationState | null>('getInspirationState', { id: agentId }, { timeoutMs: 20_000 })
+  return result && typeof result === 'object' ? result : null
+}
+
+export async function setBotInspiration(
+  agentId: string,
+  config: Partial<WorkHostInspirationConfig>,
+): Promise<WorkHostInspirationState | null> {
+  const result = await request<WorkHostInspirationState | null>('setInspirationConfig', { id: agentId, config }, { timeoutMs: 20_000 })
+  return result && typeof result === 'object' ? result : null
+}
+
+export async function runBotInspirationNow(agentId: string): Promise<{
+  decision?: string
+  detail?: string
+  outcome?: string
+  recordId?: string
+} | null> {
+  const result = await request<Record<string, unknown> | null>('runInspirationNow', { id: agentId }, { timeoutMs: 180_000 })
+  return result && typeof result === 'object' ? result as { decision?: string; detail?: string; outcome?: string; recordId?: string } : null
+}
+
+export async function recordBotInspirationFeedback(
+  agentId: string,
+  recordId: string,
+  feedback: 'useful' | 'not-useful' | 'dismissed',
+): Promise<WorkHostInspirationState | null> {
+  const result = await request<WorkHostInspirationState | null>('recordInspirationFeedback', { id: agentId, recordId, feedback }, { timeoutMs: 20_000 })
+  return result && typeof result === 'object' ? result : null
+}
+
+export async function nominateBotInspiration(
+  fromAgentId: string,
+  targetAgentId: string,
+  task: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  return await request<{ ok: boolean; reason?: string }>('nominateInspiration', { fromAgentId, targetAgentId, task }, { timeoutMs: 20_000 })
 }
 
 export async function appendBotAgentTranscriptEntries(
@@ -382,6 +512,19 @@ export async function respondBotExtensionUi(input: {
 }
 
 /**
+ * Toggle one emoji reaction on a durable Bot transcript entry. Work-host owns
+ * the toggle: sending the same emoji twice removes it, and the host resumes the
+ * Bot only when the reaction was newly added to a Bot message.
+ */
+export async function reactBotMessage(input: {
+  agentId: string
+  entryId: string
+  emoji: string
+}): Promise<void> {
+  await request('reactToMessage', input, { timeoutMs: 15_000 })
+}
+
+/**
  * Accept a Bot turn and stream its Work-host frames. The response is NDJSON;
  * the caller owns the reader. A client disconnect stops the projection, not
  * the durable turn.
@@ -390,6 +533,7 @@ export async function sendBotPromptStream(input: {
   agentId: string
   prompt: string
   clientNonce?: string
+  replyToId?: string
 }): Promise<Response> {
   const config = requiredConfig()
   let response: Response

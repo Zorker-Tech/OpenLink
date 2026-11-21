@@ -54,9 +54,11 @@ export async function POST(
 
   // Validate the turn before touching the runtime: an invalid request must
   // not warm or provision a Bot sandbox.
-  let body: { message?: unknown; clientNonce?: unknown }
+  let body: { message?: unknown; clientNonce?: unknown; replyToId?: unknown }
   try {
-    body = await request.json() as { message?: unknown; clientNonce?: unknown }
+    const payload: unknown = await request.json()
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return errorResponse('INVALID_BODY', 400)
+    body = payload
   } catch {
     return errorResponse('INVALID_BODY', 400)
   }
@@ -65,6 +67,10 @@ export async function POST(
   const clientNonce = typeof body.clientNonce === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.clientNonce)
     ? body.clientNonce
     : undefined
+  const replyToId = typeof body.replyToId === 'string' ? body.replyToId.trim() : ''
+  if (body.replyToId !== undefined && !/^[^\u0000-\u001f\u007f]{1,256}$/.test(replyToId)) {
+    return errorResponse('INVALID_REPLY_TARGET', 400)
+  }
 
   let bot: NonNullable<Awaited<ReturnType<typeof getBot>>>
   try {
@@ -110,7 +116,7 @@ export async function POST(
 
   let upstream: Response
   try {
-    upstream = await streamBotPrompt(bot, message, clientNonce)
+    upstream = await streamBotPrompt(bot, message, clientNonce, replyToId || undefined)
   } catch (error) {
     if (error instanceof BotRuntimeError) return errorResponse(error.code, error.status, error.retryable)
     console.error('[openlink-bots] Bot turn acceptance failed', error)

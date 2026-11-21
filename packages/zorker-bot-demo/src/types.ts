@@ -40,13 +40,16 @@ export type ComputerEntry = {
   timestampMs?: number
 }
 
+/** One reaction on a message: the emoji and who left it. */
+export type MessageReaction = { emoji: string; by: string }
+
 export type AgentMessageEntry = {
   kind: 'agent-message'
   id: string
   content: string
   timestampMs: number
   author?: { id: string; name: string }
-  reactions?: string[]
+  reactions?: MessageReaction[]
 }
 
 export type UserMessageEntry = {
@@ -54,7 +57,7 @@ export type UserMessageEntry = {
   id: string
   content: string
   timestampMs: number
-  reactions?: string[]
+  reactions?: MessageReaction[]
 }
 
 export type SystemEntryData = {

@@ -10,6 +10,9 @@ export type TranscriptProps = {
     onOpenComputer: () => void;
     onTakeOver: () => void;
     onFinishComputer: () => void;
+    onReact?: (entry: Extract<TranscriptEntry, {
+        kind: 'agent-message' | 'user-message';
+    }>, emoji: string) => void;
 };
-export declare function Transcript({ entries, pending, screen, cardStatus, assetBase, transcriptRef, onOpenComputer, onTakeOver, onFinishComputer, }: TranscriptProps): import("react").JSX.Element;
+export declare function Transcript({ entries, pending, screen, cardStatus, assetBase, transcriptRef, onOpenComputer, onTakeOver, onFinishComputer, onReact, }: TranscriptProps): import("react").JSX.Element;
 //# sourceMappingURL=Transcript.d.ts.map

@@ -284,7 +284,7 @@ export function ZorkerBotApp({ assetBase = '/zorker-bot-demo', autoPlayIntro = t
     }, [openPalette]);
     const sidebarWidth = computerOpen ? 68 : 280;
     const showBack = Boolean(backTarget) || activeSession.id.startsWith('new-agent');
-    return (_jsx("div", { className: `zbd-root zbd-app-root ${className ?? ''}`, "data-active-session": activeId, "data-theme": "cursor-light", ref: rootRef, children: _jsxs("div", { className: "zbd-shell zbd-app-shell", children: [_jsx(TrafficLights, {}), _jsx("div", { className: "zbd-sidebar-slot zbd-app-sidebar-slot", style: {
+    return (_jsx("div", { className: `zbd-root zbd-app-root ${className ?? ''}`, "data-active-session": activeId, "data-theme": "bot-light", ref: rootRef, children: _jsxs("div", { className: "zbd-shell zbd-app-shell", children: [_jsx(TrafficLights, {}), _jsx("div", { className: "zbd-sidebar-slot zbd-app-sidebar-slot", style: {
                         width: sidebarWidth,
                         transition: 'width .45s cubic-bezier(.22,1,.36,1)',
                     }, children: _jsx(AppSidebar, { activeId: activeId, assetBase: assetBase, collapsed: computerOpen, onNewAgent: openPalette, onSearch: setSearch, onSearchFocus: () => {

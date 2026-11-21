@@ -25,7 +25,7 @@ export function ZorkerBotWindow({ demo, rootSize, assetBase }: ZorkerBotWindowPr
   const activeAgent: Agent = { ...demo.activeAgent, name: demo.agentName }
 
   return (
-    <div className="zbd-root" data-theme="cursor-light">
+    <div className="zbd-root" data-theme="bot-light">
       <div className="zbd-shell">
         <TrafficLights />
         <div

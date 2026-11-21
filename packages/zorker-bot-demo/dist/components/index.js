@@ -6,6 +6,7 @@ export * from './ComputerBadge';
 export * from './ComputerCard';
 export * from './ConfirmationCard';
 export * from './DemoCursor';
+export * from './EmojiPicker';
 export * from './ZorkerBotWindow';
 export * from './MessageBubble';
 export * from './PendingRow';

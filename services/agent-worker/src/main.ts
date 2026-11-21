@@ -576,6 +576,99 @@ class SdkAgentRuntime {
     }
   }
 
+  /**
+   * A generic, tool-free completion for the host's inspiration engine. The
+   * caller owns the prompt and parses the structured result; the worker only
+   * supplies the Bot's model, credentials and usage accounting.
+   */
+  async completeForInspiration(input: {
+    systemPrompt: string
+    prompt: string
+    maxTokens?: number
+    temperature?: number
+  }): Promise<{ text: string; usage?: Record<string, number>; costUsd: number }> {
+    const setup = await this.modelSetup()
+    const model = setup.selected.model
+    if (!model) throw new Error('MODEL_NOT_RESOLVED')
+    const message = await setup.runtime.completeSimple(model, {
+      systemPrompt: input.systemPrompt,
+      messages: [{
+        role: 'user',
+        content: [{ type: 'text', text: input.prompt.slice(0, 24_000) }],
+        timestamp: Date.now(),
+      }],
+    }, {
+      maxTokens: input.maxTokens ?? 1_024,
+      temperature: input.temperature ?? 0.9,
+      timeoutMs: 60_000,
+      maxRetries: 0,
+    })
+    if (message.stopReason === 'error' || message.stopReason === 'aborted') {
+      throw new Error(message.errorMessage ?? `Inspiration completion ended with ${message.stopReason}`)
+    }
+    const text = message.content
+      .filter((part) => part.type === 'text')
+      .map((part) => part.text)
+      .join('')
+      .trim()
+    const usage: Record<string, number> = {
+      input: message.usage.input,
+      output: message.usage.output,
+      cacheRead: message.usage.cacheRead,
+      cacheWrite: message.usage.cacheWrite,
+      totalTokens: message.usage.totalTokens,
+    }
+    if (typeof message.usage.reasoning === 'number') usage.reasoning = message.usage.reasoning
+    const costUsd = typeof message.usage.cost?.total === 'number' && Number.isFinite(message.usage.cost.total)
+      ? message.usage.cost.total
+      : 0
+    return { text, usage, costUsd }
+  }
+
+  /** A compact, read-only snapshot of the Bot's workspace for divergence. */
+  async inspirationContext(): Promise<Record<string, unknown>> {
+    const root = this.worker.workspaceRoot
+    const run = async (command: string, args: string[]): Promise<string> => {
+      try {
+        const { stdout } = await execFileAsync(command, args, {
+          cwd: root,
+          timeout: 8_000,
+          maxBuffer: 256 * 1024,
+        })
+        return stdout.trim()
+      } catch {
+        return ''
+      }
+    }
+    const [gitLog, gitStatus, topLevel, recentFiles, packageJson, readme] = await Promise.all([
+      run('git', ['log', '-5', '--oneline']),
+      run('git', ['status', '--short']),
+      run('ls', ['-1A']),
+      run('find', ['.', '-maxdepth', '3', '-type', 'f', '-not', '-path', './node_modules/*', '-not', '-path', './.git/*', '-not', '-path', './.openlink/*', '-printf', '%T@ %p\n']),
+      run('sh', ['-lc', 'test -f package.json && head -c 8000 package.json']),
+      run('sh', ['-lc', 'test -f README.md && head -c 3000 README.md']),
+    ])
+    const recent = recentFiles
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const space = line.indexOf(' ')
+        return space > 0 ? line.slice(space + 1) : line
+      })
+      .slice(0, 30)
+    return {
+      workspaceRoot: root,
+      gitLog: gitLog.slice(0, 4000),
+      gitStatus: gitStatus.slice(0, 4000),
+      topLevel: topLevel.split('\n').filter(Boolean).slice(0, 60),
+      recentFiles: recent,
+      packageJson: packageJson.slice(0, 8000),
+      readme: readme.slice(0, 3000),
+      capturedAt: Date.now(),
+    }
+  }
+
   async resources(request?: { scope?: 'command' | 'mention' | 'skill' | 'title'; command?: string; query?: string }) {
     if (request?.scope === 'title') {
       // A title is a metadata request, not a turn: it must never enter the
@@ -985,6 +1078,12 @@ class SdkAgentRuntime {
         timestampMs: Date.now(),
       })
     }
+    const nominateBot = (target: string, task: string): boolean => {
+      const name = target.trim().slice(0, 200)
+      const focus = task.trim().slice(0, 2000)
+      if (!name || !focus) return false
+      return this.writeFrame({ type: 'nominate-inspiration', target: name, task: focus })
+    }
     const { session } = await createAgentSession({
       cwd: this.worker.workspaceRoot,
       model: selected.model,
@@ -1004,6 +1103,20 @@ class SdkAgentRuntime {
           async execute(_id, params) {
             if (!sendToUser(params.message)) throw new Error('No active chat is available to send this message')
             return { content: [{ type: 'text' as const, text: 'Message delivered.' }], details: { delivered: true } }
+          },
+        }),
+        defineTool({
+          name: 'NominateBot',
+          label: 'Nominate another Bot',
+          description: 'Ask a sibling Bot to take a specific inspiration focus on its next proactive turn. Use the sibling Bot name or id. The nomination only queues if that Bot has inspiration enabled.',
+          promptSnippet: 'Ask a sibling Bot to explore a specific focus.',
+          parameters: Type.Object({
+            target: Type.String({ description: 'The sibling Bot name or id.' }),
+            task: Type.String({ description: 'The focus to hand over, in one or two sentences.' }),
+          }),
+          async execute(_id, params) {
+            if (!nominateBot(params.target, params.task)) throw new Error('No active chat is available to nominate a Bot')
+            return { content: [{ type: 'text' as const, text: 'Nomination queued.' }], details: { queued: true } }
           },
         }),
       ],
@@ -1261,6 +1374,31 @@ const server = createServer((request, response) => {
       const message = await readMessage(request)
       await ensureRuntimeReady()
       const result = await runtime.resources({ scope: 'title', query: message })
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify(result))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/inspiration/context') {
+      if (!(runtime instanceof SdkAgentRuntime)) throw new Error('Inspiration requires the Pi runtime')
+      await ensureRuntimeReady()
+      const result = await runtime.inspirationContext()
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify(result))
+      return
+    }
+    if (request.method === 'POST' && url.pathname === '/v1/inspiration/complete') {
+      if (!(runtime instanceof SdkAgentRuntime)) throw new Error('Inspiration requires the Pi runtime')
+      const body = await readRequestJson(request, 256 * 1024) as Record<string, unknown> | null
+      const systemPrompt = typeof body?.systemPrompt === 'string' ? body.systemPrompt.trim() : ''
+      const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : ''
+      const maxTokens = body?.maxTokens === undefined ? 1_024 : Number(body.maxTokens)
+      const temperature = body?.temperature === undefined ? 0.9 : Number(body.temperature)
+      if (!systemPrompt || systemPrompt.length > 16_000) throw new Error('systemPrompt is invalid')
+      if (!prompt || prompt.length > 24_000) throw new Error('prompt is invalid')
+      if (!Number.isSafeInteger(maxTokens) || maxTokens < 64 || maxTokens > 4_096) throw new Error('maxTokens is invalid')
+      if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw new Error('temperature is invalid')
+      await ensureRuntimeReady()
+      const result = await runtime.completeForInspiration({ systemPrompt, prompt, maxTokens, temperature })
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       response.end(JSON.stringify(result))
       return

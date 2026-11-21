@@ -17,6 +17,8 @@ export type AppComposerProps = {
   disabled: boolean
   showRoutine?: boolean
   status?: ReactNode
+  reply?: { excerpt: string; onJump: () => void; onCancel: () => void }
+  replyPlaceholder?: string
   value: string
   onChange: (value: string) => void
   onSend: () => void
@@ -28,6 +30,8 @@ export function AppComposer({
   disabled,
   showRoutine = true,
   status,
+  reply,
+  replyPlaceholder = 'Reply…',
   value,
   onChange,
   onSend,
@@ -37,13 +41,18 @@ export function AppComposer({
   const menuRef = useRef<HTMLDivElement>(null)
   const fieldRef = useRef<HTMLTextAreaElement>(null)
   const hasText = value.trim().length > 0
+  const isReplying = reply !== undefined
+  const placeholder = isReplying ? replyPlaceholder : `Message ${displayName}`
 
   useEffect(() => {
     const node = fieldRef.current
     if (!node) return
     node.style.height = '0px'
-    node.style.height = `${Math.min(112, node.scrollHeight)}px`
-  }, [value])
+    // The composer grows with the content but never takes more than 40% of
+    // the viewport; the transcript keeps the remaining space.
+    const maxHeight = Math.max(24, Math.round(window.innerHeight * 0.4))
+    node.style.height = `${Math.min(maxHeight, node.scrollHeight)}px`
+  }, [isReplying, value])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -62,11 +71,14 @@ export function AppComposer({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       submit()
     }
-    if (event.key === 'Escape') setMenuOpen(false)
+    if (event.key === 'Escape') {
+      if (menuOpen) setMenuOpen(false)
+      else reply?.onCancel()
+    }
   }
 
   const addContext = () => {
@@ -83,9 +95,26 @@ export function AppComposer({
 
   return (
     <div className="zbd-composer-wrap zbd-app-composer-wrap">
-      <div aria-hidden="true" className="zbd-composer-fade" />
       {status ? <div className="zbd-composer-status">{status}</div> : null}
-      <div className="zbd-composer zbd-app-composer">
+      <div className="zbd-composer zbd-app-composer" data-replying={isReplying ? '' : undefined}>
+        {reply ? (
+          <div className="zbd-app-reply-preview">
+            <button className="zbd-app-reply-excerpt" onClick={reply.onJump} title={reply.excerpt} type="button">
+              {reply.excerpt}
+            </button>
+            <button
+              aria-label="Cancel reply"
+              className="zbd-app-reply-cancel"
+              onClick={() => {
+                reply.onCancel()
+                fieldRef.current?.focus({ preventScroll: true })
+              }}
+              type="button"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+        ) : null}
         <div className="zbd-app-composer-plus-wrap" ref={menuRef}>
           <button
             aria-expanded={menuOpen}
@@ -121,28 +150,38 @@ export function AppComposer({
         </div>
         <div className="zbd-composer-field zbd-app-composer-field">
           <textarea
-            aria-label={`Message ${displayName}`}
+            aria-label={placeholder}
             className="zbd-app-composer-input"
             disabled={disabled}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={`Message ${displayName}`}
+            placeholder={placeholder}
             ref={fieldRef}
             rows={1}
             value={value}
           />
         </div>
-        <button
-          aria-label={hasText ? 'Send message' : 'Voice message'}
-          className="zbd-composer-send zbd-app-composer-send"
-          data-working={disabled ? '' : undefined}
-          disabled={disabled || !hasText}
-          onClick={submit}
-          tabIndex={hasText ? 0 : -1}
-          type="button"
-        >
-          {hasText ? <SendArrowIcon size={16} /> : <MicIcon size={15} />}
-        </button>
+        <div className="zbd-app-composer-actions">
+          <button
+            aria-label="Voice message"
+            className="zbd-composer-mic zbd-app-composer-mic"
+            disabled={disabled}
+            type="button"
+          >
+            <MicIcon size={15} />
+          </button>
+          <button
+            aria-label="Send message"
+            className="zbd-composer-send zbd-app-composer-send"
+            data-ready={hasText ? '' : undefined}
+            data-working={disabled ? '' : undefined}
+            disabled={disabled || !hasText}
+            onClick={submit}
+            type="button"
+          >
+            <SendArrowIcon size={16} />
+          </button>
+        </div>
       </div>
     </div>
   )

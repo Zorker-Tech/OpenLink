@@ -15,10 +15,14 @@ export interface SlateAgentProfile {
   title: string;
   avatarShape: string;
   avatarColor: string;
+  /** User-authored identity instructions. Empty means "derive from context". */
+  instructions?: string;
+  /** Daily spend cap for proactive inspiration work; null means unlimited. */
+  inspirationBudgetUsd?: number | null;
 }
 
-/** The fields every profile has, in the order a file is written with them. */
-const PROFILE_FIELDS = ["name", "description", "title", "avatarShape", "avatarColor"] as const;
+/** The text fields every profile has, in the order a file is written with them. */
+const PROFILE_FIELDS = ["name", "description", "title", "avatarShape", "avatarColor", "instructions"] as const;
 
 export function getSlateProfilePath(agentDir: string): string {
   return join(agentDir, SLATE_PROFILE_FILENAME);
@@ -40,6 +44,13 @@ function textField(record: Record<string, unknown>, field: (typeof PROFILE_FIELD
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** A non-negative finite money value, or null for "no cap". */
+function budgetField(record: Record<string, unknown>): number | null {
+  const value = record["inspirationBudgetUsd"];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+  return Math.round(value * 10_000) / 10_000;
+}
+
 export function readSlateProfileFile(path: string): SlateAgentProfile | null {
   const record = readProfileRecord(path);
   if (record === null) return null;
@@ -49,6 +60,8 @@ export function readSlateProfileFile(path: string): SlateAgentProfile | null {
     title: textField(record, "title"),
     avatarShape: textField(record, "avatarShape"),
     avatarColor: textField(record, "avatarColor"),
+    instructions: textField(record, "instructions"),
+    inspirationBudgetUsd: budgetField(record),
   };
 }
 
@@ -66,7 +79,16 @@ export function readLegacyProfileAvatarField(path: string): string | null {
  */
 export function writeSlateProfileFile(path: string, profile: SlateAgentProfile): void {
   mkdirSync(dirname(path), { recursive: true });
-  const written = { ...profile, title: profile.title.trim(), avatarShape: profile.avatarShape.trim(), avatarColor: profile.avatarColor.trim() };
+  const written = {
+    ...profile,
+    title: profile.title.trim(),
+    avatarShape: profile.avatarShape.trim(),
+    avatarColor: profile.avatarColor.trim(),
+    ...(profile.instructions === undefined ? {} : { instructions: profile.instructions.trim() }),
+    ...(profile.inspirationBudgetUsd === undefined
+      ? {}
+      : { inspirationBudgetUsd: profile.inspirationBudgetUsd === null ? null : Math.round(profile.inspirationBudgetUsd * 10_000) / 10_000 }),
+  };
   const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
   writeFileSync(temporary, `${JSON.stringify(written, null, 2)}\n`, "utf8");
   renameSync(temporary, path);

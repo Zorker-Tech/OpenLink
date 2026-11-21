@@ -64,12 +64,14 @@ interface BotRow {
   work_agent_id: string
   name: string
   description: string
+  instructions: string
   avatar_shape: string
   avatar_color: string
   kind: 'bot' | 'group'
   member_ids: string[] | null
   provider_id: string | null
   model_id: string | null
+  inspiration_budget_usd: number | string | null
   last_entry_text: string
   last_activity_at: string
   last_viewed_at: string
@@ -77,7 +79,7 @@ interface BotRow {
   updated_at: string
 }
 
-const BOT_SELECT = 'id, user_id, workspace_id, project_id, runtime_session_id, runtime_status, runtime_ready_at, runtime_last_error, runtime_checked_at, work_agent_id, name, description, avatar_shape, avatar_color, kind, member_ids, provider_id, model_id, last_entry_text, last_activity_at, last_viewed_at, created_at, updated_at'
+const BOT_SELECT = 'id, user_id, workspace_id, project_id, runtime_session_id, runtime_status, runtime_ready_at, runtime_last_error, runtime_checked_at, work_agent_id, name, description, instructions, avatar_shape, avatar_color, kind, member_ids, provider_id, model_id, inspiration_budget_usd, last_entry_text, last_activity_at, last_viewed_at, created_at, updated_at'
 const SAFE_BOT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SAFE_AVATAR_ID = /^[a-z0-9-]{1,32}$/
 const BOT_AGENT_RECOVERY_LOCKS = new Map<string, Promise<unknown>>()
@@ -237,6 +239,19 @@ async function recreateBotAgent(
       avatarShape: latest.avatarShape,
       avatarColor: latest.avatarColor,
     })
+    // The create wire carries the original identity fields only; restore the
+    // user-authored instructions and proactive budget on the new agent.
+    if (latest.instructions || latest.inspirationBudgetUsd !== null) {
+      await updateBotAgent({
+        id: created.agent.id,
+        name: latest.name,
+        description: latest.description,
+        instructions: latest.instructions,
+        inspirationBudgetUsd: latest.inspirationBudgetUsd,
+        avatarShape: latest.avatarShape,
+        avatarColor: latest.avatarColor,
+      })
+    }
     const { data, error } = await supabase
       .schema('openlink')
       .from('bots')
@@ -582,10 +597,14 @@ function summary(row: BotRow, members: BotGroupMemberSummary[] = []): BotSummary
     workAgentId: row.work_agent_id,
     name: row.name,
     description: row.description,
+    instructions: row.instructions ?? '',
     avatarShape: row.avatar_shape,
     avatarColor: row.avatar_color,
     providerId: row.provider_id,
     modelId: row.model_id,
+    inspirationBudgetUsd: row.inspiration_budget_usd === null || row.inspiration_budget_usd === undefined
+      ? null
+      : Number(row.inspiration_budget_usd),
     lastEntryText: row.last_entry_text,
     lastActivityAt: row.last_activity_at,
     lastViewedAt: row.last_viewed_at,
@@ -777,6 +796,23 @@ function normalizeDescription(value: unknown): string {
   const description = typeof value === 'string' ? value.trim() : ''
   if (description.length > 2000) throw new BotInputError('BOT_DESCRIPTION_INVALID')
   return description
+}
+
+function normalizeInstructions(value: unknown, fallback: string): string {
+  if (value === undefined) return fallback
+  if (typeof value !== 'string') throw new BotInputError('BOT_INSTRUCTIONS_INVALID')
+  const instructions = value.trim()
+  if (instructions.length > 4000) throw new BotInputError('BOT_INSTRUCTIONS_INVALID')
+  return instructions
+}
+
+/** An empty string or null clears the cap; a positive number is a daily USD cap. */
+function normalizeInspirationBudget(value: unknown, fallback: number | null): number | null {
+  if (value === undefined) return fallback
+  if (value === null || value === '') return null
+  const amount = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) throw new BotInputError('BOT_BUDGET_INVALID')
+  return Math.round(amount * 10_000) / 10_000
 }
 
 function normalizeAvatar(value: unknown, fallback: string, kind: 'shape' | 'color'): string {
@@ -1201,10 +1237,14 @@ export async function updateBot(
     avatarPngBase64?: unknown
     model?: unknown
     memberIds?: unknown
+    instructions?: unknown
+    inspirationBudgetUsd?: unknown
   },
 ): Promise<BotSummary> {
   const name = input.name === undefined ? bot.name : normalizeName(input.name)
   const description = input.description === undefined ? bot.description : normalizeDescription(input.description)
+  const instructions = normalizeInstructions(input.instructions, bot.instructions)
+  const inspirationBudgetUsd = normalizeInspirationBudget(input.inspirationBudgetUsd, bot.inspirationBudgetUsd)
   const avatarShape = input.avatarShape === undefined ? bot.avatarShape : normalizeAvatar(input.avatarShape, bot.avatarShape, 'shape')
   const avatarColor = input.avatarColor === undefined ? bot.avatarColor : normalizeAvatar(input.avatarColor, bot.avatarColor, 'color')
   const avatarPngBase64 = normalizePng(input.avatarPngBase64)
@@ -1229,8 +1269,10 @@ export async function updateBot(
         ...(agentId === bot.workAgentId ? {} : { work_agent_id: agentId }),
         name,
         description,
+        instructions,
         avatar_shape: avatarShape,
         avatar_color: avatarColor,
+        inspiration_budget_usd: inspirationBudgetUsd,
         member_ids: memberIds,
         updated_at: new Date().toISOString(),
       })
@@ -1261,6 +1303,8 @@ export async function updateBot(
       id: agentId,
       name,
       description,
+      instructions,
+      inspirationBudgetUsd,
       avatarShape,
       avatarColor,
     })
@@ -1272,6 +1316,8 @@ export async function updateBot(
       id: agentId,
       name,
       description,
+      instructions,
+      inspirationBudgetUsd,
       avatarShape,
       avatarColor,
     })
@@ -1284,10 +1330,12 @@ export async function updateBot(
       ...(agentId === bot.workAgentId ? {} : { work_agent_id: agentId }),
       name,
       description,
+      instructions,
       avatar_shape: avatarShape,
       avatar_color: avatarColor,
       provider_id: selectedModel.providerId,
       model_id: selectedModel.modelId,
+      inspiration_budget_usd: inspirationBudgetUsd,
       updated_at: new Date().toISOString(),
     })
     .eq('id', bot.id)

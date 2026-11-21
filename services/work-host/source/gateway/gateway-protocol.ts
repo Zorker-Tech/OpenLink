@@ -164,6 +164,11 @@ const COMMAND_NAMES = [
   "getBotBoxStatus",
   "releaseBotBox",
   "respondBotExtensionUi",
+  "getInspirationState",
+  "setInspirationConfig",
+  "runInspirationNow",
+  "recordInspirationFeedback",
+  "nominateInspiration",
 ] as const;
 
 type GatewayCommandName = (typeof COMMAND_NAMES)[number];

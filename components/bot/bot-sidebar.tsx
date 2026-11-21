@@ -6,13 +6,23 @@ import {
   sessionToAgent,
   type AppSidebarRow,
 } from '@zorker/bot-demo/app'
+import Link from 'next/link'
+import { Grid3X3, Plus, Search } from 'lucide-react'
 import type { ThemeMode } from '@/components/account-drawer'
-import {
-  AppSidebarAccountFooter,
-  AppSidebarWorkspaceHeader,
-} from '@/components/app-sidebar-controls'
+import { AppSidebarAccountFooter } from '@/components/app-sidebar-controls'
 import { OrganizationDialog } from '@/components/organization-dialog'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { WorkspaceNavigation } from '@/components/workspace-navigation'
 import type {
   ActiveWorkspaceSummary,
@@ -43,6 +53,10 @@ type BotSidebarProps = {
   onToggle: () => void
 }
 
+/**
+ * The Bot secondary sidebar: pinned Bots as tiles, the rest as rows, with
+ * search and creation at the top and the viewer's account at the bottom.
+ */
 export function BotSidebar({
   activeId,
   activeWorkspace,
@@ -53,7 +67,6 @@ export function BotSidebar({
   mobileOpen,
   nickname,
   organizations,
-  personalWorkspace,
   rows,
   themeMode,
   workspaceSlug,
@@ -69,6 +82,14 @@ export function BotSidebar({
   const [searchQuery, setSearchQuery] = useState('')
 
   const filteredRows = rows.filter((row) => isSessionMatch(row.session, searchQuery, row.name))
+  const featured = rows.slice(0, 3)
+  const rest = rows.slice(3)
+  const viewerName = nickname || email || 'You'
+
+  const select = (sessionId: string) => {
+    onCloseMobile()
+    onSelect(sessionId)
+  }
 
   return (
     <>
@@ -93,71 +114,127 @@ export function BotSidebar({
         onCloseMobile={onCloseMobile}
         onHistory={() => setSearchOpen(true)}
         onToggle={onToggle}
+        toggleSidebarFromBot
         workspaceSlug={workspaceSlug}
       >
-        <div className="flex shrink-0 flex-col gap-2 px-1.5 pt-2 pb-1">
-          <AppSidebarWorkspaceHeader
-            activeWorkspace={activeWorkspace}
-            onAddOrganization={() => setOrganizationDialogOpen(true)}
-            onSearch={() => setSearchOpen(true)}
-            onToggle={onToggle}
-            organizations={organizations}
-            personalWorkspace={personalWorkspace}
-          />
+        <div className="bot-nav">
+        <div className="bot-secondary-header">
           <button
-            className="flex h-[35px] w-full items-center gap-1.5 rounded-lg px-2.5 text-sm tracking-[-0.1504px] text-[var(--app-foreground)] hover:bg-[var(--app-hover)]"
+            aria-label={t('搜索聊天')}
+            className="bot-secondary-icon"
+            onClick={() => setSearchOpen(true)}
+            title={t('搜索聊天')}
+            type="button"
+          >
+            <Search className="size-4" />
+          </button>
+          <button
+            aria-label={t('New Bot')}
+            className="bot-secondary-icon"
             onClick={() => {
               onCloseMobile()
               onNewAgent()
             }}
+            title={t('New Bot')}
             type="button"
           >
-            <span aria-hidden="true" className="relative size-5 shrink-0">
-              <img alt="" className="app-control-icon absolute left-[2.502px] top-[2.502px]" src="/openlink/navigation/new-chat-base.svg" />
-              <img alt="" className="app-control-icon absolute left-[6.798px] top-[2.398px]" src="/openlink/navigation/new-chat-pen.svg" />
-            </span>
-            <span>New Bot</span>
+            <Plus className="size-4" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pt-3 pb-3 [scrollbar-width:thin]">
-          <div className="flex min-w-0 flex-col gap-1">
-            {rows.map((row) => {
+        {featured.length ? (
+          <div className="bot-featured-grid">
+            {featured.map((row) => {
               const active = row.session.id === activeId
-              const agent = sessionToAgent(row.session, row.name)
               return (
                 <button
                   aria-current={active ? 'page' : undefined}
-                  className={`group flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors ${active ? 'bg-[var(--app-selected,var(--app-active))]' : 'hover:bg-[var(--app-surface)]'}`}
+                  aria-label={row.name}
+                  className="bot-featured-tile"
+                  data-active={active ? '' : undefined}
                   key={row.session.id}
-                  onClick={() => {
-                    onCloseMobile()
-                    onSelect(row.session.id)
-                  }}
+                  onClick={() => select(row.session.id)}
                   title={row.name}
                   type="button"
                 >
-                  <span className="relative flex size-8 shrink-0 items-center justify-center">
-                    <AgentAvatar
-                      agent={agent}
-                      assetBase="/zorker-bot-demo"
-                      className={row.session.isDraft ? 'zbd-app-avatar-new' : undefined}
-                      size={32}
-                    />
-                    {row.unread ? <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-[#ff453a] ring-2 ring-[var(--app-background)]" /> : null}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[14px] font-medium leading-5 tracking-[-0.15px] text-[var(--app-foreground)]">{row.name}</span>
-                      <span className="shrink-0 text-[12px] leading-4 text-[var(--app-subtle-foreground)]" suppressHydrationWarning>{row.time}</span>
-                    </span>
-                    <span className="mt-px block truncate text-[12px] leading-4 text-[var(--app-muted)]">{row.preview || 'No messages yet'}</span>
-                  </span>
+                  <AgentAvatar
+                    agent={sessionToAgent(row.session, row.name)}
+                    assetBase="/zorker-bot-demo"
+                    className={row.session.isDraft ? 'zbd-app-avatar-new' : undefined}
+                    size={40}
+                  />
+                  <span className="bot-featured-name">{row.name}</span>
+                  {row.unread ? <span className="bot-featured-unread" /> : null}
                 </button>
               )
             })}
-            {!rows.length ? <p className="px-2 py-1 text-xs text-[var(--app-subtle-foreground)]">No bots yet</p> : null}
           </div>
+        ) : null}
+
+        <div className="bot-secondary-list">
+          {rest.map((row) => {
+            const active = row.session.id === activeId
+            return (
+              <button
+                aria-current={active ? 'page' : undefined}
+                className="bot-secondary-row"
+                data-active={active ? '' : undefined}
+                key={row.session.id}
+                onClick={() => select(row.session.id)}
+                title={row.name}
+                type="button"
+              >
+                <span className="bot-secondary-avatar">
+                  <AgentAvatar
+                    agent={sessionToAgent(row.session, row.name)}
+                    assetBase="/zorker-bot-demo"
+                    className={row.session.isDraft ? 'zbd-app-avatar-new' : undefined}
+                    size={32}
+                  />
+                  {row.unread ? <span className="bot-secondary-unread" /> : null}
+                </span>
+                <span className="bot-secondary-body">
+                  <span className="bot-secondary-name">{row.name}</span>
+                  <span className="bot-secondary-preview">{row.preview || 'No messages yet'}</span>
+                </span>
+              </button>
+            )
+          })}
+          {!rows.length ? <p className="bot-secondary-empty">No bots yet</p> : null}
+        </div>
+
+        <div className="bot-secondary-footer">
+          <span className="bot-secondary-user-avatar">
+            {avatarUrl ? <img alt="" src={avatarUrl} /> : viewerName.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="bot-secondary-user-name">{viewerName}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={(
+                <button
+                  aria-label="Workspace menu"
+                  className="bot-secondary-icon"
+                  title="Workspace menu"
+                  type="button"
+                />
+              )}
+            >
+              <Grid3X3 className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" sideOffset={8}>
+              <div className="px-2 py-1.5 text-[12px] font-medium text-[var(--app-muted)]">{activeWorkspace.name}</div>
+              <DropdownMenuItem render={<Link href={`/app/${workspaceSlug}`} onClick={onCloseMobile} />}>{t('首页')}</DropdownMenuItem>
+              <DropdownMenuItem render={<Link href={`/app/${workspaceSlug}/projects`} onClick={onCloseMobile} />}>{t('项目')}</DropdownMenuItem>
+              <DropdownMenuItem render={<Link href={`/app/${workspaceSlug}/knowledge`} onClick={onCloseMobile} />}>{t('知识库')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSearchOpen(true)}>{t('搜索聊天')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setOrganizationDialogOpen(true)}>{t('组织')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onThemeChange(themeMode === 'dark' ? 'light' : 'dark')}>
+                {themeMode === 'dark' ? t('浅色模式') : t('深色模式')}
+              </DropdownMenuItem>
+              <DropdownMenuItem render={<Link href="/settings" />}>{t('个人设置')}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         </div>
       </WorkspaceNavigation>
 
@@ -180,8 +257,7 @@ export function BotSidebar({
                 key={row.session.id}
                 onClick={() => {
                   setSearchOpen(false)
-                  onCloseMobile()
-                  onSelect(row.session.id)
+                  select(row.session.id)
                 }}
                 type="button"
               >

@@ -188,6 +188,34 @@ describe("the Pi-backed Bot run step", () => {
     assert.equal(events.some((event) => event.payload?.phase === "status" && event.payload?.label === "Checking the deploy"), true);
   });
 
+  it("hands a sibling nomination to the host without failing the turn", async () => {
+    globalThis.fetch = (async () => streamOf([
+      { type: "nominate-inspiration", target: "other-bot", task: "check the deploy pipeline" },
+      { type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "done" }], usage: { input: 1, output: 1 } } },
+      { type: "agent_settled" },
+    ])) as typeof fetch;
+    const nominations: Array<{ target: string; task: string }> = [];
+    const step = createPiBotRunStep({
+      agentId: AGENT_ID,
+      getBinding: () => binding(),
+      nominateInspiration: async (target, task) => {
+        nominations.push({ target, task });
+        return { ok: true };
+      },
+      now: () => 11,
+    });
+    await step(0, {
+      signal: new AbortController().signal,
+      emitUpdate: () => {},
+      prompt: "hand off",
+      runOptions: {},
+      requestId: "request-nominate",
+      state: {},
+      setState: () => {},
+    });
+    assert.deepEqual(nominations, [{ target: "other-bot", task: "check the deploy pipeline" }]);
+  });
+
   it("fails a settled turn whose final assistant message carries a provider error", async () => {
     globalThis.fetch = (async () => streamOf([
       { type: "message_end", message: { role: "assistant", content: [], errorMessage: "provider unavailable", usage: { input: 1, output: 0 } } },

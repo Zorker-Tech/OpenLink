@@ -152,12 +152,14 @@ export async function streamBotPrompt(
   bot: BotSummary,
   message: string,
   clientNonce?: string,
+  replyToId?: string,
 ): Promise<Response> {
   try {
     return await sendBotPromptStream({
       agentId: bot.workAgentId,
       prompt: message,
       ...(clientNonce === undefined ? {} : { clientNonce }),
+      ...(replyToId === undefined ? {} : { replyToId }),
     })
   } catch (error) {
     throw workHostRuntimeError(error)

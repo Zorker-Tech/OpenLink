@@ -4,10 +4,12 @@ import { botConfirmationRequest, type BotConfirmationRequest } from './bot-confi
 
 export type BotActivityStatus = 'running' | 'done' | 'failed'
 
+export type BotAttachment = { name: string; kind: 'media' | 'file' }
+
 export type BotTranscriptEntry = Extract<
   TranscriptEntry,
   { kind: 'user-message' | 'agent-message' | 'activity' | 'system' | 'confirmation' }
->
+> & { attachment?: BotAttachment; requestId?: string; replyTo?: string }
 
 export type BotStreamUpdate =
   | { type: 'pending'; pending: PendingBeat | null }
@@ -21,8 +23,8 @@ export type BotStreamUpdate =
 
 export const OPTIMISTIC_USER_ENTRY_PREFIX = 'optimistic-user-'
 
-export function optimisticUserEntry(id: string, content: string): BotTranscriptEntry {
-  return { kind: 'user-message', id, content, timestampMs: Date.now() }
+export function optimisticUserEntry(id: string, content: string, replyTo?: string): BotTranscriptEntry {
+  return { kind: 'user-message', id, content, timestampMs: Date.now(), ...(replyTo ? { replyTo } : {}) }
 }
 
 export function upsertBotTranscriptEntry(
@@ -85,6 +87,10 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function isMediaFile(name: string) {
+  return /\.(?:avif|gif|heic|jpeg|jpg|png|svg|webp|m4a|mp3|ogg|wav|webm|mov|mp4)$/i.test(name)
+}
+
 function activity(
   id: string,
   label: string,
@@ -106,16 +112,48 @@ function activity(
   }
 }
 
-function reactionsOf(value: unknown): string[] | undefined {
+type BotMessageReaction = { emoji: string; by: string }
+
+/**
+ * Normalize both the current `{emoji, by}` rows and the legacy string-only
+ * shape. A string row has no author, so it belongs to the person viewing the
+ * Bot (`me`); the Work-host convention for a reaction sent from this surface
+ * is the same value.
+ */
+function reactionsOf(value: unknown): BotMessageReaction[] | undefined {
   if (!Array.isArray(value)) return undefined
-  const result = value.flatMap((item) => {
-    if (typeof item === 'string') return [item]
-    if (item && typeof item === 'object' && 'emoji' in item && typeof (item as { emoji?: unknown }).emoji === 'string') {
-      return [(item as { emoji: string }).emoji]
-    }
-    return []
-  })
-  return result.length ? [...new Set(result)].slice(0, 12) : undefined
+  const result: BotMessageReaction[] = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    const record = item && typeof item === 'object' && !Array.isArray(item)
+      ? item as Record<string, unknown>
+      : null
+    const emoji = (typeof item === 'string' ? item : text(record?.emoji)).trim().slice(0, 32)
+    if (!emoji) continue
+    const by = (text(record?.by).trim() || 'me').slice(0, 64)
+    const key = `${emoji}:${by}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push({ emoji, by })
+    if (result.length >= 24) break
+  }
+  return result.length ? result : undefined
+}
+
+function messageMetadata(entry: Record<string, unknown>, alternateReplyTo?: unknown) {
+  const requestId = safeId(entry.requestId ?? entry.boxRequestId, '')
+  const replyTo = safeId(entry.replyTo ?? alternateReplyTo, '')
+  const stored = entry.attachment
+  const value = stored && typeof stored === 'object' && !Array.isArray(stored)
+    ? stored as Record<string, unknown> : null
+  const name = text(value?.name).trim()
+  const kind = value?.kind
+  const attachment: BotAttachment | undefined = name && (kind === 'media' || kind === 'file') ? { name, kind } : undefined
+  return {
+    ...(requestId ? { requestId } : {}),
+    ...(replyTo ? { replyTo } : {}),
+    ...(attachment ? { attachment } : {}),
+  }
 }
 
 export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTranscriptEntry | null {
@@ -128,12 +166,14 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
     if (!content) return null
     if (entry.role === 'user' && content.startsWith(HIDDEN_PROMPT_PREFIX)) return null
     const reactions = reactionsOf(entry.reactions)
+    const metadata = messageMetadata(entry)
     return entry.role === 'user'
       ? {
           kind: 'user-message',
           id,
           content,
           timestampMs: at,
+          ...metadata,
           ...(reactions ? { reactions } : {}),
         }
       : {
@@ -141,13 +181,15 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
           id,
           content,
           timestampMs: at,
+          ...metadata,
           ...(reactions ? { reactions } : {}),
         }
   }
 
   if (kind === 'user-attachment') {
-    const name = text(entry.file_name) || 'Attachment'
-    return { kind: 'user-message', id, content: `[${name}]`, timestampMs: at }
+    const name = text(entry.file_name) || text(entry.file_path).split(/[/\\]/).at(-1) || 'Attachment'
+    const isMedia = typeof entry.width === 'number' || typeof entry.height === 'number' || isMediaFile(name)
+    return { kind: 'user-message', id, content: `[${name}]`, timestampMs: at, ...messageMetadata(entry), attachment: { name, kind: isMedia ? 'media' : 'file' } }
   }
 
   if (kind === 'notice') {
@@ -234,14 +276,19 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
       id,
       content,
       timestampMs: at,
+      ...messageMetadata(entry, message.reply_to),
       ...(authorId && authorName ? { author: { id: authorId, name: authorName } } : {}),
       ...(reactions ? { reactions } : {}),
     }
   }
 
-  if (type === 'image' || type === 'attachment') {
-    const label = text(message.file_name) || text(message.alt) || 'Attachment'
-    return { kind: 'agent-message', id, content: `[${label}]`, timestampMs: at }
+  if (type === 'image' || type === 'video' || type === 'attachment') {
+    const name = text(message.file_name) || text(message.alt) || 'Attachment'
+    return {
+      kind: 'agent-message', id, content: `[${name}]`, timestampMs: at,
+      ...messageMetadata(entry, message.reply_to),
+      attachment: { name, kind: type !== 'attachment' || isMediaFile(name) ? 'media' : 'file' },
+    }
   }
 
   if (type === 'widget') {
@@ -329,14 +376,24 @@ export function toWorkHostEntry(entry: BotTranscriptEntry): Record<string, unkno
   const id = safeId(entry.id, `entry-${Math.random().toString(36).slice(2)}`)
   const at = timestamp(entry.timestampMs)
   if (entry.kind === 'user-message') {
-    return { id, kind: 'message', role: 'user', content: entry.content, timestampMs: at }
+    return {
+      id,
+      kind: 'message',
+      role: 'user',
+      content: entry.content,
+      ...messageMetadata(entry),
+      ...(entry.reactions?.length ? { reactions: entry.reactions } : {}),
+      timestampMs: at,
+    }
   }
   if (entry.kind === 'agent-message') {
     return {
       id,
       kind: 'send-message',
       message: { type: 'text', content: entry.content },
+      ...messageMetadata(entry),
       ...(entry.author ? { author: entry.author } : {}),
+      ...(entry.reactions?.length ? { reactions: entry.reactions } : {}),
       timestampMs: at,
     }
   }
@@ -422,7 +479,10 @@ export function fromDurableGroupEntry(payload: unknown): BotTranscriptEntry | nu
   if (!id) return null
   if (kind === 'user-message') {
     const content = text(record.content)
-    return content ? { kind, id, content, timestampMs } : null
+    const reactions = reactionsOf(record.reactions)
+    return content
+      ? { kind, id, content, timestampMs, ...messageMetadata(record), ...(reactions ? { reactions } : {}) }
+      : null
   }
   if (kind === 'agent-message') {
     const content = text(record.content)
@@ -432,12 +492,15 @@ export function fromDurableGroupEntry(payload: unknown): BotTranscriptEntry | nu
       : null
     const authorId = text(author?.id).trim()
     const authorName = text(author?.name).trim()
+    const reactions = reactionsOf(record.reactions)
     return {
       kind,
       id,
       content,
       timestampMs,
+      ...messageMetadata(record),
       ...(authorId && authorName ? { author: { id: authorId, name: authorName } } : {}),
+      ...(reactions ? { reactions } : {}),
     }
   }
   if (kind === 'activity') {

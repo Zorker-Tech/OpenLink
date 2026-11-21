@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react'
+import { useMemo, useSyncExternalStore, type ReactNode, type Ref, type UIEventHandler } from 'react'
 import type {
   ComputerStatus,
   PendingBeat,
@@ -9,7 +9,7 @@ import { ActivityCard } from '../components/ActivityCard'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { ComputerCard } from '../components/ComputerCard'
 import { ConfirmationCard } from '../components/ConfirmationCard'
-import { MessageBubble } from '../components/MessageBubble'
+import { MessageBubble, type MessageBubbleProps } from '../components/MessageBubble'
 import { PendingRow } from '../components/PendingRow'
 import { SystemEntry } from '../components/SystemEntry'
 import {
@@ -18,7 +18,22 @@ import {
   type AppSession,
 } from './data'
 
-const TIMESTAMP_GAP_MS = 60_000
+const TIMESTAMP_GAP_MS = 15 * 60_000
+
+const subscribeToTimeZone = () => () => {}
+const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
+const serverTimeZone = () => 'UTC'
+
+function startsTimeGroup(previous: number | undefined, current: number, day: Intl.DateTimeFormat) {
+  return previous === undefined || current - previous >= TIMESTAMP_GAP_MS ||
+    day.format(previous) !== day.format(current)
+}
+
+function sameAuthor(left: TranscriptEntry | undefined, right: TranscriptEntry | undefined) {
+  if (left?.kind === 'user-message' && right?.kind === 'user-message') return true
+  if (left?.kind !== 'agent-message' || right?.kind !== 'agent-message') return false
+  return (left.author?.id ?? '') === (right.author?.id ?? '')
+}
 
 const EMPTY_SUGGESTIONS = [
   'Research my pipeline and draft outreach',
@@ -35,12 +50,18 @@ export type AppTranscriptProps = {
   assetBase: string
   session: AppSession
   displayName: string
+  locale?: string
+  replyTargetId?: string
   renderMessage?: (content: string) => ReactNode
+  renderMessageMenu?: MessageBubbleProps['renderMenu']
   transcriptRef: Ref<HTMLDivElement>
+  onScroll?: UIEventHandler<HTMLDivElement>
   onOpenComputer: () => void
   onTakeOver: () => void
   onFinishComputer: () => void
   onSuggestion: (suggestion: string) => void
+  onReact?: (entry: Extract<TranscriptEntry, { kind: 'agent-message' | 'user-message' }>, emoji: string) => void
+  getReplyAction?: (entry: Extract<TranscriptEntry, { kind: 'agent-message' | 'user-message' }>) => (() => void) | undefined
 }
 
 export function AppTranscript({
@@ -52,43 +73,58 @@ export function AppTranscript({
   assetBase,
   session,
   displayName,
+  locale,
+  replyTargetId,
   renderMessage,
+  renderMessageMenu,
   transcriptRef,
+  onScroll,
   onOpenComputer,
   onTakeOver,
   onFinishComputer,
   onSuggestion,
+  onReact,
+  getReplyAction,
 }: AppTranscriptProps) {
   const agent = sessionToAgent(session, displayName)
-  let previousTimestamp: number | null = null
+  const timeZone = useSyncExternalStore(subscribeToTimeZone, browserTimeZone, serverTimeZone)
+  const day = useMemo(() => new Intl.DateTimeFormat('en-CA', { dateStyle: 'short', timeZone }), [timeZone])
+  const dateTime = useMemo(() => locale && new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    weekday: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone,
+  }), [locale, timeZone])
+  let previousTimestamp: number | undefined
 
   return (
-    <div className="zbd-transcript zbd-app-transcript" ref={transcriptRef}>
+    <div className="zbd-transcript zbd-app-transcript" onScroll={onScroll} ref={transcriptRef}>
       <div className="zbd-transcript-inner zbd-app-transcript-inner">
-        {entries.map((entry) => {
+        {entries.map((entry, index) => {
+          const timestamp = entry.timestampMs
+          const showTimestamp = timestamp !== undefined && startsTimeGroup(previousTimestamp, timestamp, day)
+          if (timestamp !== undefined) previousTimestamp = timestamp
+          const time = showTimestamp ? (
+            <time className="zbd-time-separator" dateTime={new Date(timestamp).toISOString()} suppressHydrationWarning>
+              {dateTime ? dateTime.format(timestamp) : formatTranscriptTime(timestamp)}
+            </time>
+          ) : null
+
           if (entry.kind === 'system') {
-            const showTimestamp =
-              previousTimestamp === null ||
-              entry.timestampMs - previousTimestamp >= TIMESTAMP_GAP_MS
-            previousTimestamp = entry.timestampMs
             return (
-              <div className="zbd-entry" key={entry.id}>
-                {showTimestamp ? (
-                  <div className="zbd-time-separator" suppressHydrationWarning>
-                    {formatTranscriptTime(entry.timestampMs)}
-                  </div>
-                ) : null}
+              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
+                {time}
                 <SystemEntry assetBase={assetBase} entry={entry} />
               </div>
             )
           }
 
           if (entry.kind === 'computer') {
-            if (entry.timestampMs !== undefined) {
-              previousTimestamp = entry.timestampMs
-            }
             return (
-              <div className="zbd-entry" key={entry.id}>
+              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
+                {time}
                 <ComputerCard
                   assetBase={assetBase}
                   entry={entry}
@@ -103,32 +139,36 @@ export function AppTranscript({
           }
 
           if (entry.kind === 'activity') {
-            previousTimestamp = entry.timestampMs
             return (
-              <div className="zbd-entry" key={entry.id}>
+              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
+                {time}
                 <ActivityCard entry={entry} />
               </div>
             )
           }
 
           if (entry.kind === 'confirmation') {
-            previousTimestamp = entry.timestampMs
             return (
-              <div className="zbd-entry" key={entry.id}>
+              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
+                {time}
                 <ConfirmationCard entry={entry} />
               </div>
             )
           }
 
-          const showTimestamp =
-            previousTimestamp === null ||
-            entry.timestampMs - previousTimestamp >= TIMESTAMP_GAP_MS
-          previousTimestamp = entry.timestampMs
-
           const authorLabel =
             entry.kind === 'agent-message' && session.isGroup
               ? entry.author?.name
               : undefined
+
+          const previous = entries[index - 1]
+          const next = entries[index + 1]
+          const joinsPrevious = !showTimestamp && sameAuthor(previous, entry)
+          const joinsNext = next?.timestampMs !== undefined &&
+            !startsTimeGroup(entry.timestampMs, next.timestampMs, day) && sameAuthor(entry, next)
+          const groupPosition = joinsPrevious
+            ? joinsNext ? 'middle' : 'end'
+            : joinsNext ? 'start' : 'single'
 
           return (
             <div
@@ -137,21 +177,24 @@ export function AppTranscript({
                   ? 'zbd-entry zbd-app-group-entry'
                   : 'zbd-entry'
               }
+              data-entry-id={entry.id}
+              data-reply-target={entry.id === replyTargetId ? '' : undefined}
+              data-has-timestamp={showTimestamp ? '' : undefined}
+              data-same-group={joinsPrevious ? '' : undefined}
               key={entry.id}
             >
+              {time}
               {authorLabel ? (
                 <div className="zbd-app-group-author">{authorLabel}</div>
               ) : null}
               <MessageBubble
                 assetBase={assetBase}
                 entry={entry}
+                groupPosition={groupPosition}
+                onReact={onReact}
+                onReply={getReplyAction?.(entry)}
                 renderContent={renderMessage}
-                showTimestamp={showTimestamp}
-                timestampLabel={
-                  showTimestamp
-                    ? formatTranscriptTime(entry.timestampMs)
-                    : undefined
-                }
+                renderMenu={renderMessageMenu}
               />
             </div>
           )

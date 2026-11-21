@@ -49,7 +49,7 @@ export function ChatConfirmationDock({
   }
 
   return (
-    <div aria-label={t('待确认操作')} aria-live="polite" className="relative z-10 mx-[21px] flex flex-col gap-1">
+    <div aria-label={t('待确认操作')} aria-live="polite" className="bot-chat-confirmation-dock relative z-10 mx-[21px] flex flex-col gap-1">
       {requests.map((request) => (
         <section
           aria-busy={resolving.has(request.id)}

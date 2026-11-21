@@ -22,6 +22,7 @@ export type TranscriptProps = {
   onOpenComputer: () => void
   onTakeOver: () => void
   onFinishComputer: () => void
+  onReact?: (entry: Extract<TranscriptEntry, { kind: 'agent-message' | 'user-message' }>, emoji: string) => void
 }
 
 export function Transcript({
@@ -34,6 +35,7 @@ export function Transcript({
   onOpenComputer,
   onTakeOver,
   onFinishComputer,
+  onReact,
 }: TranscriptProps) {
   const firstMessageId = entries.find(
     (entry) => entry.kind === 'agent-message' || entry.kind === 'user-message',
@@ -42,7 +44,7 @@ export function Transcript({
   return (
     <div className="zbd-transcript" ref={transcriptRef}>
       <div className="zbd-transcript-inner">
-        {entries.map((entry) => {
+        {entries.map((entry, index) => {
           if (entry.kind === 'system') {
             return (
               <div className="zbd-entry" key={entry.id}>
@@ -83,11 +85,26 @@ export function Transcript({
             )
           }
 
+          const previous = entries[index - 1]
+          const next = entries[index + 1]
+          const sameAuthor = (left: TranscriptEntry | undefined, right: TranscriptEntry | undefined) => {
+            if (left?.kind === 'user-message' && right?.kind === 'user-message') return true
+            if (left?.kind !== 'agent-message' || right?.kind !== 'agent-message') return false
+            return (left.author?.id ?? '') === (right.author?.id ?? '')
+          }
+          const joinsPrevious = sameAuthor(previous, entry)
+          const joinsNext = sameAuthor(entry, next)
+          const groupPosition = joinsPrevious
+            ? joinsNext ? 'middle' : 'end'
+            : joinsNext ? 'start' : 'single'
+
           return (
-            <div className="zbd-entry" key={entry.id}>
+            <div className="zbd-entry" data-same-group={joinsPrevious ? '' : undefined} key={entry.id}>
               <MessageBubble
                 assetBase={assetBase}
                 entry={entry}
+                groupPosition={groupPosition}
+                onReact={onReact}
                 showTimestamp={entry.id === firstMessageId}
               />
             </div>

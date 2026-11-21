@@ -14,6 +14,60 @@ export interface BotRoutine {
   lastRunAt: number | null
 }
 
+export interface BotInspirationCadence {
+  meanIntervalMs: number
+  minIntervalMs: number
+  maxIntervalMs: number
+  dailyCap: number
+  burstChance: number
+}
+
+export interface BotInspirationConfig {
+  enabled: boolean
+  cadence: BotInspirationCadence
+  quietHours: { startHour: number; endHour: number }
+  budgetUsdPerDay: number | null
+  lenses: string[]
+  topics: string[]
+}
+
+export interface BotInspirationCandidate {
+  title: string
+  whyNow: string
+  firstAction: string
+  expectedValue: number
+  estimatedCost: number
+  novelty: number
+  lens: string
+}
+
+export interface BotInspirationRecord {
+  id: string
+  createdAt: number
+  trigger: 'stochastic' | 'manual' | 'nomination' | 'event'
+  lens: string
+  candidate: BotInspirationCandidate | null
+  decision: 'woke' | 'skipped' | 'duplicate' | 'budget' | 'quiet' | 'cap' | 'unavailable' | 'error'
+  detail?: string
+  outcome?: 'acted' | 'silent' | 'failed'
+  messageCount: number
+  costUsd: number
+  tokens: number
+  feedback?: 'useful' | 'not-useful' | 'dismissed'
+}
+
+export interface BotInspirationState {
+  version: number
+  agentId: string
+  config: BotInspirationConfig
+  nextFireAt: number | null
+  lastFiredAt: number | null
+  ledger: BotInspirationRecord[]
+  nominations: Array<{ id: string; fromAgentId: string; task: string; createdAt: number }>
+  feedback: { useful: number; notUseful: number; dismissed: number }
+  usage: { dayKey: string; usd: number; tokens: number; runs: number }
+}
+
 export interface BotGroupMemberSummary {
   id: string
   name: string
@@ -45,10 +99,14 @@ export interface BotSummary {
   workAgentId: string
   name: string
   description: string
+  /** User-authored identity instructions; empty means derive focus from context. */
+  instructions: string
   avatarShape: string
   avatarColor: string
   providerId: string | null
   modelId: string | null
+  /** Daily proactive-spend cap in USD; null means unlimited. */
+  inspirationBudgetUsd: number | null
   lastEntryText: string
   lastActivityAt: string
   lastViewedAt: string

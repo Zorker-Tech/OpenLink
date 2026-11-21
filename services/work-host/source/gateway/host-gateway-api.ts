@@ -762,6 +762,16 @@ export function createHostGatewayApi(
     respondBotExtensionUi: (args: any) => {
       if (ports.botRuntime == null) throw new Error("Bot runtime is unavailable");
       return ports.botRuntime.respondExtensionUi(args);
-    }
+    },
+    getInspirationState: (args: any) =>
+      call(transcript, "getInspirationState")(args.id),
+    setInspirationConfig: (args: any) =>
+      call(transcript, "setInspirationConfig")(args.id, args.config),
+    runInspirationNow: (args: any) =>
+      call(transcript, "runInspirationNow")(args.id),
+    recordInspirationFeedback: (args: any) =>
+      call(transcript, "recordInspirationFeedback")(args.id, args.recordId, args.feedback),
+    nominateInspiration: (args: any) =>
+      call(transcript, "nominateInspiration")(args.fromAgentId, args.targetAgentId, args.task)
   };
 }

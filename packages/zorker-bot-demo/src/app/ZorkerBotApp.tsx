@@ -370,7 +370,7 @@ export function ZorkerBotApp({
     <div
       className={`zbd-root zbd-app-root ${className ?? ''}`}
       data-active-session={activeId}
-      data-theme="cursor-light"
+      data-theme="bot-light"
       ref={rootRef}
     >
       <div className="zbd-shell zbd-app-shell">

@@ -168,6 +168,8 @@ export class TranscriptManager {
   readonly automationRuntime = new AutomationRuntime(this);
   readonly workflowCommands = new WorkflowCommands(this);
   readonly widgetResponses = new WidgetResponses(this);
+  /** Attached by the production host; absent in hosts that do not serve Bots. */
+  inspirationRuntime: any = null;
 
   memory: any = NO_MEMORY;
   contentSearch: any = NO_CONTENT_SEARCH;
@@ -275,6 +277,26 @@ export class TranscriptManager {
     this.xuserDelegate = delegate;
   }
 
+  getInspirationState(agentId: string): any {
+    return this.inspirationRuntime?.state?.(agentId) ?? null;
+  }
+
+  setInspirationConfig(agentId: string, config: unknown): any {
+    return this.inspirationRuntime?.configure?.(agentId, config) ?? null;
+  }
+
+  runInspirationNow(agentId: string): any {
+    return this.inspirationRuntime?.runNow?.(agentId) ?? { decision: "unavailable", detail: "inspiration runtime is not attached" };
+  }
+
+  recordInspirationFeedback(agentId: string, recordId: string, feedback: unknown): any {
+    return this.inspirationRuntime?.feedback?.(agentId, recordId, feedback) ?? null;
+  }
+
+  nominateInspiration(fromAgentId: string, targetAgentId: string, task: string): any {
+    return this.inspirationRuntime?.nominate?.(fromAgentId, targetAgentId, task) ?? { ok: false, reason: "inspiration runtime is not attached" };
+  }
+
   createAttachmentIngestor(
     session: LiveTranscriptSession,
   ): (sourcePath: string) => Promise<string> {
@@ -320,6 +342,7 @@ export class TranscriptManager {
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    try { this.inspirationRuntime?.stop?.(); } catch {}
     await Promise.allSettled([this.sessions.windowedActivationTail]);
     (this.boxHandoff as any).foreverBoxListeners?.clear?.();
     (this.boxHandoff as any).boxHandoffs?.clear?.();

@@ -95,7 +95,7 @@ const CHIEF_TRANSCRIPT: TranscriptEntry[] = [
     kind: 'user-message',
     id: 'chief-5',
     content: 'book it',
-    reactions: ['👍'],
+    reactions: [{ emoji: '👍', by: 'me' }],
     timestampMs: APP_NOW - 20 * HOUR,
   },
   {
@@ -146,7 +146,7 @@ const INBOX_TRANSCRIPT: TranscriptEntry[] = [
     kind: 'user-message',
     id: 'inbox-5',
     content: "send dana's, i'll take the rest tomorrow",
-    reactions: ['👍'],
+    reactions: [{ emoji: '👍', by: 'me' }],
     timestampMs: APP_NOW - 3 * HOUR,
   },
   {
@@ -191,7 +191,7 @@ const ACCOUNT_TRANSCRIPT: TranscriptEntry[] = [
     id: 'account-5',
     content:
       "send the acme invite. hold globex until i've read the note",
-    reactions: ['👍'],
+    reactions: [{ emoji: '👍', by: 'me' }],
     timestampMs: APP_NOW - 5 * HOUR,
   },
   {
@@ -242,7 +242,7 @@ const TALENT_TRANSCRIPT: TranscriptEntry[] = [
     kind: 'user-message',
     id: 'talent-5',
     content: 'strong list, mara especially. draft the intros',
-    reactions: ['👍'],
+    reactions: [{ emoji: '👍', by: 'me' }],
     timestampMs: APP_NOW - 8 * HOUR,
   },
   {
@@ -334,7 +334,7 @@ const OFFSITE_TRANSCRIPT: TranscriptEntry[] = [
     kind: 'agent-message',
     id: 'crew-4',
     author: { id: 'chief-of-staff', name: 'Chief' },
-    reactions: ['👍'],
+    reactions: [{ emoji: '👍', by: 'me' }],
     timestampMs: APP_NOW - 6 * HOUR,
     content:
       "recap's shared. follow-ups, assigned:\n✓ **Acme pricing follow-up** → @[Account Manager] · numbers by thursday\n✓ **Speaker + venue thank-yous** → @[Inbox Manager] · done this morning\n✓ **Final invoice** → me · reconciling against the expense report",

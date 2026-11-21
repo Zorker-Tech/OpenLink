@@ -11,6 +11,8 @@ import type { BotRuntimeBinding } from "./bot-runtime-store.ts";
 const PROMPT_CONNECT_TIMEOUT_MS = 60_000;
 const CANCEL_TIMEOUT_MS = 5_000;
 const TITLE_TIMEOUT_MS = 20_000;
+const INSPIRATION_CONTEXT_TIMEOUT_MS = 20_000;
+const INSPIRATION_COMPLETE_TIMEOUT_MS = 90_000;
 
 export interface PiWorkerPromptInput {
   readonly message: string;
@@ -99,6 +101,66 @@ export class PiWorkerClient {
       if (typeof payload?.title !== "string") return null;
       const title = payload.title.replace(/\s+/g, " ").trim();
       return title.length > 0 ? Array.from(title).slice(0, 80).join("") : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** A read-only snapshot of the Bot's workspace for the inspiration engine. */
+  async inspirationContext(): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.binding.workerUrl}/v1/inspiration/context`, {
+        method: "POST",
+        headers: this.headers(),
+        body: "{}",
+        cache: "no-store",
+        signal: AbortSignal.timeout(INSPIRATION_CONTEXT_TIMEOUT_MS),
+      });
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null) as unknown;
+      return payload !== null && typeof payload === "object" && !Array.isArray(payload)
+        ? payload as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** One tool-free completion on the Bot's model for divergence or gate work. */
+  async inspirationComplete(input: {
+    systemPrompt: string;
+    prompt: string;
+    maxTokens?: number;
+    temperature?: number;
+  }): Promise<{ text: string; usage?: Record<string, number>; costUsd: number } | null> {
+    try {
+      const response = await fetch(`${this.binding.workerUrl}/v1/inspiration/complete`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          systemPrompt: input.systemPrompt,
+          prompt: input.prompt,
+          ...(input.maxTokens === undefined ? {} : { maxTokens: input.maxTokens }),
+          ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(INSPIRATION_COMPLETE_TIMEOUT_MS),
+      });
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null) as {
+        text?: unknown;
+        usage?: unknown;
+        costUsd?: unknown;
+      } | null;
+      if (typeof payload?.text !== "string") return null;
+      const usage = payload.usage !== null && typeof payload.usage === "object" && !Array.isArray(payload.usage)
+        ? Object.fromEntries(Object.entries(payload.usage as Record<string, unknown>).filter((entry): entry is [string, number] => typeof entry[1] === "number"))
+        : undefined;
+      return {
+        text: payload.text,
+        ...(usage === undefined ? {} : { usage }),
+        costUsd: typeof payload.costUsd === "number" && Number.isFinite(payload.costUsd) ? payload.costUsd : 0,
+      };
     } catch {
       return null;
     }

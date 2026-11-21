@@ -22,6 +22,7 @@ interface BotPromptBody {
   readonly agentId: string;
   readonly prompt: string;
   readonly clientNonce?: string;
+  readonly replyToId?: string;
 }
 
 function parseBody(raw: string): BotPromptBody {
@@ -36,9 +37,11 @@ function parseBody(raw: string): BotPromptBody {
   const agentId = typeof body.agentId === "string" ? body.agentId.trim() : "";
   const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
   const clientNonce = typeof body.clientNonce === "string" && body.clientNonce.length > 0 ? body.clientNonce : undefined;
+  const replyToId = typeof body.replyToId === "string" ? body.replyToId.trim() : "";
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(agentId)) throw new Error("Bot prompt agentId is invalid");
   if (prompt.length === 0 || prompt.length > 100_000) throw new Error("Bot prompt is invalid");
-  return { agentId, prompt, ...(clientNonce === undefined ? {} : { clientNonce }) };
+  if (body.replyToId !== undefined && !/^[^\u0000-\u001f\u007f]{1,256}$/.test(replyToId)) throw new Error("Bot reply target is invalid");
+  return { agentId, prompt, ...(clientNonce === undefined ? {} : { clientNonce }), ...(replyToId ? { replyToId } : {}) };
 }
 
 function belongsToAgent(event: unknown, agentId: string): boolean {
@@ -179,6 +182,7 @@ export async function handleBotPromptStream(
     agentId: body.agentId,
     prompt: body.prompt,
     ...(body.clientNonce === undefined ? {} : { clientNonce: body.clientNonce }),
+    ...(body.replyToId === undefined ? {} : { replyToId: body.replyToId }),
   }).catch((error: unknown) => {
     // Acceptance failed after the projection was opened: report it in-band so
     // the client sees the same error contract as a failed turn.

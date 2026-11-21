@@ -63,7 +63,7 @@ export const FINAL_TRANSCRIPT = [
         kind: 'user-message',
         id: 'so-10',
         content: SEND_MESSAGE,
-        reactions: ['👍'],
+        reactions: [{ emoji: '👍', by: 'me' }],
         timestampMs: Date.now() - 12_000,
     },
     {

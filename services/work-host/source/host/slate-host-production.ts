@@ -13,6 +13,10 @@ import { getSlateAgentsRootDir } from "./storage/agent-paths.ts"
 import { BotRuntimeStore, type BotRuntimeBinding } from "./bot/bot-runtime-store.ts"
 import { createBotRuntimeGateway } from "./bot/bot-runtime-gateway.ts"
 import { createPiBotRunStep } from "./bot/pi-bot-runner.ts"
+import { InspirationRuntime } from "./inspiration/inspiration-runtime.ts"
+import { InspirationStore } from "./inspiration/inspiration-store.ts"
+import { getSlateProfilePath, readSlateProfileFile } from "./agents/agent-profile.ts"
+import { join } from "node:path"
 
 export interface ProductionSlateHostPorts {
   readonly extensionsById: Readonly<Record<HostExtensionId, HostExtensionDeclaration<unknown, any>>>
@@ -52,6 +56,23 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
         host: { ...ports.extensionHost, ...host },
         extensionsById: ports.extensionsById,
       })) as unknown as HostExtensionRegistry
+      // The inspiration subscription is a Bot control-plane loop. It is
+      // attached here, but only starts once the host says its background work
+      // is ready, so its first tick never races the runner graph.
+      const transcriptApi = extensions.api("transcript") as unknown as Record<string, any>
+      const inspirationRuntime = new InspirationRuntime({
+        tm: transcriptApi,
+        store: new InspirationStore(getSlateAgentsRootDir()),
+        getBinding: (agentId) => botRuntimeStore.read(agentId),
+        timeZone: () => {
+          const value = transcriptApi.getUserTimeZone?.()
+          return typeof value === "string" ? value : undefined
+        },
+      })
+      transcriptApi.inspirationRuntime = inspirationRuntime
+      void host.whenBackgroundWorkReady
+        .then(() => inspirationRuntime.start())
+        .catch(() => undefined)
       return extensions
     },
     createRunnerComposition({ extensions: started, emitGatewayEvent }) {
@@ -75,6 +96,30 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
               getBinding: () => botRuntimeStore.read(binding.agentId),
               emitGatewayEvent,
               groupMember: (options as SlateAgentRunnerOptions).isGroupMemberTurn === true,
+              nominateInspiration: async (target, task) => {
+                const transcript = started.api("transcript") as unknown as Record<string, any>
+                const runtime = transcript.inspirationRuntime as InspirationRuntime | null | undefined
+                if (runtime == null) return { ok: false, reason: "inspiration is not available" }
+                const source = botRuntimeStore.read(binding.agentId)
+                const candidates = botRuntimeStore.list().filter((candidate) => (
+                  candidate.agentId !== binding.agentId
+                  && candidate.userId === source?.userId
+                  && candidate.workspaceId === source?.workspaceId
+                ))
+                const normalized = target.trim().toLowerCase()
+                let match = candidates.find((candidate) => candidate.agentId === target || candidate.botId === target)
+                if (match === undefined) {
+                  for (const candidate of candidates) {
+                    const profile = readSlateProfileFile(getSlateProfilePath(join(getSlateAgentsRootDir(), candidate.agentId)))
+                    if (profile?.name.trim().toLowerCase() === normalized) {
+                      match = candidate
+                      break
+                    }
+                  }
+                }
+                if (match === undefined) return { ok: false, reason: `no sibling Bot named ${target}` }
+                return runtime.nominate(binding.agentId, match.agentId, task)
+              },
             }),
           })
         },

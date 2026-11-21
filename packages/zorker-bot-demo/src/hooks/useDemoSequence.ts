@@ -260,9 +260,9 @@ export function useDemoSequence(rootRef: RefObject<HTMLElement | null>) {
         if (entry.kind === 'user-message') {
           next[index] = {
             ...entry,
-            reactions: entry.reactions?.includes('👍')
+            reactions: entry.reactions?.some((reaction) => reaction.emoji === '👍' && reaction.by === 'me')
               ? entry.reactions
-              : [...(entry.reactions ?? []), '👍'],
+              : [...(entry.reactions ?? []), { emoji: '👍', by: 'me' }],
           }
           break
         }

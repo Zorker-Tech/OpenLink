@@ -872,6 +872,14 @@ export class SlateAgentRunner<T = unknown> {
       readonly selectedVideos?: readonly unknown[];
       readonly replyContext?: unknown;
       readonly requestSource?: string;
+      /** A background wake is not a visible user turn. */
+      readonly hidden?: boolean;
+      /** The Bot may finish without a user-facing message. */
+      readonly isSilenceAllowed?: boolean;
+      /** The Bot runner must not auto-deliver the final assistant text. */
+      readonly suppressFinalMessage?: boolean;
+      /** The inspiration record this turn belongs to. */
+      readonly inspirationId?: string;
     } = {},
   ): Promise<T | SlateAgentRunnerResult | undefined> {
     const trimmed = prompt.trim();
