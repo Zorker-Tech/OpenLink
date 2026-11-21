@@ -1,4 +1,5 @@
 import { extname, resolve } from 'node:path'
+import { release } from 'node:os'
 import { LocalOpenSandboxBackend } from './backends/local-opensandbox.js'
 import { PodmanProjectRuntimeServiceDriver, ProjectRuntimeManager } from './project-runtime.js'
 import { PodmanMachineDriver, ProjectVmManager } from './project-vm.js'
@@ -137,6 +138,7 @@ if (projectRuntimeBackend === 'container') {
       qemuCommand: env.OPENLINK_QEMU_SYSTEM_COMMAND || 'qemu-system-x86_64',
       qemuImgCommand: env.OPENLINK_QEMU_IMG_COMMAND || 'qemu-img',
       sshCommand: env.OPENLINK_SSH_COMMAND || '/usr/bin/ssh',
+      tunnelOpenSandbox: releaseArchitecture === 't2' && /microsoft.*wsl/i.test(release()),
       scpCommand: env.OPENLINK_SCP_COMMAND || '/usr/bin/scp',
       sshKeygenCommand: env.OPENLINK_SSH_KEYGEN_COMMAND || 'ssh-keygen',
       mke2fsCommand: env.OPENLINK_MKE2FS_COMMAND || 'mke2fs',

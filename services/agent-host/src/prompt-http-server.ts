@@ -44,6 +44,8 @@ export interface PromptRuntimeSession {
   resumeDesktop?(): Promise<DesktopSuspendResult>
   /** Hot-swap the optional Browser capability without recreating the Agent. */
   setBrowser?(browser?: BrowserAgentSession): Promise<void>
+  /** Reconnect the same sandbox when the Project's host-side route changes. */
+  rebindProjectRuntime?(project: ProjectRuntimeDescriptor): Promise<void>
   cleanup(): Promise<void>
 }
 
@@ -1801,6 +1803,10 @@ export async function startPromptHttpServer(
   ): Promise<Record<string, unknown>> {
     if (!entry.runtime.desktopEndpoint) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'This Bot runtime does not provide a desktop session')
     const projectManager = config.projectRuntimeManager
+    if (entry.runtime.rebindProjectRuntime && projectManager) {
+      const project = await projectManager.ensure(identity.projectId, undefined, 'agent')
+      await entry.runtime.rebindProjectRuntime(project)
+    }
     const endpoint = await entry.runtime.desktopEndpoint()
     const onClientCountChange = (count: number) => {
       if (count > 0) {
@@ -2552,7 +2558,9 @@ export async function startPromptHttpServer(
         code: failure.code,
         message: failure.message.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 2000),
       })
-      const status = failure.code === 'AUTH_DENIED' ? 403 : failure.code === 'SESSION_BUSY' || failure.code === 'GIT_SESSION_BINDING_CONFLICT' ? 409 : 400
+      const status = failure.code === 'AUTH_DENIED' ? 403
+        : failure.code === 'SESSION_BUSY' || failure.code === 'GIT_SESSION_BINDING_CONFLICT' ? 409
+        : failure.code === 'PROJECT_BACKEND_UNAVAILABLE' ? 503 : 400
       json(response, status, { error: { code: failure.code, message: failure.message, retryable: failure.retryable } })
     })
   })

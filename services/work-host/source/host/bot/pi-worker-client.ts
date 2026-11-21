@@ -6,6 +6,7 @@
  * NDJSON event stream, and cancels through the same worker. No Code session
  * lease or Code event handler is involved.
  */
+import { setTimeout as delay } from "node:timers/promises";
 import type { BotRuntimeBinding } from "./bot-runtime-store.ts";
 
 const PROMPT_CONNECT_TIMEOUT_MS = 60_000;
@@ -39,6 +40,25 @@ export class PiWorkerClient {
     return { ...this.binding.workerHeaders, "Content-Type": "application/json" };
   }
 
+  private async connectPrompt(request: RequestInit): Promise<Response> {
+    const workerUrl = new URL(this.binding.workerUrl);
+    const forwarded = workerUrl.hostname === "127.0.0.1" && workerUrl.pathname.startsWith("/v1/sandboxes/");
+    const send = () => fetch(`${this.binding.workerUrl}/v1/events`, request);
+    if (!forwarded) return send();
+    for (const interval of [100, 250, 500, 800]) {
+      try {
+        return await send();
+      } catch (error) {
+        const cause = error instanceof Error ? error.cause : undefined;
+        // ECONNREFUSED occurs before the prompt is sent. Never replay a turn
+        // whose connection had already been established.
+        if (!cause || typeof cause !== "object" || !("code" in cause) || cause.code !== "ECONNREFUSED") throw error;
+        await delay(interval, undefined, { signal: request.signal ?? undefined });
+      }
+    }
+    return send();
+  }
+
   async prompt(input: PiWorkerPromptInput): Promise<Response> {
     // The connect timeout protects the handshake only. The response body is
     // the turn stream and may legitimately stay open for a long Bot turn; the
@@ -50,7 +70,7 @@ export class PiWorkerClient {
     connectTimer.unref?.();
     let response: Response;
     try {
-      response = await fetch(`${this.binding.workerUrl}/v1/events`, {
+      response = await this.connectPrompt({
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify({
@@ -60,9 +80,9 @@ export class PiWorkerClient {
         cache: "no-store",
         signal: lifetime.signal,
       });
-    } catch (error) {
+    } catch {
       throw new PiWorkerError(
-        error instanceof Error ? error.message : "Bot worker is unreachable",
+        "Could not reach the Bot worker. Please try again.",
         503,
         true,
       );

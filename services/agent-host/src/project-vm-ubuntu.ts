@@ -8,12 +8,14 @@ import { dirname, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
 import { AgentHostError } from './errors.js'
+import { SshTransport } from './ssh.js'
 import {
   shellQuote,
   type ProjectVmCommandResult,
   type ProjectVmDiskMode,
   type ProjectVmMachineDriver,
   type ProjectVmMachineSpec,
+  type ProjectVmPortForward,
 } from './project-vm.js'
 
 const execFile = promisify(execFileCallback)
@@ -56,6 +58,8 @@ export interface UbuntuQemuProjectVmDriverOptions {
   qemuCommand?: string
   qemuImgCommand?: string
   sshCommand?: string
+  /** Route host-to-guest OpenSandbox traffic through SSH. */
+  tunnelOpenSandbox?: boolean
   scpCommand?: string
   sshKeygenCommand?: string
   guestUser?: string
@@ -375,6 +379,7 @@ export function ubuntuProjectVmQemuArguments(input: UbuntuProjectVmQemuArguments
  * starts it again from the same disk.
  */
 export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
+  readonly forwardPort?: ProjectVmMachineDriver['forwardPort']
   private readonly projectBaseDisk: string
   private readonly kernelPath: string
   private readonly initrdPath: string
@@ -435,6 +440,35 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     this.baseFingerprint = options.baseFingerprint?.trim() || 'unversioned'
     this.gpu = options.gpu === true
     this.freePageReporting = options.freePageReporting !== false
+    if (options.tunnelOpenSandbox) this.forwardPort = this.forwardServicePort.bind(this)
+  }
+
+  private async forwardServicePort(name: string, remotePort: number, service?: 'opensandbox' | 'browserHost' | 'codeServer'): Promise<ProjectVmPortForward> {
+    if (service !== 'opensandbox') return { localPort: remotePort, close: async () => undefined }
+    const directory = stateDirectory(this.stateRoot, name)
+    const record = await readJson<UbuntuProjectVmRecord>(stateFile(directory, 'vm.json'))
+    if (!record?.servicePorts.includes(remotePort)) {
+      throw new AgentHostError('INVALID_TARGET', 'The Project VM service port is not registered')
+    }
+    // QEMU owns the loopback SSH endpoint and the VM has its own durable key.
+    // Pin its host key on first use and forward only registered guest ports.
+    const transport = new SshTransport({ id: name, host: '127.0.0.1', user: record.guestUser, port: record.sshPort, remoteRoot: '/' }, {
+      identityFile: stateFile(directory, 'id_ed25519'),
+      knownHostsFile: stateFile(directory, 'known_hosts'),
+      localVmTunnel: { executable: this.ssh },
+    })
+    const stateFilePath = stateFile(directory, 'opensandbox-forward.json')
+    const previousPort = (await readJson<{ localPort?: number }>(stateFilePath))?.localPort
+    const preferred = previousPort && Number.isSafeInteger(previousPort) && previousPort >= 1024 && previousPort <= 65535
+      && await this.hostPortAvailable(previousPort) ? previousPort : undefined
+    const forward = await transport.tunnel(remotePort, preferred)
+    try {
+      await atomicWrite(stateFilePath, JSON.stringify({ localPort: forward.localPort }))
+      return forward
+    } catch (error) {
+      await forward.close()
+      throw error
+    }
   }
 
   async ensureMachine(name: string, spec: ProjectVmMachineSpec): Promise<void> {
@@ -507,11 +541,11 @@ export class UbuntuQemuProjectVmDriver implements ProjectVmMachineDriver {
     }
   }
 
-  async streamToMachine(name: string, command: string, args: string[], sourcePath: string): Promise<void> {
+  async streamToMachine(name: string, command: string, args: string[], sourcePath: string): Promise<ProjectVmCommandResult> {
     const directory = stateDirectory(this.stateRoot, name)
     const record = await this.requireRecord(directory)
     try {
-      await this.stream(this.ssh, this.sshArgs(record, [command, ...args]), sourcePath, {
+      return await this.stream(this.ssh, this.sshArgs(record, [command, ...args]), sourcePath, {
         timeout: DEFAULT_STREAM_TIMEOUT_MS,
       })
     } catch (error) {

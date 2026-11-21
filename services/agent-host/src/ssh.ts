@@ -192,6 +192,8 @@ export interface SshTransportOptions {
   privateKey?: string
   knownHostsFile: string
   connectTimeoutSeconds?: number
+  /** Trust on first use only for locally managed VM endpoints. */
+  localVmTunnel?: { executable: string }
 }
 
 export interface SshTunnel {
@@ -264,18 +266,20 @@ export class SshTransport {
     ]))
   }
 
-  async tunnel(remotePort = 43122): Promise<SshTunnel> {
+  async tunnel(remotePort = 43122, preferredLocalPort?: number): Promise<SshTunnel> {
     if (!Number.isSafeInteger(remotePort) || remotePort < 1 || remotePort > 65_535) throw new AgentHostError('INVALID_TARGET', 'Remote tunnel port is invalid')
-    const localPort = await availablePort()
+    const localPort = preferredLocalPort ?? await availablePort()
     const temporaryIdentity = await this.createTemporaryIdentity()
+    const localVm = this.options.localVmTunnel
     const args = [
-      ...this.baseArgs(temporaryIdentity?.path),
+      ...this.baseArgs(temporaryIdentity?.path, localVm ? 'accept-new' : 'yes'),
       '-N',
       '-o', 'ExitOnForwardFailure=yes',
+      ...(localVm ? ['-o', 'ConnectionAttempts=3', '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=3'] : []),
       '-L', `127.0.0.1:${localPort}:127.0.0.1:${remotePort}`,
       endpoint(this.target),
     ]
-    const child = spawn('ssh', args, { shell: false, stdio: ['ignore', 'ignore', 'pipe'] })
+    const child = spawn(localVm?.executable ?? 'ssh', args, { shell: false, stdio: ['ignore', 'ignore', 'pipe'] })
     let stderr = ''
     child.stderr.on('data', (chunk: Buffer) => { stderr = `${stderr}${chunk.toString('utf8')}`.slice(-8192) })
     try {
@@ -291,23 +295,23 @@ export class SshTransport {
     return {
       localPort,
       close: async () => {
-        if (child.exitCode !== null) return
+        if (child.exitCode !== null || child.signalCode !== null) return
         child.kill('SIGTERM')
         await Promise.race([
           new Promise<void>((resolveExit) => child.once('exit', () => resolveExit())),
           new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
         ])
-        if (child.exitCode === null) child.kill('SIGKILL')
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
         await temporaryIdentity?.cleanup()
       },
     }
   }
 
-  private baseArgs(identityFile = this.options.identityFile): string[] {
+  private baseArgs(identityFile = this.options.identityFile, strictHostKeyChecking: 'yes' | 'accept-new' = 'yes'): string[] {
     return [
       '-p', String(this.target.port),
       '-o', 'BatchMode=yes',
-      '-o', 'StrictHostKeyChecking=yes',
+      '-o', `StrictHostKeyChecking=${strictHostKeyChecking}`,
       '-o', `UserKnownHostsFile=${this.options.knownHostsFile}`,
       '-o', `ConnectTimeout=${this.options.connectTimeoutSeconds ?? 10}`,
       ...(identityFile ? ['-i', identityFile] : []),

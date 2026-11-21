@@ -63,7 +63,7 @@ export interface ProjectVmMachineDriver {
    * image archives so a multi-gigabyte tar never lands on the thin Project
    * disk before the engine consumes it.
    */
-  streamToMachine?(name: string, command: string, args: string[], sourcePath: string): Promise<void>
+  streamToMachine?(name: string, command: string, args: string[], sourcePath: string): Promise<ProjectVmCommandResult>
   copyToMachine?(name: string, sourcePath: string, destinationPath: string): Promise<void>
   /** Copy a file out of the guest for backup/migration. */
   copyFromMachine?(name: string, sourcePath: string, destinationPath: string): Promise<void>
@@ -75,7 +75,7 @@ export interface ProjectVmMachineDriver {
    * SSH-backed drivers return a real tunnel which must be closed with the
    * project runtime.
    */
-  forwardPort?(name: string, remotePort: number): Promise<ProjectVmPortForward>
+  forwardPort?(name: string, remotePort: number, service?: 'opensandbox' | 'browserHost' | 'codeServer'): Promise<ProjectVmPortForward>
   /**
    * Cheap running-state probe used to avoid waiting on a stopped VM's
    * unreachable published ports during persisted-runtime reattachment.

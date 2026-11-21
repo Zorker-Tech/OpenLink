@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { startPromptHttpServer, type PromptRuntimeBackend } from '../src/prompt-http-server.js'
+import type { ProjectRuntimeController } from '../src/project-runtime-router.js'
 
 const PROJECT_ID = '2c51ca26-3cd0-4cb4-896d-2061de06098c'
 const CODE_TOKEN = 'code-token-which-is-long-enough'
@@ -33,17 +34,26 @@ test('Bot substrate uses its own token, one sandbox per Bot key, and idempotent 
   context.after(async () => { await rm(storageRoot, { recursive: true, force: true }) })
   const created: string[] = []
   const cleaned: string[] = []
+  let projectEndpoint = 'http://127.0.0.1:39001'
+  const projectRuntimeManager = {
+    ensure: async () => ({ projectId: PROJECT_ID, opensandboxEndpoint: projectEndpoint }),
+    prepareSessionStorage: async () => {},
+    ensureProjectGitRepository: async () => {},
+    getGitPreviewSessionBinding: async () => undefined,
+  } as unknown as ProjectRuntimeController
   const backend: PromptRuntimeBackend = {
     createSession: async (_userId, _workspaceId, sessionId) => {
       created.push(sessionId)
+      let endpoint = projectEndpoint
       return {
         sandboxId: `sandbox-${sessionId}`,
         prompt: async () => new Response(),
         workerEndpoint: async () => ({
-          url: `http://worker/${sessionId}`,
+          url: `${endpoint}/${sessionId}`,
           headers: { 'X-OpenLink-Agent-Worker-Token': 'worker-token' },
         }),
         desktopEndpoint: async () => ({ url: `http://desktop/${sessionId}/vnc.html` }),
+        rebindProjectRuntime: async (project) => { endpoint = project.opensandboxEndpoint },
         cleanup: async () => { cleaned.push(sessionId) },
       }
     },
@@ -57,6 +67,7 @@ test('Bot substrate uses its own token, one sandbox per Bot key, and idempotent 
     storageRoot,
     transport: 'test',
     sessionIdleTtlMs: 60_000,
+    projectRuntimeManager,
   }, backend)
   context.after(async () => { runtime.server.close(); await runtime.shutdown() })
   const address = runtime.server.address() as AddressInfo
@@ -84,16 +95,20 @@ test('Bot substrate uses its own token, one sandbox per Bot key, and idempotent 
   assert.equal(payload.ok, true)
   assert.equal(payload.boxKey, BOT_KEY)
   assert.equal(payload.sandboxId, `sandbox-${BOT_KEY}`)
-  assert.equal(payload.workerUrl, `http://worker/${BOT_KEY}`)
+  assert.equal(payload.workerUrl, `${projectEndpoint}/${BOT_KEY}`)
   assert.equal(payload.workerHeaders['X-OpenLink-Agent-Worker-Token'], 'worker-token')
   assert.match(String(payload.desktopUrl), new RegExp(`/v1/desktop/gateway/sessions/${BOT_KEY}/`))
   assert.equal(payload.vncUrl, `http://desktop/${BOT_KEY}/vnc.html`)
   assert.equal(payload.created, true)
   assert.deepEqual(created, [BOT_KEY])
 
+  projectEndpoint = 'http://127.0.0.1:39002'
   const again = await fetch(ensureUrl, { method: 'POST', headers: substrateHeaders, body: substrateBody() })
   assert.equal(again.status, 200)
-  assert.equal((await again.json() as Record<string, any>).created, false)
+  const rebound = await again.json() as Record<string, any>
+  assert.equal(rebound.created, false)
+  assert.equal(rebound.workerUrl, `${projectEndpoint}/${BOT_KEY}`)
+  assert.equal(rebound.sandboxId, payload.sandboxId)
   assert.deepEqual(created, [BOT_KEY])
 
   const desktop = await fetch(`${base}/v1/substrate/bots/${BOT_KEY}/desktop`, {

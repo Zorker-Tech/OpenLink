@@ -1107,15 +1107,24 @@ test('streams image archives into the engine instead of staging them on the Proj
   const streamed: Array<{ command: string; args: string[]; sourcePath: string }> = []
   const copied: string[] = []
   const loaded: string[][] = []
+  const workerTags: string[][] = []
+  let workerImported = false
   const machineDriver: ProjectVmMachineDriver = {
     ensureMachine: async () => undefined,
     bootstrapToolchain: async () => undefined,
     copyToMachine: async (_machine, source) => { copied.push(source) },
-    streamToMachine: async (_machine, command, args, sourcePath) => { streamed.push({ command, args, sourcePath }) },
+    streamToMachine: async (_machine, command, args, sourcePath) => {
+      streamed.push({ command, args, sourcePath })
+      if (sourcePath !== '/tmp/test-worker.tar') return { stdout: '', stderr: '' }
+      workerImported = true
+      return { stdout: 'Loaded image: localhost/test/worker\n', stderr: '' }
+    },
     runInMachine: async (_machine, command, args = []) => {
       if (command === 'sudo' && args[0] === '-n' && args[1] === 'podman' && args[2] === 'image' && args[3] === 'exists') {
+        if (args[4] === 'test/worker' || (workerImported && args[4] === 'localhost/test/worker')) return { stdout: '', stderr: '' }
         throw new Error('image not found')
       }
+      if (command === 'sudo' && args[1] === 'podman' && args[2] === 'tag') workerTags.push(args.slice(3))
       if (command === 'sudo' && args[0] === '-n' && args[1] === 'podman' && args[2] === 'load') loaded.push(args)
       return { stdout: '', stderr: '' }
     },
@@ -1136,6 +1145,7 @@ test('streams image archives into the engine instead of staging them on the Proj
     egressImage: 'test/egress', agentWorkerImage: 'test/worker', agentRpcWorkerImage: 'test/rpc',
     codeServerImage: 'test/code-server',
     imageArchives: Object.fromEntries(images.map((image) => [image, `/tmp/${image.replaceAll('/', '-')}.tar`])),
+    imageArchiveVersions: { 'test/worker': 'new-revision' },
   }
   await (serviceDriver as unknown as { ensureImages(input: ProjectRuntimeServiceInput): Promise<void> }).ensureImages(input)
   assert.equal(streamed.length, images.length)
@@ -1143,6 +1153,7 @@ test('streams image archives into the engine instead of staging them on the Proj
   assert.ok(streamed.every((call) => call.command === 'sudo' && call.args.join(' ') === '-n podman load'))
   assert.deepEqual(copied, [], 'a streamed archive must never be copied to the Project disk')
   assert.deepEqual(loaded, [], 'a streamed archive must not use the file-based load path')
+  assert.deepEqual(workerTags, [['localhost/test/worker', 'test/worker'], ['localhost/test/worker', 'docker.io/test/worker']])
 })
 
 test('reports an absent Project desktop as unsupported instead of failing', async () => {

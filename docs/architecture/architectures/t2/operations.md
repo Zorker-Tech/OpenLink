@@ -40,6 +40,11 @@ T1 remains the default. T2 uses a separate Project VM state root
 `.openlink-runtime/project-vms/t2`, so a T1 and T2 runtime cannot overwrite
 each other's descriptor. Do not run both modes for the same project at once.
 
+On WSL2, Agent Host connects to OpenSandbox in the T2 guest through a loopback
+SSH tunnel. Reattachment reuses the last local port when available and keeps
+the existing sandbox lease while the guest connection recovers. If the address
+changes, Bot warmup refreshes the Worker route before Work-host starts the turn.
+
 ## Desktop checks
 
 ```text

@@ -1,6 +1,27 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ensureProviderCredentialVault, ensureRecoveredWorkerProcess, projectContainerReachableUrl, waitForWorker, requestWorkerPrompt } from '../src/backends/local-opensandbox.js'
+import { retryQemuForward } from '../src/qemu-port-forward.js'
+
+test('retries a refused QEMU connection before the request is sent', async () => {
+  let attempts = 0
+  const result = await retryQemuForward(async () => {
+    if (++attempts === 1) throw new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } })
+    return 'connected'
+  })
+  assert.equal(result, 'connected')
+  assert.equal(attempts, 2)
+})
+
+test('does not replay a QEMU request after an established connection resets', async () => {
+  let attempts = 0
+  const error = new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } })
+  await assert.rejects(retryQemuForward(async () => {
+    attempts += 1
+    throw error
+  }), (received) => received === error)
+  assert.equal(attempts, 1)
+})
 
 test('cancellation reaches a Worker whose response headers have not arrived', async () => {
   const original = globalThis.fetch

@@ -10,6 +10,7 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { ConnectionConfig, Sandbox } from '@alibaba-group/opensandbox'
 import { AgentHostError } from './errors.js'
+import { retryQemuForward } from './qemu-port-forward.js'
 import { isProjectId, type ProjectVmDescriptor, type ProjectVmDiskMode, type ProjectVmManager, type ProjectVmMachineDriver, type ProjectVmCommandResult, type ProjectVmPortForward } from './project-vm.js'
 import type { ProjectRuntimeStatusUpdate, ProjectRuntimeStatusWriter } from './project-runtime-status.js'
 import { AGENT_TOOL_CLI } from './agent-tools.js'
@@ -771,9 +772,9 @@ export class ProjectRuntimeManager {
       if (this.machineDriver.forwardPort) {
         const forwards: ProjectVmPortForward[] = []
         try {
-          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.opensandbox))
-          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.browserHost))
-          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.codeServer))
+          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.opensandbox, 'opensandbox'))
+          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.browserHost, 'browserHost'))
+          forwards.push(await this.machineDriver.forwardPort(machineName, servicePorts.codeServer, 'codeServer'))
         } catch (error) {
           await Promise.allSettled(forwards.map((forward) => forward.close()))
           throw error
@@ -2092,7 +2093,8 @@ export class ProjectRuntimeManager {
       ...(scope === 'all' ? [[descriptor.browserHostEndpoint, '/healthz'], [descriptor.codeServerEndpoint, '/healthz']] as Array<[string, string]> : []),
     ]
     for (const [endpoint, path] of checks) {
-      const response = await fetch(`${endpoint}${path}`, { signal: AbortSignal.timeout(1_500), cache: 'no-store' })
+      const probe = () => fetch(`${endpoint}${path}`, { signal: AbortSignal.timeout(1_500), cache: 'no-store' })
+      const response = await (descriptor.backend === 'qemu-kvm' ? retryQemuForward(probe) : probe())
       if (!response.ok) throw new Error(`${endpoint}${path} returned HTTP ${response.status}`)
       if (response.body) await response.body.cancel().catch(() => undefined)
     }
@@ -2233,9 +2235,9 @@ export class ProjectRuntimeManager {
       if (this.machineDriver.forwardPort) {
         try {
           await this.writeStatus({ projectId, backend: vm.backend, machineName: vm.machineName, workspacePath: vm.workspacePath, status: 'provisioning', phase: 'connecting_services', diskMode: vm.diskMode })
-          forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.opensandbox))
-          forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.browserHost))
-          forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.codeServer))
+          forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.opensandbox, 'opensandbox'))
+          forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.browserHost, 'browserHost'))
+          forwards.push(await this.machineDriver.forwardPort(vm.machineName, ports.codeServer, 'codeServer'))
         } catch (error) {
           // Register partial forwards before attempting cleanup. If a tunnel
           // refuses to close, the next provisioning/retry can find and close
@@ -3200,14 +3202,13 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
     const copyToMachine = this.machineDriver.copyToMachine?.bind(this.machineDriver)
     const copyRemoteToMachine = this.machineDriver.copyRemoteToMachine?.bind(this.machineDriver)
     const loadedArchives = new Set<string>()
-    // Recover from a host/process interruption during an earlier import.
-    // /tmp is a small tmpfs on Project VMs and can be smaller than one of the
-    // worker archives; stage large files on the disk-backed /var/tmp instead.
-    // Image transfer temp files are disposable. /tmp can also contain
-    // root-unreadable desktop helper files (for example FreeRDP clipboard
-    // entries); a failed sweep must not abort Project runtime provisioning.
-    await runInMachine(input.machineName, 'find', ['/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete']).catch(() => undefined)
-    await runInMachine(input.machineName, 'find', ['/var/tmp', '-maxdepth', '1', '-type', 'f', '-name', 'openlink-image-*.tar', '-delete']).catch(() => undefined)
+    // Recover partial imports from both staging locations. Match archive names
+    // before checking file types so stale desktop mounts cannot block startup.
+    await runInMachine(input.machineName, 'sh', ['-c', [
+      'for archive in /tmp/openlink-image-*.tar /var/tmp/openlink-image-*.tar; do',
+      '  if [ ! -L "$archive" ] && [ -f "$archive" ]; then rm -f -- "$archive"; fi',
+      'done',
+    ].join('\n')]).catch(() => undefined)
     const imageNames = [input.opensandboxImage, input.browserHostImage, input.execdImage, input.egressImage, input.agentWorkerImage, input.agentRpcWorkerImage, input.codeServerImage]
     for (const image of imageNames) {
       const archive = input.imageArchives?.[image]
@@ -3241,14 +3242,14 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       if (!archive) throw new AgentHostError('BACKEND_NOT_CONFIGURED', 'Image ' + image + ' is not loaded into project VM and no image archive is configured')
       if (loadedArchives.has(archive)) continue
       const streamToMachine = this.machineDriver.streamToMachine?.bind(this.machineDriver)
-      let loadedImageOutput = ''
+      let loaded: ProjectVmCommandResult
       if (!archive.startsWith('remote:') && streamToMachine) {
         // Feed the archive to `podman load` over SSH stdin. The bytes never
         // become a file on the Project disk, so a multi-gigabyte archive does
         // not permanently consume thin-overlay clusters even before the engine
         // starts storing the layers it actually needs.
         const streamed = this.serviceCommand('podman', ['load'])
-        await streamToMachine(input.machineName, streamed.command, streamed.args, archive)
+        loaded = await streamToMachine(input.machineName, streamed.command, streamed.args, archive)
       } else {
         const filename = '/var/tmp/openlink-image-' + image.replace(/[^A-Za-z0-9_.-]/g, '_') + '.tar'
         if (archive.startsWith('remote:')) {
@@ -3259,8 +3260,7 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
           await copyToMachine(input.machineName, archive, filename)
         }
         try {
-          const loaded = await runInMachine(input.machineName, 'podman', ['load', '--input', filename])
-          loadedImageOutput = `${loaded.stdout}\n${loaded.stderr}`
+          loaded = await runInMachine(input.machineName, 'podman', ['load', '--input', filename])
         } finally {
           // Image archives are staging artifacts, not runtime state. Keeping all
           // seven tarballs on the VM disk can exhaust a fresh Project VM before
@@ -3273,8 +3273,8 @@ export class PodmanProjectRuntimeServiceDriver implements ProjectRuntimeServiceD
       // imports as docker.io/<image>. A Project VM can also have an older
       // localhost/<image> alias from its base disk. Prefer the reference
       // reported by this load, then update all aliases so OpenSandbox cannot
-      // resolve the stale base-disk image on the next session. A streamed load
-      // reports nothing, so the short name is also a candidate.
+      // resolve the stale base-disk image on the next session.
+      const loadedImageOutput = `${loaded.stdout}\n${loaded.stderr}`
       const loadedReferences = [...loadedImageOutput.matchAll(/Loaded image(?:\(s\))?:\s*([^\s,]+)/g)]
         .map((match) => match[1].trim())
       const importedCandidates = [...new Set([...loadedReferences, image, `docker.io/${image}`, `localhost/${image}`])]

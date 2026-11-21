@@ -8,6 +8,7 @@ import { dirname, resolve } from 'node:path'
 import { resolve as resolveGuestPath } from 'node:path/posix'
 import { promisify } from 'node:util'
 import { AgentHostError } from '../errors.js'
+import { isQemuForwardConnectionRefused, retryQemuForward } from '../qemu-port-forward.js'
 import type { AgentExtensionUiResponse, AgentNativeSessionSnapshot, AgentProviderRuntimeConfiguration } from '../contracts.js'
 import type { DesktopEndpoint } from '../desktop-gateway.js'
 import type { BrowserAgentSession } from '../browser-client.js'
@@ -69,6 +70,7 @@ export interface OpenSandboxPromptSession {
   networkAccess(hosts: string[], mode: 'temporary' | 'persistent', durationSeconds?: number): Promise<void>
   resources(request?: AgentResourceRequest): Promise<unknown>
   workerEndpoint(): Promise<{ url: string; headers: Record<string, string> }>
+  rebindProjectRuntime(project: ProjectRuntimeDescriptor): Promise<void>
   desktopEndpoint(): Promise<DesktopEndpoint>
   desktopStatus(): Promise<DesktopRuntimeStatus>
   suspendDesktop(): Promise<DesktopSuspendResult>
@@ -376,7 +378,6 @@ export class LocalOpenSandboxBackend {
     const desktopMode = this.desktopModeFor(projectRuntime)
     // T1 exposes one native desktop per Project VM. Every chat session shares
     // it instead of starting its own container desktop.
-    const projectDesktopUrl = projectRuntime?.desktopEndpoint
     let activeSandbox = sandbox
     let endpoint = await activeSandbox.getEndpoint(43130)
     let baseUrl = workerUrl(connection, endpoint)
@@ -385,6 +386,7 @@ export class LocalOpenSandboxBackend {
     let cleanupPromise: Promise<void> | undefined
     let desktopStarted = false
     let desktopStarting: Promise<void> | undefined
+    let rebind = Promise.resolve()
     const networkTimers = new Set<ReturnType<typeof setTimeout>>()
     const ensureRunning = async (): Promise<void> => {
       if (cleaned) throw new AgentHostError('INVALID_SESSION', 'Agent Worker session has been cleaned up', { retryable: true })
@@ -397,6 +399,7 @@ export class LocalOpenSandboxBackend {
       paused = false
     }
     const desktopEndpoint = async (): Promise<DesktopEndpoint> => {
+      const projectDesktopUrl = projectRuntime?.desktopEndpoint
       if (projectDesktopUrl) return { url: projectDesktopUrl, headers: {} }
       await ensureRunning()
       if (!desktopStarted) {
@@ -419,7 +422,7 @@ export class LocalOpenSandboxBackend {
     const desktopControl = async (action: 'status' | 'suspend' | 'resume'): Promise<DesktopRuntimeStatus> => {
       // The project-level desktop is owned by the Project VM, not by a chat
       // session. It must not be paused just because one chat went idle.
-      if (projectDesktopUrl) return { state: 'running', suspended: false }
+      if (projectRuntime?.desktopEndpoint) return { state: 'running', suspended: false }
       // Do not wake a paused sandbox just to inspect or sleep its desktop.
       if (paused) return { state: 'stopped', suspended: false }
       await ensureRunning()
@@ -434,6 +437,35 @@ export class LocalOpenSandboxBackend {
         paused = true
       },
       resume: ensureRunning,
+      rebindProjectRuntime: (next) => {
+        const attempt = rebind.then(async () => {
+          if (!projectRuntime || projectRuntime.projectId !== next.projectId) return
+          if (projectRuntime.opensandboxEndpoint === next.opensandboxEndpoint) {
+            if (!paused) await ensureRecoveredWorkerProcess(activeSandbox, baseUrl, endpoint.headers ?? {})
+            return
+          }
+          const newConnection = this.connectionFor(next)
+          const reconnect = () => Sandbox.connect({ sandboxId: activeSandbox.id, connectionConfig: newConnection, skipHealthCheck: true })
+          const replacement = await (next.backend === 'qemu-kvm' ? retryQemuForward(reconnect) : reconnect())
+          try {
+            const newEndpoint = await replacement.getEndpoint(43130)
+            const newUrl = workerUrl(newConnection, newEndpoint)
+            if (!paused) await ensureRecoveredWorkerProcess(replacement, newUrl, newEndpoint.headers ?? {})
+            const previous = activeSandbox
+            activeSandbox = replacement
+            connection = newConnection
+            endpoint = newEndpoint
+            baseUrl = newUrl
+            projectRuntime = next
+            await previous.close().catch(() => undefined)
+          } catch (error) {
+            await replacement.close().catch(() => undefined)
+            throw error
+          }
+        })
+        rebind = attempt.catch(() => undefined)
+        return attempt
+      },
       prompt: async (message, signal, attachments) => {
         await ensureRunning()
         return requestWorkerPrompt(baseUrl, workerHeaders(), message, signal, attachments)
@@ -554,9 +586,11 @@ export class LocalOpenSandboxBackend {
       return null
     }
     const connection = this.connectionFor(projectRuntime)
+    const forward = projectRuntime?.backend === 'qemu-kvm'
+    const read = <T>(operation: () => Promise<T>) => forward ? retryQemuForward(operation) : operation()
     try {
-      let sandbox = await Sandbox.connect({ sandboxId: lease.sandboxId, connectionConfig: connection, skipHealthCheck: true })
-      const info = await sandbox.getInfo()
+      let sandbox = await read(() => Sandbox.connect({ sandboxId: lease.sandboxId, connectionConfig: connection, skipHealthCheck: true }))
+      const info = await read(() => sandbox.getInfo())
       if (info.status.state === 'Paused' || info.status.state === 'Pausing') {
         sandbox = await sandbox.resume({ readyTimeoutSeconds: 180 })
       } else if (info.status.state !== 'Running' && info.status.state !== 'Resuming') {
@@ -572,14 +606,17 @@ export class LocalOpenSandboxBackend {
           runtimeConfiguration.apiKey,
         )
       }
-      const endpoint = await sandbox.getEndpoint(43130)
-      await ensureRecoveredWorkerProcess(sandbox, workerUrl(connection, endpoint), endpoint.headers ?? {})
+      const endpoint = await read(() => sandbox.getEndpoint(43130))
+      await read(() => ensureRecoveredWorkerProcess(sandbox, workerUrl(connection, endpoint), endpoint.headers ?? {}))
       const layout = createSessionStorageLayout(projectRuntime?.sessionStorageRoot ?? this.config.storageRoot, userId, workspaceId, sessionId)
       const runtime = await this.runtimeHandle(sandbox, connection, lease.workerToken, layout, leaseFile, projectRuntime)
       if (browserSession) await runtime.setBrowser(browserSession)
       return runtime
     } catch (error) {
       console.warn(`OpenLink could not reattach Agent sandbox ${lease.sandboxId}: ${error instanceof Error ? error.message : String(error)}`)
+      if (forward && isQemuForwardConnectionRefused(error)) {
+        throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', 'Project VM forwarding is temporarily unavailable', { retryable: true })
+      }
       await rm(leaseFile, { force: true }).catch(() => undefined)
       return null
     }
@@ -597,12 +634,14 @@ export class LocalOpenSandboxBackend {
         }
       })()
       : { domain: this.config.domain, protocol: 'http' as const, apiKey: this.config.apiKey }
-    await cleanupOpenSandboxSessionWorkloads(connection, {
+    const cleanup = () => cleanupOpenSandboxSessionWorkloads(connection, {
       'openlink.user_id': userId,
       'openlink.workspace_id': workspaceId,
       'openlink.session_id': sessionId,
       ...(projectId ? { 'openlink.project_id': projectId } : {}),
     })
+    if (projectRuntime?.backend === 'qemu-kvm') await retryQemuForward(cleanup)
+    else await cleanup()
     await rm(this.leaseFile(userId, workspaceId, sessionId), { force: true })
   }
 
