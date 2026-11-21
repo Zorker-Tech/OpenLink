@@ -30,6 +30,7 @@ export async function runGroupMemberRounds(
       if (member == null) continue
 
       const messages = await runGroupMemberTurn(dependencies, request.group, member, members)
+      if (!dependencies.isCurrent()) return
       let reachedConversationLimit = false
       for (const message of messages) {
         dependencies.postMemberMessage(member, message)

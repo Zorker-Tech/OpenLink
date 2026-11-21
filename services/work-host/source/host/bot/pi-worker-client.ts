@@ -20,6 +20,7 @@ export interface PiWorkerPromptInput {
   readonly message: string;
   readonly images?: ReadonlyArray<{ readonly type: "image"; readonly data: string; readonly mimeType: string }>;
   readonly deliveryGuidance?: string;
+  readonly management?: boolean;
 }
 
 export class PiWorkerError extends Error {
@@ -42,10 +43,10 @@ export class PiWorkerClient {
     return { ...this.binding.workerHeaders, "Content-Type": "application/json" };
   }
 
-  private async connectPrompt(request: RequestInit): Promise<Response> {
+  private async connectPrompt(request: RequestInit, groupMember: boolean): Promise<Response> {
     const workerUrl = new URL(this.binding.workerUrl);
     const forwarded = workerUrl.hostname === "127.0.0.1" && workerUrl.pathname.startsWith("/v1/sandboxes/");
-    const send = () => fetch(`${this.binding.workerUrl}/v1/events`, request);
+    const send = () => fetch(`${this.binding.workerUrl}${groupMember ? '/v1/group/events' : '/v1/events'}`, request);
     if (!forwarded) return send();
     for (const interval of [100, 250, 500, 800]) {
       try {
@@ -61,7 +62,7 @@ export class PiWorkerClient {
     return send();
   }
 
-  async prompt(input: PiWorkerPromptInput): Promise<Response> {
+  async prompt(input: PiWorkerPromptInput, groupMember = false): Promise<Response> {
     // The connect timeout protects the handshake only. The response body is
     // the turn stream and may legitimately stay open for a long Bot turn; the
     // runner owns its idle/total deadlines and aborts this controller when it
@@ -78,11 +79,12 @@ export class PiWorkerClient {
         body: JSON.stringify({
           message: input.message,
           ...(input.deliveryGuidance === undefined ? {} : { deliveryGuidance: input.deliveryGuidance }),
+          ...(input.management ? { management: true } : {}),
           ...(input.images === undefined || input.images.length === 0 ? {} : { attachments: input.images }),
         }),
         cache: "no-store",
         signal: lifetime.signal,
-      });
+      }, groupMember);
     } catch {
       throw new PiWorkerError(
         "Could not reach the Bot worker. Please try again.",
@@ -101,6 +103,14 @@ export class PiWorkerClient {
       );
     }
     return response;
+  }
+
+  async resolveManagement(id: string, result: Record<string, unknown>, groupMember: boolean): Promise<void> {
+    const response = await fetch(`${this.binding.workerUrl}/v1/${groupMember ? 'group/' : ''}management/resolve`, {
+      method: 'POST', headers: this.headers(), body: JSON.stringify({ id, result }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) throw new PiWorkerError('The worker could not receive the management result', response.status, false);
   }
 
   /**
@@ -163,13 +173,13 @@ export class PiWorkerClient {
     }
   }
 
-  /** One tool-free completion on the Bot's model for divergence or gate work. */
+  /** Run a tool-free completion independently of the Bot's active turn. */
   async inspirationComplete(input: {
     systemPrompt: string;
     prompt: string;
     maxTokens?: number;
     temperature?: number;
-  }): Promise<{ text: string; usage?: Record<string, number>; costUsd: number } | null> {
+  }, signal?: AbortSignal): Promise<{ text: string; usage?: Record<string, number>; costUsd: number } | null> {
     try {
       const response = await fetch(`${this.binding.workerUrl}/v1/inspiration/complete`, {
         method: "POST",
@@ -181,7 +191,7 @@ export class PiWorkerClient {
           ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
         }),
         cache: "no-store",
-        signal: AbortSignal.timeout(INSPIRATION_COMPLETE_TIMEOUT_MS),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(INSPIRATION_COMPLETE_TIMEOUT_MS)]) : AbortSignal.timeout(INSPIRATION_COMPLETE_TIMEOUT_MS),
       });
       if (!response.ok) return null;
       const payload = await response.json().catch(() => null) as {
@@ -208,8 +218,8 @@ export class PiWorkerClient {
     this.#lifetime?.abort();
   }
 
-  async cancel(): Promise<void> {
-    await fetch(`${this.binding.workerUrl}/v1/cancel`, {
+  async cancel(groupMember = false): Promise<void> {
+    await fetch(`${this.binding.workerUrl}${groupMember ? '/v1/group/cancel' : '/v1/cancel'}`, {
       method: "POST",
       headers: this.headers(),
       body: "{}",

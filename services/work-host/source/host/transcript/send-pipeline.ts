@@ -66,6 +66,7 @@ export interface SendPromptOptions {
   readonly composedAtMs?: number;
   readonly enterEpochMs?: number;
   readonly requireQuickBotReply?: boolean;
+  readonly queueUserTurn?: boolean;
 }
 
 export interface EchoEntry {
@@ -315,6 +316,9 @@ export class SendPipeline {
           messageEntryId = entry.entry.id;
           echoes.push(entry);
         }
+        if (settings.queueUserTurn && (!durable || messageEntryId === undefined)) {
+          throw new Error('The user message could not be stored');
+        }
       } catch (error) {
         for (const { entry } of echoes) {
           session.db.deleteTranscriptEntry(entry.id);
@@ -343,7 +347,7 @@ export class SendPipeline {
       if (ackOwed)
         this.tm.ackObligations.recordAckObligationSend(session, acceptedAtMs);
       if (ackOwed && durable && settings.requireQuickBotReply && messageEntryId) {
-        this.tm.ackObligations.armQuickBotReply(session, messageEntryId, cleanPrompt, acceptedAtMs);
+        this.tm.ackObligations.armQuickBotReply(session, messageEntryId, cleanPrompt, acceptedAtMs, attachmentPaths.length > 0);
       }
       const ackGuardHandle = this.tm.ackObligations.armSendGuard(
         session,
@@ -412,6 +416,7 @@ export class SendPipeline {
           clientNonce: settings.clientNonce,
           userMessageId: messageEntryId,
           awaitTurn,
+          queueUserTurn: settings.queueUserTurn === true,
           acceptedAtMs,
           traceCtx: trace?.context,
           readAddressedTranscript: readTranscript,
@@ -436,6 +441,7 @@ export class SendPipeline {
           ? {}
           : { clientNonce: settings.clientNonce }),
         awaitTurn,
+        queueUserTurn: settings.queueUserTurn === true,
         isFork: threadingInfo.isFork,
         ...(messageEntryId == null ? {} : { userMessageId: messageEntryId }),
         ...(threadingInfo.replyContext == null

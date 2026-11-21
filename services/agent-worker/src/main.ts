@@ -248,8 +248,8 @@ type WorkerPromptAttachment = {
   relativePath?: string; sizeBytes: number; sha256: string; contentBase64: string
 }
 
-async function readPrompt(request: IncomingMessage): Promise<{ message: string; attachments: WorkerPromptAttachment[]; deliveryGuidance?: string }> {
-  const body = await readRequestJson(request, 16 * 1024 * 1024) as { message?: unknown; attachments?: unknown; deliveryGuidance?: unknown }
+async function readPrompt(request: IncomingMessage): Promise<{ message: string; attachments: WorkerPromptAttachment[]; deliveryGuidance?: string; management: boolean }> {
+  const body = await readRequestJson(request, 16 * 1024 * 1024) as { message?: unknown; attachments?: unknown; deliveryGuidance?: unknown; management?: unknown }
   const message = typeof body.message === 'string' ? body.message.trim() : ''
   const deliveryGuidance = typeof body.deliveryGuidance === 'string' ? body.deliveryGuidance.trim() : undefined
   if (deliveryGuidance && deliveryGuidance.length > 2_048) throw new Error('deliveryGuidance is invalid')
@@ -325,7 +325,7 @@ async function readPrompt(request: IncomingMessage): Promise<{ message: string; 
     return { type: 'image' as const, mediaType, url, ...(filename ? { filename } : {}) }
   })
   if (!message && !attachments.length) throw new Error('message is invalid')
-  return { message, attachments, ...(deliveryGuidance ? { deliveryGuidance } : {}) }
+  return { message, attachments, management: body.management === true, ...(deliveryGuidance ? { deliveryGuidance } : {}) }
 }
 
 async function readExtensionUiResponse(request: IncomingMessage): Promise<AgentExtensionUiResponse> {
@@ -476,10 +476,17 @@ class SdkAgentRuntime {
   private activeResponse?: ServerResponse
   private activeSignal?: AbortSignal
   private readonly pendingUi = new Map<string, PendingExtensionUiRequest>()
+  private readonly pendingManagement = new Map<string, (result: Record<string, unknown>) => void>()
   private gitSnapshotSignature?: string
   private turnBaseline?: GitWorkingTreeBaseline | null
 
-  constructor(private readonly worker: WorkerConfig) {}
+  constructor(private readonly worker: WorkerConfig, private readonly groupTurn = false) {}
+
+  async disposeGroupTurn(): Promise<void> {
+    await this.turnBaseline?.dispose().catch(() => undefined)
+    const context = await this.sessionPromise?.catch(() => undefined)
+    context?.session.dispose()
+  }
 
   async control(input: { action: string; text?: string }): Promise<unknown> {
     const { session, sessionManager } = await this.session()
@@ -751,12 +758,13 @@ class SdkAgentRuntime {
     }
   }
 
-  async prompt(message: string, response: ServerResponse, signal: AbortSignal, attachments: WorkerPromptAttachment[] = [], deliveryGuidance?: string): Promise<void> {
+  async prompt(message: string, response: ServerResponse, signal: AbortSignal, attachments: WorkerPromptAttachment[] = [], deliveryGuidance?: string, management = false): Promise<void> {
     if (this.busy) throw new Error('Agent is already processing a prompt')
     this.busy = true
     this.deliveryGuidance = deliveryGuidance
     this.activeResponse = response
     this.activeSignal = signal
+    let restoreTools: (() => void) | undefined
     try {
       let context: { session: AgentSession; sessionManager: SessionManager }
       try {
@@ -770,6 +778,9 @@ class SdkAgentRuntime {
         throw error
       }
       const { session, sessionManager } = context
+      const activeTools = session.getActiveToolNames().filter(name => name !== 'ManageBots')
+      session.setActiveToolsByName(management ? [...activeTools, 'ManageBots'] : activeTools)
+      if (management) restoreTools = () => session.setActiveToolsByName(activeTools)
       const uploadedFiles = await stageCodexPromptFiles(this.worker.workspaceRoot, attachments.filter((attachment): attachment is Extract<WorkerPromptAttachment, { type: 'file' }> => attachment.type === 'file'))
       const protocol = piPromptProtocolInput(
         message,
@@ -856,7 +867,7 @@ class SdkAgentRuntime {
           response.write(`${JSON.stringify({ type: 'extension_error', error: 'Agent request was canceled', terminal: true })}\n`)
         }
         this.cancelRequested = false
-        if (!response.writableEnded) {
+        if (!this.groupTurn && !response.writableEnded) {
           response.write(`${JSON.stringify({
             type: 'openlink_session_entries',
             header: sessionManager.getHeader(),
@@ -869,6 +880,7 @@ class SdkAgentRuntime {
         this.cancelPendingUi()
       }
     } finally {
+      restoreTools?.()
       this.deliveryGuidance = undefined
       this.busy = false
       this.cancelRequested = false
@@ -881,8 +893,35 @@ class SdkAgentRuntime {
   cancel(): boolean {
     if (!this.busy) return false
     this.cancelRequested = true
+    for (const resolve of this.pendingManagement.values()) resolve({ error: 'BOT_MANAGEMENT_CANCELLED' })
     this.activeAbort?.()
     return true
+  }
+
+  resolveManagement(id: string, result: Record<string, unknown>): boolean {
+    const resolve = this.pendingManagement.get(id)
+    if (!resolve) return false
+    resolve(result)
+    return true
+  }
+
+  private manageBots(parameters: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return new Promise((resolve) => {
+      const id = randomUUID()
+      const signal = this.activeSignal
+      const cancel = () => finish({ error: 'BOT_MANAGEMENT_CANCELLED' })
+      const finish = (result: Record<string, unknown>) => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', cancel)
+        this.pendingManagement.delete(id)
+        resolve(result)
+      }
+      const timer = setTimeout(() => finish({ error: 'BOT_MANAGEMENT_TIMEOUT' }), 100_000)
+      timer.unref()
+      this.pendingManagement.set(id, finish)
+      signal?.addEventListener('abort', cancel, { once: true })
+      if (signal?.aborted || !this.writeFrame({ type: 'openlink_bot_management', id, parameters })) cancel()
+    })
   }
 
   async resolveExtensionUi(response: AgentExtensionUiResponse): Promise<void> {
@@ -920,6 +959,7 @@ class SdkAgentRuntime {
     fallback: T,
     parse: (response: AgentExtensionUiResponse) => T,
   ): Promise<T> {
+    if (this.groupTurn) return Promise.resolve(fallback)
     const response = this.activeResponse
     const signal = options?.signal ?? this.activeSignal
     if (!response || response.writableEnded || response.destroyed || signal?.aborted) return Promise.resolve(fallback)
@@ -1058,7 +1098,7 @@ class SdkAgentRuntime {
 
   private async createSession(): Promise<{ session: AgentSession; sessionManager: SessionManager }> {
     const { runtime: modelRuntime, selected } = await this.modelSetup()
-    const sessionManager = this.worker.sessionFile
+    const sessionManager = this.groupTurn ? SessionManager.inMemory(this.worker.workspaceRoot) : this.worker.sessionFile
       ? SessionManager.open(this.worker.sessionFile, this.worker.sessionRoot, this.worker.workspaceRoot)
       : SessionManager.create(this.worker.workspaceRoot, this.worker.sessionRoot)
     if (this.worker.browserExtensionPath && !this.worker.browserCapabilityFile) throw new Error('OpenLink browser capability file is required when the extension is enabled')
@@ -1089,6 +1129,7 @@ class SdkAgentRuntime {
       })
     }
     const nominateBot = (target: string, task: string): boolean => {
+      if (this.groupTurn) return false
       const name = target.trim().slice(0, 200)
       const focus = task.trim().slice(0, 2000)
       if (!name || !focus) return false
@@ -1105,7 +1146,9 @@ class SdkAgentRuntime {
         defineTool({
           name: 'SendMessage',
           label: 'Send message',
-          description: 'Send a message to the user in this chat immediately. Use it for progress updates or a proactive message before the turn ends. Your final assistant reply is also delivered automatically, so do not repeat the same content with this tool.',
+          description: this.groupTurn
+            ? 'Publish a message in the current group chat. Only share a useful, audience-ready reply. Reasoning, drafts, tool results and final text outside this tool stay private.'
+            : 'Send a user-facing message in this chat immediately. Use it for useful progress, results or proactive messages. Do not repeat a message you already sent.',
           promptSnippet: 'Send a message to the user immediately.',
           parameters: Type.Object({
             message: Type.String({ description: 'The message to send. Keep it concise.' }),
@@ -1113,6 +1156,42 @@ class SdkAgentRuntime {
           async execute(_id, params) {
             if (!sendToUser(params.message)) throw new Error('No active chat is available to send this message')
             return { content: [{ type: 'text' as const, text: 'Message delivered.' }], details: { delivered: true } }
+          },
+        }),
+        ...(this.groupTurn ? [defineTool({
+          name: 'ReactToMessage',
+          label: 'React to a group message',
+          description: 'React to a public message using its address from the group transcript. Use one emoji when it adds value on its own.',
+          parameters: Type.Object({
+            message_address: Type.String({ minLength: 1, maxLength: 128 }),
+            emoji: Type.String({ minLength: 1, maxLength: 16 }),
+          }),
+          execute: async (_id, params) => {
+            if (!this.writeFrame({ type: 'react-to-message', messageAddress: params.message_address, emoji: params.emoji })) {
+              throw new Error('No active group turn is available')
+            }
+            return { content: [{ type: 'text' as const, text: 'Reaction submitted.' }], details: { submitted: true } }
+          },
+        })] : []),
+        defineTool({
+          name: 'ManageBots',
+          label: 'Manage Bots and routines',
+          description: 'List Bots and groups in this workspace, create a specialist Bot, start a group with yourself and existing Bots, invite Bots to a group you belong to, or list, create, pause and resume your scheduled routines. Resolve IDs with list. Create only when it serves a concrete user goal; offer a recurring routine before enabling it when the schedule or recurring work is uncertain. Confirm only successful tool results.',
+          parameters: Type.Object({
+            action: Type.Union(['list', 'create_bot', 'create_group', 'invite', 'list_routines', 'create_routine', 'pause_routine', 'resume_routine'].map(action => Type.Literal(action))),
+            name: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
+            description: Type.Optional(Type.String({ maxLength: 2000 })),
+            groupId: Type.Optional(Type.String({ maxLength: 36 })),
+            memberIds: Type.Optional(Type.Array(Type.String({ maxLength: 36 }), { maxItems: 6 })),
+            routineId: Type.Optional(Type.String({ maxLength: 128 })),
+            prompt: Type.Optional(Type.String({ minLength: 1, maxLength: 8000 })),
+            schedule: Type.Optional(Type.String({ minLength: 1, maxLength: 160, description: 'A five-field cron schedule in the Work-host time zone.' })),
+            isEnabled: Type.Optional(Type.Boolean({ description: 'Enable on creation when the recurring schedule is authorized. Otherwise create it paused.' })),
+          }),
+          execute: async (_id, parameters) => {
+            const result = await this.manageBots(parameters)
+            if (typeof result.error === 'string') throw new Error(result.error)
+            return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], details: result }
           },
         }),
         defineTool({
@@ -1246,6 +1325,7 @@ async function desktopRuntimeState(): Promise<{ state: DesktopState; suspended: 
 let lifecycleState: 'starting' | 'ready' | 'error' = 'starting'
 let lifecycleError = ''
 let preparePromise: Promise<void> | undefined
+let activeGroupTurn: SdkAgentRuntime | undefined
 
 async function ensureRuntimeReady(): Promise<void> {
   if (lifecycleState === 'ready') return
@@ -1327,8 +1407,8 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify({ suspended: false, state: 'running' }))
       return
     }
-    if (request.method === 'POST' && url.pathname === '/v1/cancel') {
-      const active = runtime.cancel()
+    if (request.method === 'POST' && (url.pathname === '/v1/cancel' || url.pathname === '/v1/group/cancel')) {
+      const active = url.pathname === '/v1/group/cancel' ? activeGroupTurn?.cancel() ?? false : runtime.cancel()
       response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       response.end(JSON.stringify({ ok: true, active }))
       return
@@ -1352,6 +1432,15 @@ const server = createServer((request, response) => {
       }
       response.writeHead(202, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       response.end(JSON.stringify({ ok: true }))
+      return
+    }
+    if (request.method === 'POST' && (url.pathname === '/v1/management/resolve' || url.pathname === '/v1/group/management/resolve')) {
+      const target = url.pathname.startsWith('/v1/group/') ? activeGroupTurn : runtime
+      const body = await readRequestJson(request, 1024 * 1024) as { id?: unknown; result?: unknown } | null
+      if (!(target instanceof SdkAgentRuntime) || typeof body?.id !== 'string' || !body.result || typeof body.result !== 'object' || Array.isArray(body.result)) {
+        return response.writeHead(400).end()
+      }
+      response.writeHead(target.resolveManagement(body.id, body.result as Record<string, unknown>) ? 204 : 404).end()
       return
     }
     if (request.method === 'POST' && url.pathname === '/v1/browser-mcp') {
@@ -1428,12 +1517,15 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify(result))
       return
     }
-    if (request.method !== 'POST' || url.pathname !== '/v1/events') {
+    const groupTurn = url.pathname === '/v1/group/events'
+    if (request.method !== 'POST' || (url.pathname !== '/v1/events' && !groupTurn)) {
       response.writeHead(404).end()
       return
     }
-    const { message, attachments, deliveryGuidance } = await readPrompt(request)
-    await ensureRuntimeReady()
+    const { message, attachments, deliveryGuidance, management } = await readPrompt(request)
+    if (groupTurn && !(runtime instanceof SdkAgentRuntime)) throw new Error('Group turns require the Pi runtime')
+    if (!groupTurn) await ensureRuntimeReady()
+    if (groupTurn && activeGroupTurn) throw new Error('A group turn is already running')
     response.writeHead(200, {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -1443,7 +1535,18 @@ const server = createServer((request, response) => {
     response.flushHeaders?.()
     const abortController = new AbortController()
     response.once('close', () => { if (!response.writableEnded) abortController.abort() })
-    if (runtime instanceof SdkAgentRuntime) await runtime.prompt(message, response, abortController.signal, attachments, deliveryGuidance)
+    if (groupTurn) {
+      // A member's group context comes from the room transcript supplied by
+      // the host. Its private conversation never enters this session.
+      const groupRuntime = new SdkAgentRuntime(worker, true)
+      activeGroupTurn = groupRuntime
+      try {
+        await groupRuntime.prompt(message, response, abortController.signal, attachments, deliveryGuidance, management)
+      } finally {
+        activeGroupTurn = undefined
+        await groupRuntime.disposeGroupTurn()
+      }
+    } else if (runtime instanceof SdkAgentRuntime) await runtime.prompt(message, response, abortController.signal, attachments, deliveryGuidance, management)
     else await runtime.prompt(message, response, abortController.signal, attachments)
     response.end()
   })().catch((error) => {

@@ -36,6 +36,12 @@ export const SLATE_ONBOARDING_KICKSTART_PROMPT = [
   DELIVERY_AND_CHOICES,
 ].join("\n");
 
+export const BOT_FIRST_WELCOME_PROMPT = [
+  'This is the first Bot in the workspace. The user has just created you and has not sent a message yet.',
+  'Open the conversation with a short welcome in the user’s language when known. In your own words, show one practical example of asking you to create a specialist Bot or start a group chat with teammates. Ask at most one natural question about what they would like to try.',
+  'Deliver the welcome once with SendMessage. Wait for the user to choose what to try before creating anything. Keep this instruction private.',
+].join('\n');
+
 /** The tray reminder shown when an agent's introduction failed. */
 export const INTRODUCTION_FAILED_TRAY_TITLE = "Your agent couldn't introduce itself";
 

@@ -929,6 +929,7 @@ export function createHostRunnerComposition<Runner extends ProductionSessionBoun
         deps.emitGatewayEvent({ channel: "computer-action", payload: { agentId, ...action } });
       },
       systemPrompt: overrides.systemPrompt,
+      ...(overrides.requiresBotRuntime === true ? { requiresBotRuntime: true } : {}),
       isMultitaskEnabled: () => looseMethod(experiments, "isMultitaskEnabled")?.() ?? false,
       isSendMessageDeliveryOwedEnabled: () => looseMethod(experiments, "isSendMessageDeliveryOwedEnabled")?.() ?? false,
       isDynamicToolsEnabled: () => looseMethod(experiments, "isDynamicToolsEnabled")?.() ?? false,

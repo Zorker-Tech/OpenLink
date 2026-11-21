@@ -18,6 +18,7 @@ import {
   SLATE_DISK_SAVER_REAUDIT_PROMPT,
 } from "../../shared/agents/disk-saver.ts";
 import {
+  BOT_FIRST_WELCOME_PROMPT,
   INTRODUCTION_FAILED_TRAY_TITLE,
   SLATE_ONBOARDING_KICKSTART_PROMPT,
   introductionFailedTrayKey,
@@ -118,7 +119,7 @@ export class AgentLifecycle {
     return session;
   }
 
-  async kickstartAgent(agentId: string, isRunReady: boolean): Promise<boolean> {
+  async kickstartAgent(agentId: string, isRunReady: boolean, isBot = false): Promise<boolean> {
     let session: any;
     try {
       session =
@@ -145,15 +146,21 @@ export class AgentLifecycle {
     void this.tm.runLifecycle.enqueueExclusiveRun(
       session.id,
       async () => {
+        if (!session.db.getIntroductionPending()) {
+          this.tm.runLifecycle.endSessionRun(session);
+          return;
+        }
         this.tm.turnRuntime.activeRequestSources.set(session.id, "turn");
         try {
-          const prompt =
-            session.db.getAgentPurpose() === "disk-saver"
+          const prompt = isBot ? BOT_FIRST_WELCOME_PROMPT
+            : session.db.getAgentPurpose() === "disk-saver"
               ? SLATE_DISK_SAVER_KICKSTART_PROMPT
               : SLATE_ONBOARDING_KICKSTART_PROMPT;
-          const turnResult = await agentRunner.run(prompt, { hidden: true });
+          const turnResult = await agentRunner.run(prompt, isBot
+            ? { hidden: true, suppressFinalMessage: true, isSilenceAllowed: true }
+            : { hidden: true });
           let didDeliver = turnResult.sentMessageCount > 0;
-          if (!turnResult.aborted && turnResult.sentMessageCount === 0)
+          if (!isBot && !turnResult.aborted && turnResult.sentMessageCount === 0)
             didDeliver =
               await this.tm.automationRuntime.ensureHiddenTurnReply(agentRunner);
           if (turnResult.quiescedForUpgrade) {

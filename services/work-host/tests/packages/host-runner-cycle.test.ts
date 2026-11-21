@@ -291,6 +291,14 @@ describe("the runner that holds a conversation", () => {
     return { runner, updates };
   }
 
+  it('returns an outcome when a Bot turn finishes without any additional reply', async () => {
+    const { runner, updates } = runnerWith({ isBotRunner: true, runStep: async () => ({ done: true }) });
+    assert.deepEqual(await runner.run('A first reply already answered this'), {
+      text: '', sentMessageCount: 0, reacted: false, aborted: false,
+    });
+    assert.equal(updates.some(update => update.type === 'send-message'), false);
+  });
+
   it("keeps the runner's Agent checkpoint isolated from callers", () => {
     const { runner } = runnerWith();
     const source = new ConversationStateStructure({ turns: [new Uint8Array([1])] });

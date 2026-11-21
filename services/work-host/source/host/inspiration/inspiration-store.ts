@@ -109,7 +109,7 @@ function normalizeOutcome(value: unknown): InspirationOutcome | undefined {
 }
 
 function normalizeTrigger(value: unknown): InspirationTrigger {
-  return value === "manual" || value === "nomination" || value === "event" ? value : "stochastic";
+  return value === "manual" || value === "nomination" || value === "event" || value === "follow-up" ? value : "stochastic";
 }
 
 function normalizeFeedback(value: unknown): InspirationFeedback | undefined {
@@ -170,6 +170,8 @@ export function parseInspirationState(agentId: string, value: unknown): Inspirat
     : [];
   const feedback = recordOf(record.feedback);
   const legacyConfig = recordOf(record.config);
+  const followUp = recordOf(record.followUp);
+  const followUpMessageId = text(followUp?.messageId, 256);
   const lastDecision = ledger.at(-1)?.decision;
   const deferredByLegacyPolicy = legacyConfig !== null && "enabled" in legacyConfig
     && (lastDecision === "budget" || lastDecision === "cap" || lastDecision === "quiet");
@@ -191,6 +193,8 @@ export function parseInspirationState(agentId: string, value: unknown): Inspirat
     observationCursor: observationCursor(record.observationCursor),
     observations: Array.isArray(record.observations) ? record.observations.slice(-MAX_OBSERVATIONS).map(parseObservation)
       .filter((value): value is InspirationObservation => value !== null) : [],
+    followUp: followUpMessageId ? { messageId: followUpMessageId, dueAt: finite(followUp?.dueAt, 0) || null } : null,
+    retryAt: finite(record.retryAt, 0) || null,
     preferences: normalizePreferences(record.preferences),
     preferenceSummary: normalizePreferenceSummary(record.preferenceSummary),
     preferenceSummaryAttemptAt: finite(record.preferenceSummaryAttemptAt, 0) || null,
@@ -215,6 +219,8 @@ export function defaultInspirationState(agentId: string): InspirationState {
     usage: { dayKey: "", usd: 0, tokens: 0, runs: 0 },
     observationCursor: null,
     observations: [],
+    followUp: null,
+    retryAt: null,
     preferences: { samples: 0, weights: {} },
     preferenceSummary: null,
     preferenceSummaryAttemptAt: null,

@@ -896,7 +896,7 @@ export class SlateAgentRunner<T = unknown> {
     this.observation.turnStarted();
 
     try {
-      return await runFallbackStepLoop<T, RunnerConversationState, typeof runOptions>({
+      const result = await runFallbackStepLoop<T, RunnerConversationState, typeof runOptions>({
         attempt,
         prompt: trimmed,
         runOptions,
@@ -908,6 +908,11 @@ export class SlateAgentRunner<T = unknown> {
         ...(this.options.runStep !== undefined ? { runStep: this.options.runStep.bind(this.options) } : {}),
         ...(this.options.settle !== undefined ? { settle: this.options.settle.bind(this.options) } : {}),
       });
+      // The first reply can complete a Bot turn before its runner emits any
+      // updates. Callers still need a turn outcome for that silent finish.
+      return this.isBotRunner && result === undefined
+        ? attempt.outcome({ aborted: attempt.signal.aborted && !attempt.awaitingUser })
+        : result;
     } finally {
       this.emitRunLifecycle({ type: "ended", requestId: attempt.runId });
       if (this.#currentAttempt === attempt) this.#currentAttempt = null;

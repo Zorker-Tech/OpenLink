@@ -1,4 +1,5 @@
 import type { TranscriptEntry } from '../transcript/transcript-hub.ts';
+import { extractInspirationJson } from './inspiration-divergence.ts';
 import { CATEGORY_CODES, classifyDialogueMessage, normalizePreferences, OBSERVATION_CATEGORIES, type InspirationPreferences, type ObservationCategory } from './inspiration-observations.ts';
 
 const MIN_MESSAGES = 4;
@@ -80,17 +81,13 @@ export function buildPreferenceSummaryPrompt(window: NonNullable<ReturnType<type
 }
 
 export function parsePreferenceSummary(reply: string, checkpoint: Pick<PreferenceSummary, 'throughId' | 'throughAt' | 'updatedAt'>): PreferenceSummary | null {
-  try {
-    const parsed = JSON.parse(reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')) as { summary?: unknown; weights?: unknown } | null;
-    const weights = normalizePreferences(parsed).weights;
-    if (typeof parsed?.summary !== 'string' || !parsed.summary.trim() || !Object.keys(weights).length) return null;
-    return {
-      ...checkpoint, summary: parsed.summary.trim().slice(0, 800),
-      weights: Object.fromEntries(Object.entries(weights).map(([category, weight]) => [category, Math.min(1.6, Math.max(0.5, weight))])),
-    };
-  } catch {
-    return null;
-  }
+  const parsed = extractInspirationJson(reply) as { summary?: unknown; weights?: unknown } | null;
+  const weights = normalizePreferences(parsed).weights;
+  if (typeof parsed?.summary !== 'string' || !parsed.summary.trim() || !Object.keys(weights).length) return null;
+  return {
+    ...checkpoint, summary: parsed.summary.trim().slice(0, 800),
+    weights: Object.fromEntries(Object.entries(weights).map(([category, weight]) => [category, Math.min(1.6, Math.max(0.5, weight))])),
+  };
 }
 
 export function normalizePreferenceSummary(value: unknown): PreferenceSummary | null {

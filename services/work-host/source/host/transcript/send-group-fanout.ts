@@ -18,6 +18,7 @@ interface GroupSendArgs {
   readonly clientNonce?: string | undefined;
   readonly userMessageId?: string | undefined;
   readonly awaitTurn: boolean;
+  readonly queueUserTurn?: boolean;
   readonly acceptedAtMs: number;
   readonly traceCtx: unknown;
   readonly readAddressedTranscript: () => readonly { readonly id: string }[];
@@ -47,11 +48,11 @@ function publishGroupEntryIfConfigured(tm: TranscriptManagerLike, args: GroupSen
 
 async function dispatchGroupTurn(tm: TranscriptManagerLike, args: GroupSendArgs): Promise<void> {
   publishGroupEntryIfConfigured(tm, args);
-  const epoch = args.nextTurnEpoch(args.session);
+  const epoch = args.queueUserTurn ? undefined : args.nextTurnEpoch(args.session);
   tm.runLifecycle.beginSessionRun(args.session);
   const completion = tm.runLifecycle.enqueueExclusiveRun(
     args.session.id,
-    () => tm.groupChat.runGroupTurn(args.session, epoch, args.traceCtx, "user"),
+    () => tm.groupChat.runGroupTurn(args.session, epoch ?? args.nextTurnEpoch(args.session), args.traceCtx, "user", args.queueUserTurn ? args.userMessageId : undefined),
     { lane: "user", source: "group", acceptedAtMs: args.acceptedAtMs },
   );
   args.markSendAccepted(args.clientNonce);

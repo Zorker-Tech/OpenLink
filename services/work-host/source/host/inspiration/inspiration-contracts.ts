@@ -13,7 +13,7 @@ export const INSPIRATION_STORE_VERSION = 1;
 export const INSPIRATION_MAX_LEDGER = 100;
 export const INSPIRATION_MAX_CANDIDATES = 5;
 
-export type InspirationTrigger = "stochastic" | "manual" | "nomination" | "event";
+export type InspirationTrigger = "stochastic" | "manual" | "nomination" | "event" | "follow-up";
 export type InspirationDecision = "woke" | "skipped" | "duplicate" | "budget" | "quiet" | "cap" | "unavailable" | "error";
 export type InspirationOutcome = "acted" | "silent" | "failed";
 export type InspirationFeedback = "useful" | "not-useful" | "dismissed";
@@ -112,6 +112,8 @@ export interface InspirationState {
   usage: InspirationUsage;
   observationCursor: string | null;
   observations: InspirationObservation[];
+  followUp: { messageId: string; dueAt: number | null } | null;
+  retryAt: number | null;
   preferences: InspirationPreferences;
   preferenceSummary: PreferenceSummary | null;
   preferenceSummaryAttemptAt: number | null;
@@ -119,6 +121,7 @@ export interface InspirationState {
 
 export interface InspirationGateResult {
   selection: number | null;
+  mode: 'investigate' | 'notify';
   reason: string;
 }
 

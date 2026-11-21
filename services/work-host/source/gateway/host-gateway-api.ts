@@ -10,6 +10,7 @@ import {
   parseCoordinatorTranscriptWindowRequest,
 } from "../shared/rpc/coordinator.ts";
 import type { BotRuntimeGateway } from "../host/bot/bot-runtime-gateway.ts";
+import { HOST_ACCOUNT_SLOT } from "../shared/send-acceptance.ts";
 
 export const HOST_CAPABILITIES = [
   "orderedReplicasV1",
@@ -190,6 +191,10 @@ export function createHostGatewayApi(
     },
 
     sendPrompt: async (args: any) => {
+      const acceptOnly = args.acceptOnly === true;
+      if (acceptOnly && (typeof args.agentId !== 'string' || typeof args.clientNonce !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(args.clientNonce))) {
+        throw new Error('A conversation and a valid send nonce are required');
+      }
       const agentId =
         (typeof args.agentId === "string" && args.agentId.length > 0
           ? args.agentId
@@ -205,7 +210,7 @@ export function createHostGatewayApi(
       });
       await call(transcript, "sendPrompt")(args.prompt, {
         agentId: args.agentId,
-        directAddressedAcceptance: args.directAddressedAcceptance,
+        directAddressedAcceptance: acceptOnly || args.directAddressedAcceptance,
         attachmentPaths: args.attachmentPaths ?? [],
         attachmentNames: args.attachmentNames ?? [],
         richText: args.richText,
@@ -216,8 +221,16 @@ export function createHostGatewayApi(
         enterEpochMs: args.enterEpochMs,
         composedAtMs: args.composedAtMs,
         ...(args.requireQuickBotReply === true ? { requireQuickBotReply: true } : {}),
-        awaitTurn: process.env[DISABLE_SEND_ACCEPT_RETURN_ENV] === "1"
+        queueUserTurn: acceptOnly,
+        awaitTurn: !acceptOnly && process.env[DISABLE_SEND_ACCEPT_RETURN_ENV] === "1"
       });
+      if (acceptOnly) {
+        const receipt = call(transcript, 'promptAcceptanceStatus')({ accountSlot: HOST_ACCOUNT_SLOT, clientNonce: args.clientNonce });
+        if (receipt.outcome !== 'found' || receipt.record.agentId !== agentId || receipt.record.status !== 'accepted' || !receipt.record.echoEntryId) {
+          throw new Error('The send could not be confirmed');
+        }
+        return { accepted: true, entryId: receipt.record.echoEntryId };
+      }
       return { accepted: true };
     },
     promptAcceptanceStatus: (args: any) =>

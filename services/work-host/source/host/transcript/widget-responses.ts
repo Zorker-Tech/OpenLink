@@ -526,6 +526,7 @@ export class WidgetResponses {
     entryId: string;
     emoji: string;
     by: string;
+    addOnly?: boolean;
   }): { before: TranscriptEntry; isAdding: boolean } | null {
     const isActive =
       input.session == null ||
@@ -540,6 +541,7 @@ export class WidgetResponses {
     const isAdding = !((before.reactions as any[]) ?? []).some(
       (reactionRow) => reactionRow.emoji === input.emoji && reactionRow.by === input.by,
     );
+    if (input.addOnly && !isAdding) return null;
     const withToggle = (transcriptEntry: TranscriptEntry): TranscriptEntry => {
       const toggled = toggleReaction(transcriptEntry.reactions as any, input.emoji, input.by);
       const { reactions: _omit, ...remainder } = transcriptEntry;
@@ -556,7 +558,9 @@ export class WidgetResponses {
         withToggle,
       );
     } else {
-      input.session.db.updateTranscriptEntry(input.entryId, withToggle);
+      const stampedEntry = input.session.db.updateTranscriptEntry(input.entryId, withToggle);
+      if (stampedEntry == null) return null;
+      this.tm.roster.emit({ type: 'updated', entry: stampedEntry }, input.session.id);
       void this.tm.roster.emitAgentUpdate(input.session.id);
     }
     return { before, isAdding };

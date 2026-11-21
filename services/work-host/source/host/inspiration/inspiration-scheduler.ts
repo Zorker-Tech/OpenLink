@@ -1,7 +1,11 @@
 /** The stochastic clock behind a Bot's curiosity subscription. */
-import type { InspirationCadence, InspirationConfig, InspirationState } from "./inspiration-contracts.ts";
+import type { InspirationCadence, InspirationConfig, InspirationState, InspirationTrigger } from "./inspiration-contracts.ts";
+import { OBSERVATION_MAX_AGE_MS } from './inspiration-observations.ts';
 
 const HOUR = 60 * 60_000;
+const NOMINATION_DELAY_MS = 2 * 60_000;
+const FILE_REVIEW_INTERVAL_MS = 30_000;
+const TRAFFIC_REVIEW_INTERVAL_MS = 10 * 60_000;
 
 export function inspirationDayKey(now: number, timeZone: string | undefined): string {
   const date = new Date(now);
@@ -45,8 +49,25 @@ export function computeNextFireAt(input: {
   return Math.round(next);
 }
 
-export function isDue(state: InspirationState, now: number): boolean {
-  return state.nextFireAt !== null && state.nextFireAt <= now;
+type ScheduledReview = { trigger: Exclude<InspirationTrigger, 'manual'>; at: number };
+
+export function nextInspirationReview(state: InspirationState, now: number): ScheduledReview | null {
+  const reviews: ScheduledReview[] = [];
+  const consider = (trigger: ScheduledReview['trigger'], at: number | null | undefined) => {
+    if (at != null) reviews.push({ trigger, at });
+  };
+  const recent = state.observations.filter(({ observedAt }) => observedAt >= now - OBSERVATION_MAX_AGE_MS);
+  const firstFile = recent.find(({ files }) => files.length > 0);
+  const observation = firstFile ?? recent[0];
+  if (observation) {
+    const previous = state.ledger.findLast(({ trigger }) => trigger === 'event')?.createdAt ?? 0;
+    consider('event', Math.max(observation.observedAt + 5_000, previous + (firstFile ? FILE_REVIEW_INTERVAL_MS : TRAFFIC_REVIEW_INTERVAL_MS)));
+  }
+  if (state.nominations[0]) consider('nomination', state.nominations[0].createdAt + NOMINATION_DELAY_MS);
+  consider('follow-up', state.followUp?.dueAt);
+  consider('stochastic', state.nextFireAt);
+  const first = reviews.sort((a, b) => a.at - b.at)[0];
+  return first ? { ...first, at: Math.max(first.at, state.retryAt ?? 0) } : null;
 }
 
 /**

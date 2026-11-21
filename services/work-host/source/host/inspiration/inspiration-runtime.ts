@@ -12,7 +12,6 @@ import { dirname } from "node:path";
 import { getSlateProfilePath, readSlateProfileFile } from "../agents/agent-profile.ts";
 import type { BotRuntimeBinding } from "../bot/bot-runtime-store.ts";
 import { PiWorkerClient } from "../bot/pi-worker-client.ts";
-import { getTranscript } from "../transcript/transcript-store.ts";
 import type { TranscriptEntry, TranscriptManagerLike } from "../transcript/transcript-hub.ts";
 import {
   buildGatePrompt,
@@ -28,7 +27,6 @@ import {
 import { deriveInspirationPreferences, lensPreference, MAX_OBSERVATIONS, OBSERVATION_MAX_AGE_MS, observationPriority } from './inspiration-observations.ts';
 import { blendInspirationPreferences, buildPreferenceSummaryPrompt, dialogueContent, parsePreferenceSummary, PREFERENCE_MIN_INTERVAL_MS, preferenceSummaryWindow, recentClassificationCodes } from './inspiration-preference-summary.ts';
 import {
-  INSPIRATION_MAX_CANDIDATES,
   type InspirationCandidate,
   type InspirationConfig,
   type InspirationFeedback,
@@ -41,15 +39,15 @@ import {
   computeNextFireAt,
   inspirationDayKey,
   inspirationPriority,
-  isDue,
+  nextInspirationReview,
   resetUsageIfNeeded,
 } from "./inspiration-scheduler.ts";
 import { normalizeInspirationConfig, trimInspirationState, type InspirationStore } from "./inspiration-store.ts";
 
 const HIDDEN_PROMPT_PREFIX = "[SLATE_HIDDEN_PROMPT]";
-const MANUAL_PULL_MS = 2 * 60_000;
-const RESCHEDULE_AFTER_BUSY_MS = 10 * 60_000;
-const EVENT_COOLDOWN_MS = 10 * 60_000;
+const FOLLOW_UP_DELAY_MS = 2 * 60_000;
+const RETRY_AFTER_ERROR_MS = 2 * 60_000;
+const RETRY_AFTER_BUSY_MS = 30_000;
 const MIN_EVENT_SCORE = 0.64;
 
 export interface InspirationRuntimeDeps {
@@ -258,11 +256,9 @@ export class InspirationRuntime {
     };
     if (!nomination.task) return { ok: false, reason: "the nomination is empty" };
     if (target.nominations.some(item => item.fromAgentId === fromAgentId && normalizeTitle(item.task) === normalizeTitle(nomination.task))) return { ok: true };
-    const nextFireAt = Math.min(target.nextFireAt ?? Number.POSITIVE_INFINITY, now + MANUAL_PULL_MS);
     const next = trimInspirationState({
       ...target,
       nominations: [...target.nominations, nomination].slice(-20),
-      nextFireAt: Number.isFinite(nextFireAt) ? nextFireAt : now + MANUAL_PULL_MS,
     });
     this.#store.write(next);
     return { ok: true };
@@ -290,6 +286,14 @@ export class InspirationRuntime {
           const now = this.#now();
           const entries = session ? this.#entriesFor(session) : [];
           const preferences = session ? this.#derivePreferences(entries, latest, now) : latest.preferences;
+          const latestUserMessage = entries.findLast((entry) => entry.kind === 'message' && entry.role === 'user'
+            && typeof entry.content === 'string' && !entry.content.startsWith(HIDDEN_PROMPT_PREFIX));
+          const userText = latestUserMessage?.content?.trim() ?? '';
+          const userAt = latestUserMessage?.timestampMs;
+          const followUp = latestUserMessage && latestUserMessage.id !== latest.followUp?.messageId && userText.length >= 8
+            && typeof userAt === 'number' && userAt >= now - OBSERVATION_MAX_AGE_MS && userAt <= now
+            ? { messageId: latestUserMessage.id, dueAt: userAt + FOLLOW_UP_DELAY_MS }
+            : latest.followUp;
           const busy = this.#isBusy(state.agentId) || this.#firing.has(state.agentId);
           const lastAttempt = latest.preferenceSummaryAttemptAt ?? 0;
           if (session && !busy && now - lastAttempt >= PREFERENCE_MIN_INTERVAL_MS
@@ -308,15 +312,12 @@ export class InspirationRuntime {
             return item.files.length ? [{ sequence: item.sequence, observedAt: item.observedAt, files: item.files }] : [];
           }) : [];
           const retained = latest.observations.filter(({ observedAt }) => observedAt >= now - OBSERVATION_MAX_AGE_MS);
-          const changed = acceptBatch || retained.length !== latest.observations.length || JSON.stringify(preferences) !== JSON.stringify(latest.preferences);
+          const changed = followUp !== latest.followUp || acceptBatch || retained.length !== latest.observations.length || JSON.stringify(preferences) !== JSON.stringify(latest.preferences);
           if (!changed) return;
           const observations = [...retained, ...observed].slice(-MAX_OBSERVATIONS);
-          const lastReview = latest.ledger.findLast(({ trigger }) => trigger === 'event')?.createdAt ?? 0;
-          const eventAt = Math.max(now + 5_000, lastReview + EVENT_COOLDOWN_MS);
           this.#store.write({
-            ...latest, preferences, observations,
+            ...latest, preferences, observations, followUp,
             observationCursor: acceptBatch ? batch.cursor : latest.observationCursor,
-            nextFireAt: observed.length ? Math.min(latest.nextFireAt ?? eventAt, eventAt) : latest.nextFireAt,
           });
         }));
       }
@@ -351,10 +352,11 @@ export class InspirationRuntime {
     this.#summarizing = agentId;
     try {
       this.#store.update(agentId, current => ({ ...current, preferenceSummaryAttemptAt: now }));
-      const result = await client.inspirationComplete({ ...buildPreferenceSummaryPrompt(window, state.preferenceSummary), maxTokens: 420, temperature: 0.2 });
+      const result = await client.inspirationComplete({ ...buildPreferenceSummaryPrompt(window, state.preferenceSummary), maxTokens: 1_024, temperature: 0.2 });
       if (!result) return;
       const updatedAt = this.#now();
       const summary = parsePreferenceSummary(result.text, { throughId: window.throughId, throughAt: window.throughAt, updatedAt });
+      if (!summary) this.#logger.warn('[inspiration] preference summary response was invalid');
       this.#store.update(agentId, (current) => {
         const accounted = { ...current, usage: addUsage(current, updatedAt, timeZone, Math.max(0, result.costUsd), Math.max(0, result.usage?.totalTokens ?? 0), 0) };
         if (!summary) return accounted;
@@ -378,7 +380,8 @@ export class InspirationRuntime {
     const due: Array<{ agentId: string; score: number }> = [];
     for (const binding of this.#listBindings()) {
       const state = this.state(binding.agentId);
-      if (!isDue(state, now) || this.#firing.has(state.agentId)) continue;
+      const scheduled = nextInspirationReview(state, now);
+      if (!scheduled || scheduled.at > now || this.#firing.has(state.agentId)) continue;
       const session = await this.#resolveSession(state.agentId);
       if (session === null) continue;
       due.push({ agentId: state.agentId, score: this.#score(state, identityForSession(session), now) });
@@ -386,13 +389,9 @@ export class InspirationRuntime {
     due.sort((a, b) => b.score - a.score);
     for (const { agentId } of due) {
       if (!this.#getBinding(agentId)) continue;
-      const latest = this.#store.read(agentId);
-      const now = this.#now();
-      if (!isDue(latest, now)) continue;
-      const hasObservation = latest.observations.some(({ observedAt }) => observedAt >= now - OBSERVATION_MAX_AGE_MS);
-      const lastReview = latest.ledger.findLast(({ trigger }) => trigger === 'event')?.createdAt ?? 0;
-      const trigger = hasObservation && now >= lastReview + EVENT_COOLDOWN_MS ? 'event' : latest.nominations.length ? 'nomination' : 'stochastic';
-      await this.fire(agentId, trigger).catch((error) => {
+      const scheduled = nextInspirationReview(this.#store.read(agentId), this.#now());
+      if (!scheduled || scheduled.at > this.#now()) continue;
+      await this.fire(agentId, scheduled.trigger).catch((error) => {
         this.#logger.warn(`[inspiration] tick fire failed for ${agentId}: ${error instanceof Error ? error.message : String(error)}`);
       });
     }
@@ -426,6 +425,7 @@ export class InspirationRuntime {
     const initial = this.state(agentId);
     const observations = trigger === 'event' ? initial.observations.filter(({ observedAt }) => observedAt >= this.#now() - OBSERVATION_MAX_AGE_MS) : [];
     const observedKeys = new Set(observations.map(({ observedAt, sequence }) => observedAt + ':' + sequence));
+    const followUp = trigger === 'follow-up' ? initial.followUp : null;
     const nomination = trigger === 'nomination' || trigger === 'manual' ? initial.nominations[0] : undefined;
     let costUsd = 0;
     let tokens = 0;
@@ -445,14 +445,14 @@ export class InspirationRuntime {
         const retained = latest.observations.filter(({ observedAt, sequence }) => (
           observedAt >= now - OBSERVATION_MAX_AGE_MS && (!details.consume || !observedKeys.has(observedAt + ':' + sequence))
         ));
-        let nextFireAt = details.nextAt ?? computeNextFireAt({ now, config: latest.config, random: this.#random });
-        if (retained.length && details.nextAt === undefined) {
-          const reviewedAt = trigger === 'event' ? now : latest.ledger.findLast((entry) => entry.trigger === 'event')?.createdAt ?? 0;
-          const eventAt = Math.max(now + 5_000, reviewedAt + EVENT_COOLDOWN_MS);
-          nextFireAt = Math.min(nextFireAt, eventAt);
-        }
+        const nextFireAt = trigger === 'stochastic' && details.nextAt === undefined
+          ? computeNextFireAt({ now, config: latest.config, random: this.#random })
+          : latest.nextFireAt;
         return {
           ...latest, nextFireAt, observations: retained,
+          retryAt: details.nextAt ?? null,
+          followUp: details.consume && followUp && latest.followUp?.messageId === followUp.messageId
+            ? { ...followUp, dueAt: null } : latest.followUp,
           ledger: [...latest.ledger, record],
           lastFiredAt: details.decision === 'woke' ? now : latest.lastFiredAt,
           nominations: nomination && details.consume ? latest.nominations.filter(({ id }) => id !== nomination.id) : latest.nominations,
@@ -471,11 +471,11 @@ export class InspirationRuntime {
       const session = await this.#resolveSession(agentId);
       const binding = this.#getBinding(agentId);
       if (!session || !binding) {
-        return finish({ decision: 'unavailable', detail: 'the Bot runtime is not provisioned', nextAt: this.#now() + RESCHEDULE_AFTER_BUSY_MS });
+        return finish({ decision: 'unavailable', detail: 'the Bot runtime is not provisioned', nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
       }
       const hold = (): Parameters<typeof finish>[0] | null => {
         if (!this.#getBinding(agentId)) return { decision: 'unavailable', detail: 'the Bot runtime was released' };
-        if (this.#isBusy(agentId)) return { decision: 'skipped', detail: 'Bot has an active turn', nextAt: this.#now() + RESCHEDULE_AFTER_BUSY_MS };
+        if (this.#isBusy(agentId)) return { decision: 'skipped', detail: 'Bot has an active turn', nextAt: this.#now() + RETRY_AFTER_BUSY_MS };
         return null;
       };
       const blocked = hold();
@@ -507,18 +507,20 @@ export class InspirationRuntime {
         recentIdeas: recent, observations, preferences,
         ...(nomination === undefined ? {} : { nomination }),
         messageCodes: recentClassificationCodes(entries),
+        followUp: followUp !== null,
         topics: initial.config.topics,
         lens: pickLens(initial.config.lenses, this.#random),
       };
 
       if (observations.length) {
         const result = await complete({ ...buildObservationGatePrompt(context), maxTokens: 220, temperature: 0.15 });
-        if (!result) return finish({ decision: 'error', detail: 'the observation scorer is unavailable', nextAt: this.#now() + RESCHEDULE_AFTER_BUSY_MS });
+        if (!result) return finish({ decision: 'error', detail: 'the observation scorer is unavailable', nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
         const judgment = parseObservationScore(result.text);
         const prior = observationPriority(observations, preferences);
         const score = judgment ? 0.82 * judgment.score + 0.18 * prior : 0;
-        if (!judgment || judgment.score < 0.55 || score < MIN_EVENT_SCORE) {
-          return finish({ decision: 'skipped', detail: judgment ? `Observation score ${score.toFixed(2)}: ${judgment.reason}` : 'the observation score was invalid', consume: true });
+        if (!judgment) return finish({ decision: 'error', detail: 'the observation score was invalid', nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
+        if (judgment.score < 0.55 || score < MIN_EVENT_SCORE) {
+          return finish({ decision: 'skipped', detail: `Observation score ${score.toFixed(2)}: ${judgment.reason}`, consume: true });
         }
       }
       const beforeGeneration = hold();
@@ -526,10 +528,21 @@ export class InspirationRuntime {
       context.workspace = await client.inspirationContext();
       const beforeCompletion = hold();
       if (beforeCompletion) return finish(beforeCompletion);
-      const generated = await complete({ ...buildGeneratePrompt(context), maxTokens: 1_400, temperature: 0.9 });
-      if (!generated) return finish({ decision: 'error', detail: 'the model completion failed', nextAt: this.#now() + RESCHEDULE_AFTER_BUSY_MS });
+      const generation = buildGeneratePrompt(context);
+      const generated = await complete({ ...generation, maxTokens: 1_800, temperature: 0.5 });
+      if (!generated) return finish({ decision: 'error', detail: 'the model completion failed', nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
 
-      const candidates = parseInspirationCandidates(generated.text, context.lens).slice(0, INSPIRATION_MAX_CANDIDATES);
+      let candidates = parseInspirationCandidates(generated.text, context.lens);
+      if (!candidates) {
+        const beforeRetry = hold();
+        if (beforeRetry) return finish(beforeRetry);
+        const repaired = await complete({
+          ...generation, maxTokens: 1_200, temperature: 0.2,
+          systemPrompt: `${generation.systemPrompt} Return at most two candidates and ensure the JSON is complete.`,
+        });
+        candidates = repaired ? parseInspirationCandidates(repaired.text, context.lens) : null;
+      }
+      if (!candidates) return finish({ decision: 'error', detail: 'the candidate model returned an invalid response', nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
       if (candidates.length === 0) return finish({ decision: 'skipped', detail: 'the model returned no candidates', consume: true });
       const fresh = candidates.filter((candidate) => !isDuplicateTitle(candidate.title, recent));
       if (!fresh.length) return finish({ decision: 'duplicate', detail: 'all candidates repeated recent inspirations', consume: true });
@@ -541,15 +554,16 @@ export class InspirationRuntime {
 
       const beforeGate = hold();
       if (beforeGate) return finish(beforeGate);
-      const gated = await complete({ ...buildGatePrompt(context, ranked), maxTokens: 256, temperature: 0.2 });
-      if (!gated) return finish({ decision: 'error', detail: 'the candidate gate is unavailable', nextAt: this.#now() + RESCHEDULE_AFTER_BUSY_MS });
+      const gated = await complete({ ...buildGatePrompt(context, ranked), maxTokens: 768, temperature: 0.2 });
+      if (!gated) return finish({ decision: 'error', detail: 'the candidate gate is unavailable', nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
       const approval = parseInspirationGate(gated.text, ranked.length);
+      if (!approval) return finish({ decision: 'error', detail: 'the candidate gate returned an invalid response', nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
       const selected = approval.selection === null ? null : ranked[approval.selection];
       if (!selected) return finish({ decision: 'skipped', detail: approval.reason || 'the gate did not approve a candidate', consume: true });
 
       const beforeWake = hold();
       if (beforeWake) return finish(beforeWake);
-      const wakePrompt = buildWakePrompt({ ...context, candidate: selected });
+      const wakePrompt = buildWakePrompt({ ...context, candidate: selected, mode: approval.mode });
       this.#waking.add(agentId);
       try {
         const wake = await this.#runWake(agentId, wakePrompt, (usage) => account(usage.costUsd, usage.tokens));
@@ -564,18 +578,16 @@ export class InspirationRuntime {
     } catch (error) {
       const detail = error instanceof Error ? error.message.slice(0, 600) : String(error).slice(0, 600);
       this.#logger.warn(`[inspiration] fire failed for ${agentId}: ${detail}`);
-      return finish({ decision: 'error', detail, nextAt: this.#now() + RESCHEDULE_AFTER_BUSY_MS });
+      return finish({ decision: 'error', detail, nextAt: this.#now() + RETRY_AFTER_ERROR_MS });
     } finally {
       this.#firing.delete(agentId);
     }
   }
 
   #entriesFor(session: Record<string, any>): TranscriptEntry[] {
-    const active = this.#tm.sessions.activeSession?.id === session.id;
-    const entries: TranscriptEntry[] = active
-      ? getTranscript()
-      : Array.isArray(session.db?.getTranscriptEntries?.()) ? session.db.getTranscriptEntries() : [];
-    return entries;
+    const window = this.#tm.sessions.getAgentTranscriptTail?.(session.id, { limit: 260 });
+    if (Array.isArray(window?.entries)) return window.entries;
+    return session.db?.getTranscriptEntries?.() ?? [];
   }
 
   async #runWake(agentId: string, prompt: string,

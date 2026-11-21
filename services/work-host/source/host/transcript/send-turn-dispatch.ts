@@ -32,6 +32,7 @@ export interface DispatchUserTurnArgs {
   readonly enterEpochMs?: number;
   readonly clientNonce?: string;
   readonly awaitTurn: boolean;
+  readonly queueUserTurn?: boolean;
   readonly isFork: boolean;
   readonly userMessageId?: string;
   readonly replyContext?: unknown;
@@ -171,19 +172,19 @@ export async function dispatchUserTurn(
   const agentRunner = transcriptManager.runnerRegistry.getRunner(liveSession);
   const recentUserMessages = userEntryId == null ? undefined : addressedRecoveryMessages(readAddressed);
   const promptForRun = composeRunPrompt(transcriptManager, liveSession, cleanPrompt, richContent, composedAt);
-  const epoch = nextEpoch(liveSession);
+  const epoch = args.queueUserTurn ? undefined : nextEpoch(liveSession);
   const carriesRecovery = userEntryId != null && !forking;
-  if (carriesRecovery && recentUserMessages != null) {
+  if (epoch !== undefined && carriesRecovery && recentUserMessages != null) {
     recoverySends.set(liveSession.id, {
       epoch,
       messageId: userEntryId,
       recentUserMessages,
     });
-  } else {
+  } else if (epoch !== undefined) {
     recoveryBreaks.set(liveSession.id, epoch);
   }
 
-  const hadActiveRun = supersedeActiveRuns(transcriptManager, liveSession, agentRunner, carriesRecovery, acceptedAt, wasRunning);
+  if (!args.queueUserTurn) supersedeActiveRuns(transcriptManager, liveSession, agentRunner, carriesRecovery, acceptedAt, wasRunning);
   const ackToken = transcriptManager.ackObligations.mintAckRunToken(liveSession.id);
   const queueStartEpochMs = Date.now();
   const queueStartPerfMs = performance.now();
@@ -195,7 +196,7 @@ export async function dispatchUserTurn(
         agentRunner,
         promptForRun,
         buildTurnRunOptions({ richText: richContent, selectedImages: imageInputs, selectedVideos: videoInputs, fileAttachmentPaths: attachmentPaths, attachedFileSizes: attachmentSizes, messageId: userEntryId, recentUserMessages, replyContext: replyInfo, isFork: forking, traceCtx: traceContext, enterEpochMs: enterAt, queueStartEpochMs, queueStartPerfMs, clientNonce: nonceValue, ackToken }),
-        epoch,
+        epoch ?? nextEpoch(liveSession),
       ),
     {
       lane: "user",

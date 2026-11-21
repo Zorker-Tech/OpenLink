@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 
 import type { BotRuntimeBinding } from "../../source/host/bot/bot-runtime-store.ts";
 import { createPiBotRunStep } from "../../source/host/bot/pi-bot-runner.ts";
+import { parseFirstBotReply } from "../../source/host/bot/first-bot-reply.ts";
 import type { RunnerUpdate } from "../../source/host/runner/runner-turn-attempt.ts";
 
 const AGENT_ID = "11111111-1111-4111-8111-111111111111";
@@ -40,6 +41,40 @@ const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
 describe("the Pi-backed Bot run step", () => {
+  it('returns management results to the isolated group Worker without exposing its tool traffic', async () => {
+    const argumentsSeen: unknown[] = [];
+    const updates: RunnerUpdate[] = [];
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const body = JSON.parse(String(init?.body));
+      if (url.endsWith('/v1/group/events')) {
+        assert.equal(body.management, true);
+        return streamOf([
+          { type: 'openlink_bot_management', id: 'request-for-tool', parameters: { action: 'create_routine', name: 'Morning report' } },
+          { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'private planning' } },
+          { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'private final' }] } },
+          { type: 'agent_settled' },
+        ]);
+      }
+      assert.ok(url.endsWith('/v1/group/management/resolve'));
+      assert.deepEqual(body, { id: 'request-for-tool', result: { routine: { id: 'morning-report' } } });
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    const step = createPiBotRunStep({
+      agentId: AGENT_ID, getBinding: binding, groupMember: true,
+      async manageBot(id, parameters) {
+        argumentsSeen.push(id, parameters);
+        return { routine: { id: 'morning-report' } };
+      },
+    });
+    await step(0, {
+      signal: new AbortController().signal, emitUpdate: update => updates.push(update), prompt: 'Create a routine',
+      runOptions: {}, requestId: 'room-request', state: {}, setState: () => {},
+    });
+    assert.deepEqual(argumentsSeen, ['room-request:request-for-tool', { action: 'create_routine', name: 'Morning report' }]);
+    assert.deepEqual(updates, []);
+  });
+
   it("translates Pi events into one delivered message and one turn lifecycle", async () => {
     const requests: Array<{ url: string; body: unknown; headers: Headers }> = [];
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
@@ -167,6 +202,54 @@ describe("the Pi-backed Bot run step", () => {
       { type: 'text', content: 'The fix passed the tests.' },
     ]);
     assert.deepEqual(costs, [0.01, 0]);
+  });
+
+  it('delivers an explicitly marked proactive finding without SendMessage', async () => {
+    globalThis.fetch = async () => streamOf([
+      { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: '{"message":"The deploy check lacks a regression test."}' }] } },
+      { type: 'agent_settled' },
+    ]);
+    const updates: RunnerUpdate[] = [];
+    const step = createPiBotRunStep({ agentId: AGENT_ID, getBinding: binding });
+    await step(0, {
+      signal: new AbortController().signal, emitUpdate: update => updates.push(update), prompt: 'Investigate',
+      runOptions: { requestSource: 'inspiration', suppressFinalMessage: true }, requestId: 'proactive-finding', state: {}, setState: () => {},
+    });
+    assert.deepEqual(updates.filter(update => update.type === 'send-message').map(update => update.message), [
+      { type: 'text', content: 'The deploy check lacks a regression test.' },
+    ]);
+  });
+
+  it('validates a single emoji and requires inspection of attachments before skipping the full turn', () => {
+    const response = JSON.stringify({ message: 'The next step is a quick check.', emoji: '👩🏽‍💻', needsFollowUp: false });
+    assert.deepEqual(parseFirstBotReply(response, false), { message: 'The next step is a quick check.', emoji: '👩🏽‍💻', needsFollowUp: false });
+    assert.equal(parseFirstBotReply(response, true)?.needsFollowUp, true);
+    assert.equal(parseFirstBotReply(response.replace('👩🏽‍💻', '👍🙂'), false)?.emoji, null);
+    assert.equal(parseFirstBotReply('{"message":"That is ready."}', false), null);
+  });
+
+  it('lets a continuation finish silently after the model decides there is nothing else to deliver', async () => {
+    const opening = 'I’ll check the desktop logs.';
+    globalThis.fetch = async (input, init) => {
+      if (String(input).endsWith('/title')) return Response.json({ title: 'Check the desktop logs' });
+      const body = JSON.parse(String(init?.body));
+      assert.match(body.deliveryGuidance, /I’ll check the desktop logs/);
+      assert.match(body.deliveryGuidance, /Earlier completed dialogue/);
+      return streamOf([
+        { type: 'send-message', message: { content: 'I’ll check the desktop logs!' } },
+        { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: '{"message":null}' }] } },
+        { type: 'agent_settled' },
+      ]);
+    };
+    const updates: RunnerUpdate[] = [];
+    const step = createPiBotRunStep({ agentId: AGENT_ID, getBinding: binding, firstReplyContext: async () => ({
+      reply: { message: opening, emoji: null, needsFollowUp: true }, recentCompletedTurns: [{ role: 'user', text: 'This is my desktop.' }],
+    }) });
+    await step(0, {
+      signal: new AbortController().signal, emitUpdate: update => updates.push(update), prompt: 'Check the desktop logs',
+      runOptions: { messageId: 'message-id' }, requestId: 'optional-continuation', state: {}, setState: () => {},
+    });
+    assert.equal(updates.some(update => update.type === 'send-message'), false);
   });
 
   it("turns a Pi dialog into a durable question card and an awaiting-input event", async () => {

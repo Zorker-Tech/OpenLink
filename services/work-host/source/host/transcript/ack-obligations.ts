@@ -6,16 +6,25 @@
  * gone or the redrives ran out — with each of those steps reported.
  */
 import { randomUUID } from "node:crypto";
+import type { FirstBotReply, FirstBotReplyContext, FirstBotReplyInput } from '../bot/first-bot-reply.ts';
+import { dialogueContent } from '../inspiration/inspiration-preference-summary.ts';
 import { slateErrorDetail } from "../ports/telemetry.ts";
 import { classifyAgentError, isDeliveryOwed } from "./turn-runtime.ts";
-import { createSendMessageEntry } from './send-message-shaping.ts';
+import { createSendMessageEntry, quotableEntryText } from './send-message-shaping.ts';
 import { allocateTranscriptEntryId } from './transcript-entry-ids.ts';
-import { getTranscript } from './transcript-store.ts';
-import type { Disposable, TranscriptManagerLike } from "./transcript-hub.ts";
+import { getTranscript, removeEntry } from './transcript-store.ts';
+import type { Disposable, TranscriptEntry, TranscriptManagerLike } from "./transcript-hub.ts";
 
 export const MAX_ACK_REDRIVES = 3;
 export const ACK_REDRIVE_IDLE_DELAY_MS = 5_000;
-export const QUICK_BOT_REPLY_MS = 3_750;
+const QUICK_BOT_REPLY_TIMEOUT_MS = 6_000;
+
+type FirstBotReplyGenerator = (agentId: string, input: FirstBotReplyInput, signal: AbortSignal) => Promise<FirstBotReply | null>;
+type PendingQuickReply = { messageId: string; controller: AbortController; settled: Promise<void> };
+
+function quotableFirstReply(entry: TranscriptEntry): string {
+  return entry.kind === 'send-message' ? quotableEntryText(entry).trim() : '';
+}
 
 /** The recoveryPrompt a redrive sends: it has to make the agent actually answer, not think about answering. */
 export function buildAckRedrivePrompt(): string {
@@ -39,54 +48,110 @@ function redriveConversationHistory(transcript: any[], recoveryPrompt: string, r
 export class AckObligations {
   readonly ackRedriveTimers = new Map<string, Disposable>();
   readonly ackRunTokens = new Map<string, Set<string>>();
-  readonly #quickBotReplies = new Map<string, { userMessageId: string; receipt: string; timer: ReturnType<typeof setTimeout> }>();
+  readonly #quickBotReplies = new Map<string, PendingQuickReply>();
+  #firstBotReplyGenerator?: FirstBotReplyGenerator;
 
   constructor(readonly tm: TranscriptManagerLike) {}
 
-  armQuickBotReply(conversation: any, userMessageId: string, prompt: string, acceptedAtMs: number): void {
-    const receipt = /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) ? 'メッセージを受け取りました。'
-      : /\p{Script=Han}/u.test(prompt) ? '收到你的消息。' : 'I received your message.';
-    const pending = this.#quickBotReplies.get(conversation.id);
-    if (pending) {
-      pending.userMessageId = userMessageId;
-      pending.receipt = receipt;
-      return;
+  setFirstBotReplyGenerator(generator: FirstBotReplyGenerator): void {
+    this.#firstBotReplyGenerator = generator;
+  }
+
+  armQuickBotReply(conversation: any, userMessageId: string, prompt: string, acceptedAtMs: number, hasAttachments = false): void {
+    const generate = this.#firstBotReplyGenerator;
+    const remaining = acceptedAtMs + QUICK_BOT_REPLY_TIMEOUT_MS - Date.now();
+    if (!generate || remaining <= 0) return;
+    this.#cancelQuickBotReply(conversation.id);
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(remaining)]);
+    const settled = this.#generateQuickBotReply(conversation, userMessageId, prompt, hasAttachments, generate, signal).finally(() => {
+      if (this.#quickBotReplies.get(conversation.id)?.controller === controller) this.#quickBotReplies.delete(conversation.id);
+    });
+    this.#quickBotReplies.set(conversation.id, { messageId: userMessageId, controller, settled });
+  }
+
+  async firstBotReplyContext(agentId: string, messageId: string, signal: AbortSignal): Promise<FirstBotReplyContext> {
+    const pending = this.#quickBotReplies.get(agentId);
+    if (pending?.messageId === messageId) {
+      const cancel = () => pending.controller.abort();
+      if (signal.aborted) cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try { await pending.settled; } finally { signal.removeEventListener('abort', cancel); }
     }
-    const timer = setTimeout(() => {
-      const current = this.#quickBotReplies.get(conversation.id);
-      this.#quickBotReplies.delete(conversation.id);
-      if (!current || this.tm.disposed) return;
-      this.#deliverQuickBotReply(conversation, current.userMessageId, current.receipt);
-    }, Math.max(0, acceptedAtMs + QUICK_BOT_REPLY_MS - Date.now()));
-    timer.unref();
-    this.#quickBotReplies.set(conversation.id, { userMessageId, receipt, timer });
+    if (signal.aborted) return { reply: null, recentCompletedTurns: [] };
+
+    const entries: TranscriptEntry[] = this.tm.sessions.getAgentTranscriptTail(agentId, { limit: 40 }).entries;
+    const anchor = entries.findIndex(entry => entry.id === messageId);
+    const current = anchor < 0 ? undefined : entries.slice(anchor + 1).find(entry => entry.firstBotReplyTo === messageId);
+    const message = current ? quotableFirstReply(current) : '';
+    const reply = message && typeof current?.firstBotReplyNeedsFollowUp === 'boolean'
+      ? { message, emoji: typeof current.firstBotReplyEmoji === 'string' ? current.firstBotReplyEmoji : null, needsFollowUp: current.firstBotReplyNeedsFollowUp }
+      : null;
+    const recent = anchor < 0 ? [] : entries.slice(0, anchor);
+    const recentCompletedTurns: FirstBotReplyInput['context'] = recent.filter(entry => entry.firstBotReplyNeedsFollowUp === false)
+      .slice(-2).flatMap((entry) => {
+        const user = recent.find(candidate => candidate.id === entry.firstBotReplyTo);
+        return typeof user?.content === 'string' ? [
+          { role: 'user' as const, text: user.content.slice(0, 200) },
+          { role: 'assistant' as const, text: quotableFirstReply(entry) },
+        ] : [];
+      });
+    return { reply, recentCompletedTurns };
   }
 
   clearQuickBotReplies(): void {
-    for (const { timer } of this.#quickBotReplies.values()) clearTimeout(timer);
+    for (const { controller } of this.#quickBotReplies.values()) controller.abort();
     this.#quickBotReplies.clear();
   }
 
-  #deliverQuickBotReply(conversation: any, userMessageId: string, receipt: string): void {
+  #cancelQuickBotReply(agentId: string): void {
+    this.#quickBotReplies.get(agentId)?.controller.abort();
+    this.#quickBotReplies.delete(agentId);
+  }
+
+  async #generateQuickBotReply(conversation: any, userMessageId: string, message: string, hasAttachments: boolean, generate: FirstBotReplyGenerator, signal: AbortSignal): Promise<void> {
+    try {
+      const entries: TranscriptEntry[] = this.tm.sessions.activeSession?.id === conversation.id ? getTranscript() : conversation.db.getTranscriptEntries();
+      const context = entries.slice(-8).flatMap<FirstBotReplyInput['context'][number]>((entry) => {
+        const content = dialogueContent(entry);
+        if (entry.id === userMessageId || typeof content !== 'string' || !content.trim() || content.startsWith('[SLATE_HIDDEN_PROMPT]')) return [];
+        return [{ role: entry.role === 'user' ? 'user' : 'assistant', text: content.slice(0, 280) }];
+      }).slice(-3);
+      const reply = await generate(conversation.id, { message, context, hasAttachments }, signal);
+      if (reply && !signal.aborted && !this.tm.disposed) this.#deliverQuickBotReply(conversation, userMessageId, reply);
+    } catch (error) {
+      if (!signal.aborted) this.reportRedriveError(conversation.id, error);
+    }
+  }
+
+  #deliverQuickBotReply(conversation: any, userMessageId: string, receipt: FirstBotReply): void {
     const active = this.tm.sessions.activeSession?.id === conversation.id;
     try {
-      const entries = active ? getTranscript() : conversation.db.getTranscriptEntries();
-      const anchor = entries.findIndex((entry: any) => entry.id === userMessageId);
-      if (anchor < 0 || entries.slice(anchor + 1).some((entry: any) => (
-        entry.kind === 'send-message' && entry.message?.type === 'text' && typeof entry.message.content === 'string' && entry.message.content.trim()
-      ))) return;
+      const entries: TranscriptEntry[] = active ? getTranscript() : conversation.db.getTranscriptEntries();
+      const anchor = entries.findIndex(entry => entry.id === userMessageId && isUserWrittenMessage(entry));
+      if (anchor < 0 || entries.slice(anchor + 1).some(entry => isUserWrittenMessage(entry) || quotableFirstReply(entry))) return;
       const entry = {
-        ...createSendMessageEntry(allocateTranscriptEntryId(entries, 'send-message'), { type: 'text', content: receipt }, Date.now()),
+        ...createSendMessageEntry(allocateTranscriptEntryId(entries, 'send-message'), { type: 'text', content: receipt.message }, Date.now()),
         hostReceipt: true,
+        firstBotReplyTo: userMessageId,
+        firstBotReplyNeedsFollowUp: receipt.needsFollowUp,
+        firstBotReplyEmoji: receipt.emoji,
       };
       let persisted = false;
       if (active) {
-        this.tm.appendEntry(entry, { persistBeforeEmit: true, onPersistOutcome: (value: boolean) => { persisted = value; } });
+        this.tm.appendEntry(entry, { persistBeforeEmit: true, deferEmit: true, onPersistOutcome: (value: boolean) => { persisted = value; } });
+        if (!persisted) removeEntry(entry.id);
       } else {
         persisted = conversation.db.appendTranscriptEntry(entry);
         if (persisted) this.tm.sessionStore.markSessionActivity(conversation);
       }
       if (persisted) {
+        if (receipt.emoji) {
+          try {
+            this.tm.widgetResponses.applyReaction({ session: conversation, entryId: userMessageId, emoji: receipt.emoji, by: conversation.id, addOnly: true });
+          } catch (error) { this.reportRedriveError(conversation.id, error); }
+        }
+        this.tm.roster.emit({ type: 'appended', entry }, conversation.id);
         const token = this.mintAckRunToken(conversation.id);
         this.fulfillAckObligation(conversation.id, token);
         this.retireAckRunToken(conversation.id, token);
@@ -186,6 +251,7 @@ export class AckObligations {
     if (!this.canOweAck()) return;
     const owed = this.tm.ackObligationStore!.get(agent);
     if (owed == null) return;
+    this.#cancelQuickBotReply(agent);
     this.tm.ackObligationStore!.clear(agent);
     this.clearAckRedriveTimer(agent);
     const nowMs = Date.now();
@@ -201,6 +267,7 @@ export class AckObligations {
   }
 
   markAckObligationLost(agent: string, reason: "agent_deleted" | "max_redrives"): void {
+    this.#cancelQuickBotReply(agent);
     if (!this.canOweAck()) return;
     const owed = this.tm.ackObligationStore!.get(agent);
     if (owed == null) return;

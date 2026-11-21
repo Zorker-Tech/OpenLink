@@ -13,6 +13,9 @@ import { getSlateAgentsRootDir } from "./storage/agent-paths.ts"
 import { BotRuntimeStore, type BotRuntimeBinding } from "./bot/bot-runtime-store.ts"
 import { createBotRuntimeGateway } from "./bot/bot-runtime-gateway.ts"
 import { createPiBotRunStep } from "./bot/pi-bot-runner.ts"
+import { createBotManagementClient } from './bot/bot-management-client.ts'
+import { PiWorkerClient } from "./bot/pi-worker-client.ts"
+import { generateFirstBotReply } from "./bot/first-bot-reply.ts"
 import { InspirationRuntime } from "./inspiration/inspiration-runtime.ts"
 import { InspirationStore } from "./inspiration/inspiration-store.ts"
 import { getSlateProfilePath, readSlateProfileFile } from "./agents/agent-profile.ts"
@@ -60,6 +63,10 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
       // attached here, but only starts once the host says its background work
       // is ready, so its first tick never races the runner graph.
       const transcriptApi = extensions.api("transcript") as unknown as Record<string, any>
+      transcriptApi.ackObligations?.setFirstBotReplyGenerator((agentId: string, input: Parameters<typeof generateFirstBotReply>[1], signal: AbortSignal) => {
+        const binding = botRuntimeStore.read(agentId)
+        return binding ? generateFirstBotReply(new PiWorkerClient(binding), input, signal) : Promise.resolve(null)
+      })
       const inspirationRuntime = new InspirationRuntime({
         tm: transcriptApi,
         store: new InspirationStore(getSlateAgentsRootDir()),
@@ -84,11 +91,15 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
         botRuntimeProvider: (agentId) => botRuntimeStore.read(agentId),
         buildRunner: (options) => {
           const binding = options.botRuntime as BotRuntimeBinding | undefined
-          if (binding === undefined) return new SlateAgentRunner(options as SlateAgentRunnerOptions)
+          if (binding === undefined) {
+            if (options.requiresBotRuntime === true) throw new Error('Group member Bot runtime is unavailable')
+            return new SlateAgentRunner(options as SlateAgentRunnerOptions)
+          }
           // A Bot turn runs in the Bot's own sandbox through the shared Pi
           // worker. The ordinary Work-agent turn shell is deliberately not
           // built: its model session and checkpoint belong to Work agents.
           const { productionTurnRunShell: _workAgentTurnShell, ...botOptions } = options as SlateAgentRunnerOptions
+          const manageBot = createBotManagementClient(() => botRuntimeStore.read(binding.agentId))
           return new SlateAgentRunner({
             ...botOptions,
             isBotRunner: true,
@@ -97,6 +108,12 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
               getBinding: () => botRuntimeStore.read(binding.agentId),
               emitGatewayEvent,
               groupMember: (options as SlateAgentRunnerOptions).isGroupMemberTurn === true,
+              ...(manageBot ? { manageBot } : {}),
+              ...(typeof options.systemPrompt === 'string' ? { groupSystemPrompt: options.systemPrompt } : {}),
+              firstReplyContext: (messageId, signal) => {
+                const transcript = started.api('transcript') as unknown as Record<string, any>
+                return transcript.ackObligations.firstBotReplyContext(binding.agentId, messageId, signal)
+              },
               nominateInspiration: async (target, task) => {
                 const transcript = started.api("transcript") as unknown as Record<string, any>
                 const runtime = transcript.inspirationRuntime as InspirationRuntime | null | undefined

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-import { createGroupMemberStream, GroupChatGlue, SlateGroupCreateError } from "../../source/host/transcript/group-chat-glue.ts";
+import { GroupChatGlue, SlateGroupCreateError } from "../../source/host/transcript/group-chat-glue.ts";
 import { AgentGoneError } from "../../source/host/transcript/session-runtime.ts";
 import { getTranscript, setTranscript } from "../../source/host/transcript/transcript-store.ts";
 import { GROUP_CONFIG_VERSION, SHARED_ROOM_HISTORY_LIMIT, SlateGroupNestingError, buildGroupRedriveNote } from "../../source/host/groups/group-chat.ts";
@@ -95,6 +95,10 @@ function world(options: { directories?: Record<string, string>; agents?: Array<R
     sessions: {
       activeSession: undefined as unknown,
       liveSessions,
+      getAgentTranscript: async (id: string) => {
+        record("getAgentTranscript", id);
+        return storeEntries;
+      },
       isAgentGone: (id: string) => false,
       openSessionOnce: async (id: string) => {
         record("openSessionOnce", id);
@@ -155,6 +159,11 @@ function world(options: { directories?: Record<string, string>; agents?: Array<R
       record("createAgent", profile, origin);
       return { agent: { id: "created-group" }, transcript: getTranscript() };
     },
+    createBackgroundAgent: async (profile: unknown, origin: string, options: { configureAgentDir(dir: string): void }) => {
+      record("createBackgroundAgent", profile, origin);
+      options.configureAgentDir(join(root, "created-group"));
+      return { agent: { id: "created-group" }, transcript: [] };
+    },
     appendEntry: (entry: Record<string, unknown>) => {
       record("appendEntry", entry);
       setTranscript([...getTranscript(), entry as never]);
@@ -189,8 +198,6 @@ describe("which directories are groups and rooms", () => {
     const plainSession = fakeSession("plain-1", join(dirs.root, "plain-1"));
     assert.deepEqual([world1.glue.isGroupSession(groupSession), world1.glue.isGroupSession(plainSession), world1.glue.isRemoteRoomSession(plainSession)], [true, false, false]);
     assert.deepEqual(world1.glue.groupIdentityFor(groupSession), { name: "Group group-1", description: "a group" });
-    // And a stream starts with nothing in it.
-    assert.deepEqual(createGroupMemberStream(), { currentId: undefined, currentText: "", sealed: [] });
   });
 
   it("pins a member's session for a room turn, and refuses one that is gone", async () => {
@@ -275,7 +282,13 @@ describe("creating and reconfiguring a group", () => {
     (external.tm.sessionStore as { getAgentDir: unknown }).getAgentDir = (id: string) => id === "group-1" ? join(externalDirs.root, "external-group") : join(external.root, id);
     const retried = await external.glue.createGroup({ name: "Another name", memberIds: ["member-2", "member-1"], externalId: "openlink-group-1" });
     assert.equal(external.named("createAgent").length, 0);
+    assert.equal(external.named("switchAgent").length, 0);
+    assert.deepEqual(external.named("getAgentTranscript")[0]?.args, ["group-1"]);
     assert.deepEqual(retried.agent, { id: "group-1", isGroup: true, memberIds: ["member-1", "member-2"], snapshotEpoch: "epoch", snapshotSeq: 1 });
+    const fresh = await external.glue.createGroup({ name: "New room", memberIds: ["member-1", "member-2"], externalId: "openlink-group-2" });
+    assert.equal(external.named("createBackgroundAgent").length, 1);
+    assert.equal(fresh.agent.id, "created-group");
+    assert.equal(readSlateGroupConfig(join(external.root, "created-group"))?.externalId, "openlink-group-2");
   });
 
   it("reconfigures a group's members, and leaves a room alone", async () => {
@@ -290,8 +303,8 @@ describe("creating and reconfiguring a group", () => {
       externalId: "openlink-group-1",
       remoteMembers: [{ ownerAuthId: "owner-1", agentId: "remote-1", name: "Remote" }],
     });
-    await world1.glue.setGroupMembers("group-1", ["member-2", "group-1", "nobody", "member-2"]);
-    // The group itself and anything unknown are not members, and what is asked for is written down.
+    await assert.rejects(() => world1.glue.setGroupMembers("group-1", ["member-2", "group-1", "nobody"]), SlateGroupCreateError);
+    await world1.glue.setGroupMembers("group-1", ["member-2", "member-2"]);
     const written = JSON.parse(readFileSync(getSlateGroupPath(groupDir), "utf8")) as { memberIds: string[]; version: number; externalId?: string; remoteMembers?: unknown[] };
     assert.deepEqual([written.memberIds, written.version], [["member-2"], GROUP_CONFIG_VERSION]);
     assert.equal(written.externalId, "openlink-group-1");
@@ -299,7 +312,7 @@ describe("creating and reconfiguring a group", () => {
     assert.equal(world1.named("emitAgents").length, 1);
     // Nothing left to put in the group writes nothing at all.
     const before = readFileSync(getSlateGroupPath(groupDir), "utf8");
-    await world1.glue.setGroupMembers("group-1", ["group-1", "nobody"]);
+    await assert.rejects(() => world1.glue.setGroupMembers("group-1", ["group-1", "nobody"]), SlateGroupCreateError);
     assert.equal(readFileSync(getSlateGroupPath(groupDir), "utf8"), before);
     // A directory that is not a group has nothing to reconfigure.
     const plain = world({ agents: [] });
@@ -352,7 +365,7 @@ describe("running a room's turn", () => {
     assert.deepEqual([deps.isSharedRoom, deps.isCurrent()], [true, true]);
     world1.tm.sendPipeline.currentTurnEpoch = () => 7;
     assert.equal(deps.isCurrent(), false);
-    assert.deepEqual(deps.readHistory(), [{ speaker: { kind: "user", name: "Ada" }, content: "hello room" }]);
+    assert.deepEqual(deps.readHistory(), [{ id: "t0u", speaker: { kind: "user", name: "Ada" }, content: "hello room" }]);
     // Members are resolved with the remote members the group's own configuration vouches for.
     assert.deepEqual(await deps.resolveMembers([formatRemoteAgentId(remote)]), [{ id: formatRemoteAgentId(remote), name: "Remote nine", description: "" }]);
     // A member's turn asked for through the deps is a member turn: a directory with no runner attached answers nothing.
@@ -362,7 +375,25 @@ describe("running a room's turn", () => {
     assert.equal(world1.named("enqueueExclusiveRun").length, 0);
   });
 
-  it("runs a member's turn with its own persona, streams what it says into the room, and posts it when it lands", async () => {
+  it("keeps later queued prompts out of the current room turn and stamps its reply", () => {
+    const dirs = agentsDir();
+    const groupDir = dirs.group("group", ["member"]);
+    const member = { id: "member", name: "Member", description: "" };
+    const entries = [
+      { id: "original", kind: "send-message", author: member, message: { type: "text", content: "Earlier" } },
+      { id: "current", kind: "message", role: "user", content: "First", replyTo: "original" },
+      { id: "queued", kind: "message", role: "user", content: "Second" },
+    ];
+    const world1 = world({ directories: { group: groupDir }, entries });
+    const room = fakeSession("group", groupDir, entries as never);
+    (world1.tm.sessions as { activeSession: unknown }).activeSession = room;
+    const turn = world1.glue.groupOrchestratorDeps(room, 1, undefined, "user", undefined, "current");
+    assert.deepEqual(turn.readHistory().map(entry => entry.id), ["original", "current"]);
+    turn.postMemberMessage(member, "Response");
+    assert.equal((world1.named("appendEntry").at(-1)?.args[0] as { replyTo?: string }).replyTo, "current");
+  });
+
+  it("keeps a member’s private draft out of the room and collects only its explicit reply", async () => {
     const dirs = agentsDir();
     const groupDir = dirs.group("group-1", ["member-1"]);
     const memberDir = dirs.plain("member-1", { name: "Ada" });
@@ -388,12 +419,11 @@ describe("running a room's turn", () => {
       createdRunner = runner;
       return runner;
     };
-    const sent = await world1.glue.runGroupMemberTurn(groupSession, { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "you are Ada", prompt: "say hi" }, createGroupMemberStream(), () => true);
+    const sent = await world1.glue.runGroupMemberTurn(groupSession, { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "you are Ada", prompt: "say hi" }, () => true);
     assert.deepEqual(sent, ["hello everyone"]);
     assert.deepEqual(seenOverrides, { systemPrompt: "you are Ada", isSharedRoomTurn: false });
-    // The room was shown the member speaking while it spoke, and the preview was taken away when the turn ended.
-    const streamed = world1.named("emit").map((call) => call.args[0] as { type: string; entry?: { streaming?: boolean } });
-    assert.equal(streamed.some((event) => event.type === "appended" && event.entry?.streaming === true), true);
+    assert.equal(world1.named("emit").some(call => (call.args[0] as { type?: string }).type === "appended"), false);
+    assert.deepEqual(getTranscript(), []);
     assert.deepEqual(world1.named("enqueueExclusiveRun")[0]?.args[0], { lane: "background", source: "group-member" });
     // While the member's turn ran, its runner was the one registered for that conversation; afterwards it is gone.
     assert.deepEqual([duringRun?.stored, duringRun?.size], [createdRunner, 1]);
@@ -402,7 +432,7 @@ describe("running a room's turn", () => {
     // A member that cannot be pinned at all says nothing rather than ending the room's turn.
     const gone = world({ directories: { "group-1": groupDir, "member-1": memberDir } });
     gone.tm.sessions.isAgentGone = () => true;
-    const pinnedNowhere = await gone.glue.runGroupMemberTurn(groupSession, { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "p" }, createGroupMemberStream(), () => true);
+    const pinnedNowhere = await gone.glue.runGroupMemberTurn(groupSession, { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "p" }, () => true);
     assert.deepEqual([pinnedNowhere, gone.named("enqueueExclusiveRun").length], [[], 0]);
   });
 
@@ -416,7 +446,7 @@ describe("running a room's turn", () => {
       return { run: async () => ({ sentMessageCount: 0, reacted: false, aborted: false }) };
     };
     (world1.tm.sharedRooms as { sharedRoomConfigOf: unknown }).sharedRoomConfigOf = () => ({ sharedRoomId: "shared-1", memberIds: [], remoteMembers: [] });
-    await world1.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "you are Ada", prompt: "p" }, createGroupMemberStream(), () => true);
+    await world1.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "you are Ada", prompt: "p" }, () => true);
     assert.deepEqual(seenOverrides, {
       systemPrompt: "you are Ada" + buildSharedRoomGuardrails({ hostName: "", isForeignHost: false }),
       isSharedRoomTurn: true,
@@ -435,21 +465,21 @@ describe("running a room's turn", () => {
       },
     });
     // A member whose turn failed says nothing, and does not fail the room.
-    const quiet = await world1.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "p" }, createGroupMemberStream(), () => true);
+    const quiet = await world1.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "p" }, () => true);
     assert.deepEqual([quiet, attempts], [[], 1]);
     // A member preempted by a direct message is asked again, with a note saying the room has not seen a reply.
     const retried = world({ directories: { "group-1": groupDir, "member-1": dirs.plain("member-1") } });
     const prompts: string[] = [];
     (retried.tm.execution as { createGroupMemberRunner: unknown }).createGroupMemberRunner = () => ({ run: async (prompt: string) => { prompts.push(prompt); return { sentMessageCount: 0, reacted: false, aborted: false }; } });
     retried.glue.dmPreemptedGroupMemberIds.add("member-1");
-    const nothing = await retried.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "say hi" }, createGroupMemberStream(), () => true);
+    const nothing = await retried.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "say hi" }, () => true);
     assert.deepEqual(nothing, []);
     assert.deepEqual(prompts, ["say hi", `say hi${buildGroupRedriveNote()}`]);
     // And one that was not preempted is asked once.
     const once = world({ directories: { "group-1": groupDir, "member-1": dirs.plain("member-1") } });
     const oncePrompts: string[] = [];
     (once.tm.execution as { createGroupMemberRunner: unknown }).createGroupMemberRunner = () => ({ run: async (prompt: string) => { oncePrompts.push(prompt); return { sentMessageCount: 0, reacted: false, aborted: false }; } });
-    await once.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "say hi" }, createGroupMemberStream(), () => true);
+    await once.glue.runGroupMemberTurn(fakeSession("group-1", groupDir), { member: { id: "member-1", name: "Ada", description: "" }, systemPrompt: "s", prompt: "say hi" }, () => true);
     assert.deepEqual(oncePrompts, ["say hi"]);
   });
 
@@ -565,49 +595,8 @@ describe("what a member's talk does to the room", () => {
     assert.equal((sideSession.db.getTranscriptEntries()[0] as Record<string, unknown>).message && ((sideSession.db.getTranscriptEntries()[0] as Record<string, unknown>).message as { content: string }).content, "said quietly");
     assert.equal(side.named("markSessionActivity").length, 1);
     assert.equal(side.named("emitAgentUpdate").length, 1);
-    // A preview the room is already watching becomes the message itself rather than a second entry.
-    const streamed = world({ directories: { "group-1": groupDir } });
-    (streamed.tm.sessions as { activeSession: unknown }).activeSession = groupSession;
-    const live = createGroupMemberStream();
-    const member = { id: "member-1", name: "Ada", description: "" };
-    streamed.glue.streamGroupMemberUpdate(groupSession, member, { type: "text-delta", text: "hello" }, live);
-    streamed.glue.streamGroupMemberUpdate(groupSession, member, { type: "send-message", message: { type: "text", content: "hello" } }, live);
-    streamed.glue.postGroupMemberMessage(groupSession, member, "hello", live);
-    const finalized = streamed.lastEmitted();
-    assert.deepEqual([finalized?.type, (finalized?.entry?.message as unknown as { content: string } | undefined)?.content], ["updated", "hello"]);
-    assert.equal(streamed.named("markActiveSessionArrival").length, 1);
-    assert.equal(streamed.named("publishSharedRoomEntry").length, 1);
-    assert.deepEqual([live.sealed.length, live.currentId], [0, undefined]);
-  });
-
-  it("shows a member talking as it talks, and takes the preview away when the turn is done", () => {
-    const dirs = agentsDir();
-    const groupDir = dirs.group("group-1", ["member-1"]);
-    const groupSession = fakeSession("group-1", groupDir);
-    const world1 = world({ directories: { "group-1": groupDir } });
-    (world1.tm.sessions as { activeSession: unknown }).activeSession = groupSession;
-    const member = { id: "member-1", name: "Ada", description: "" };
-    const live = createGroupMemberStream();
-    // A prefix that could still turn out to be a pass is not shown at all.
-    world1.glue.streamGroupMemberUpdate(groupSession, member, { type: "text-delta", text: "(pa" }, live);
-    assert.equal(live.currentId, undefined);
-    // Once it is clearly not a pass, the room is shown the member speaking.
-    world1.glue.streamGroupMemberUpdate(groupSession, member, { type: "text-delta", text: "hello" }, live);
-    const opened = world1.lastEmitted();
-    assert.deepEqual([opened?.type, opened?.entry?.streaming, (opened?.entry?.message as unknown as { content: string } | undefined)?.content], ["appended", true, "(pahello"]);
-    world1.glue.streamGroupMemberUpdate(groupSession, member, { type: "text-delta", text: " there" }, live);
-    assert.equal((world1.lastEmitted()?.entry?.message as unknown as { content: string } | undefined)?.content, "(pahello there");
-    // What was sent seals the preview, and finishing the turn takes every preview away.
-    world1.glue.streamGroupMemberUpdate(groupSession, member, { type: "send-message", message: { type: "text", content: "hello there" } }, live);
-    assert.deepEqual(live.sealed.length, 1);
-    assert.equal(live.currentId, undefined);
-    world1.glue.finalizeGroupMemberStream(groupSession, live);
-    assert.equal(world1.lastEmitted()?.type, "removed");
-    assert.deepEqual([live.currentId, live.currentText, live.sealed], [undefined, "", []]);
-    // A room that is not on screen is not streamed into at all.
-    const side = world({ directories: { "group-1": groupDir } });
-    side.glue.streamGroupMemberUpdate(groupSession, member, { type: "text-delta", text: "hello" }, createGroupMemberStream());
-    assert.equal(side.named("emit").length, 0);
+    side.glue.postGroupMemberMessage(sideSession, { id: "member-1", name: "Ada", description: "" }, '{"message":null}');
+    assert.equal(sideSession.db.getTranscriptEntries().length, 1, "Internal markers cannot become public messages");
   });
 
   it("reads the room's history as what was said and who said it", () => {
@@ -625,9 +614,9 @@ describe("what a member's talk does to the room", () => {
     const groupSession = fakeSession("group-1", groupDir, entries as never);
     (world1.tm.sessions as { activeSession: unknown }).activeSession = groupSession;
     assert.deepEqual(world1.glue.readGroupHistory(groupSession), [
-      { speaker: { kind: "user", name: "Ada" }, content: "hello room" },
-      { speaker: { kind: "user" }, content: "and hello again" },
-      { speaker: { kind: "member", id: "member-1", name: "Ada" }, content: "from Ada" },
+      { id: "t0u", speaker: { kind: "user", name: "Ada" }, content: "hello room" },
+      { id: "t0u2", speaker: { kind: "user" }, content: "and hello again" },
+      { id: "t0s1", speaker: { kind: "member", id: "member-1", name: "Ada" }, content: "from Ada" },
     ]);
     assert.equal(SHARED_ROOM_HISTORY_LIMIT, 24);
     void GROUP_MAX_MEMBERS;
@@ -668,7 +657,7 @@ describe("the edges a group turn is told about", () => {
     const world1 = world({ directories: { group: groupDir } });
     const remoteId = formatRemoteAgentId({ ownerAuthId: "owner", agentId: "agent" });
     const session = { id: "group", dbPath: join(groupDir, "store.db") };
-    const remote = await world1.glue.runGroupMemberTurn(session, { member: { id: remoteId, name: "Remote", description: "" }, systemPrompt: "s", prompt: "p" }, { currentId: undefined, currentText: "", sealed: [] }, () => true);
+    const remote = await world1.glue.runGroupMemberTurn(session, { member: { id: remoteId, name: "Remote", description: "" }, systemPrompt: "s", prompt: "p" }, () => true);
     assert.deepEqual(remote, []);
     assert.equal(world1.named("createGroupMemberRunner").length, 0);
   });
@@ -685,7 +674,7 @@ describe("the edges a group turn is told about", () => {
         return { sentMessageCount: 1, reacted: true, aborted: false };
       },
     });
-    await world1.glue.runGroupMemberTurn(session, { member: { id: "m1", name: "Member", description: "" }, systemPrompt: "s", prompt: "p" }, { currentId: undefined, currentText: "", sealed: [] }, () => true);
+    await world1.glue.runGroupMemberTurn(session, { member: { id: "m1", name: "Member", description: "" }, systemPrompt: "s", prompt: "p" }, () => true);
     assert.deepEqual((world1.named("applyReaction")[0]?.args[0] as { emoji: string }).emoji, "x");
   });
 
@@ -702,7 +691,7 @@ describe("the edges a group turn is told about", () => {
         return { sentMessageCount: 0, reacted: false, aborted: false };
       },
     });
-    await world1.glue.runGroupMemberTurn(session, { member: { id: "m1", name: "Member", description: "" }, systemPrompt: "s", prompt: "p" }, { currentId: undefined, currentText: "", sealed: [] }, () => true);
+    await world1.glue.runGroupMemberTurn(session, { member: { id: "m1", name: "Member", description: "" }, systemPrompt: "s", prompt: "p" }, () => true);
     assert.equal(runs, 3);
   });
 
@@ -721,12 +710,5 @@ describe("the edges a group turn is told about", () => {
     assert.deepEqual(requests[0]?.peers.map((peer) => peer.id).includes(remoteId), false);
   });
 
-  it("does not open a preview for an empty streamed delta", () => {
-    const world1 = world();
-    (world1.tm.sessions as { activeSession: unknown }).activeSession = { id: "group" };
-    const stream = createGroupMemberStream();
-    world1.glue.streamGroupMemberUpdate({ id: "group" }, { id: "m1", name: "Member", description: "" }, { type: "text-delta" }, stream);
-    assert.equal(stream.currentId, undefined);
-    assert.equal(world1.named("appendEntry").length, 0);
-  });
+
 });

@@ -375,8 +375,9 @@ export class SlateHost {
   }
 
   async kickstartIfPending(agentId: string): Promise<boolean> {
-    const inferenceReady = (await optionalMethod(this.extensionsForHostOperation().api("inference"), "isReady")?.()) ?? false;
-    return (await optionalMethod(this.transcriptExtension, "kickstartAgent")?.(agentId, inferenceReady)) ?? false;
+    const isBot = this.runtime.botRuntime?.readBinding(agentId) != null;
+    const inferenceReady = isBot || ((await optionalMethod(this.extensionsForHostOperation().api("inference"), "isReady")?.()) ?? false);
+    return (await optionalMethod(this.transcriptExtension, "kickstartAgent")?.(agentId, inferenceReady, isBot)) ?? false;
   }
 
   async requestDiskSaverAudit(agentId: string): Promise<boolean> {

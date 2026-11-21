@@ -16,6 +16,7 @@ import {
 } from "../../source/host/inspiration/inspiration-divergence.ts";
 import {
   inspirationPriority,
+  nextInspirationReview,
   poissonDelay,
 } from "../../source/host/inspiration/inspiration-scheduler.ts";
 import {
@@ -102,7 +103,7 @@ function mockWorker(candidateTitle = "Check the deploy pipeline") {
     }
     if (url.endsWith("/v1/inspiration/complete")) {
       const body = JSON.parse(String(init?.body ?? "{}")) as { systemPrompt?: string };
-      if (String(body.systemPrompt).includes("interruption gate")) {
+      if (String(body.systemPrompt).includes("candidate gate")) {
         return Response.json({ text: JSON.stringify({ selection: 0, reason: "worth a look" }), costUsd: 0.0001, usage: { totalTokens: 20 } });
       }
       return Response.json({
@@ -192,11 +193,14 @@ describe("the inspiration subscription", () => {
       "Here you go:\n```json\n{\"candidates\":[{\"title\":\"Check deploy\",\"whyNow\":\"changed\",\"firstAction\":\"read logs\",\"expectedValue\":0.9,\"estimatedCost\":0.1,\"novelty\":0.8,\"lens\":\"reliability\"}]}\n```",
       "random",
     );
+    assert.ok(candidates);
     assert.equal(candidates.length, 1);
+    assert.equal(parseInspirationCandidates('{"candidates":[', 'random'), null);
+    assert.deepEqual(parseInspirationCandidates('{"candidates":[]}', 'random'), []);
     assert.equal(candidates[0]?.title, "Check deploy");
     assert.equal(candidates[0]?.lens, "reliability");
-    assert.deepEqual(parseInspirationGate('{"selection":0,"reason":"ok"}', 2), { selection: 0, reason: "ok" });
-    assert.deepEqual(parseInspirationGate('{"selection":4,"reason":"out of range"}', 2), { selection: null, reason: "out of range" });
+    assert.deepEqual(parseInspirationGate('{"selection":0,"reason":"ok"}', 2), { selection: 0, mode: "investigate", reason: "ok" });
+    assert.equal(parseInspirationGate('{"selection":4,"reason":"out of range"}', 2), null);
     assert.equal(isDuplicateTitle("Check the deploy pipeline", [{
       id: "1",
       createdAt: 1,
@@ -287,7 +291,7 @@ describe("the inspiration subscription", () => {
     const state = store.read(AGENT_ID);
     assert.equal(state.nominations.length, 1);
     assert.equal(state.nominations[0]?.task, "Check the deploy pipeline");
-    assert.ok((state.nextFireAt ?? Infinity) <= Date.UTC(2026, 0, 1, 12, 2));
+    assert.deepEqual(nextInspirationReview(state, Date.UTC(2026, 0, 1, 12, 0)), { trigger: 'nomination', at: Date.UTC(2026, 0, 1, 12, 2) });
     await rm(root, { recursive: true, force: true });
   });
 
@@ -335,11 +339,57 @@ describe("the inspiration subscription", () => {
     context.after(() => rm(root, { recursive: true, force: true }));
     mockWorker();
     const complete = globalThis.fetch;
-    globalThis.fetch = (request, init) => String(init?.body).includes('interruption gate')
+    globalThis.fetch = (request, init) => String(init?.body).includes('candidate gate')
       ? Promise.resolve(new Response('', { status: 503 })) : complete(request, init);
     const runtime = new InspirationRuntime({ tm, store, listBindings: () => [binding()], getBinding: binding });
     assert.equal((await runtime.runNow(AGENT_ID)).decision, 'error');
     assert.equal(calls.length, 0);
+  });
+
+  it('keeps periodic discovery due when an unrelated traffic observation is skipped', async (context) => {
+    const { root, store, tm, calls } = await fixture();
+    context.after(() => rm(root, { recursive: true, force: true }));
+    mockWorker();
+    const complete = globalThis.fetch;
+    globalThis.fetch = (request, init) => String(init?.body).includes('You score')
+      ? Promise.resolve(Response.json({ text: '{"score":0.1,"reason":"Routine traffic"}', costUsd: 0 })) : complete(request, init);
+    const now = Date.UTC(2026, 0, 1, 12);
+    store.write({ ...defaultInspirationState(AGENT_ID), nextFireAt: now - 1_000, observations: [{
+      sequence: 1, observedAt: now - 10_000, files: [], traffic: { receivedBytes: 500_000, sentBytes: 500_000, direction: 'bidirectional' },
+    }] });
+    const runtime = new InspirationRuntime({ tm, store, now: () => now, listBindings: () => [binding()], getBinding: binding });
+    await runtime.tick();
+    assert.equal(store.read(AGENT_ID).ledger.at(-1)?.trigger, 'event');
+    assert.equal(store.read(AGENT_ID).nextFireAt, now - 1_000);
+    await runtime.tick();
+    assert.equal(store.read(AGENT_ID).ledger.at(-1)?.trigger, 'stochastic');
+    assert.equal(calls.length, 1);
+  });
+
+  it('autonomously investigates a finished user turn once before the periodic schedule', async (context) => {
+    const { root, store, tm, calls } = await fixture();
+    context.after(() => rm(root, { recursive: true, force: true }));
+    mockWorker();
+    let now = Date.UTC(2026, 0, 1, 12);
+    const original = tm.sessions.resolveBackgroundSession;
+    const userAt = now - 90_000;
+    tm.sessions.resolveBackgroundSession = async (id) => ({
+      ...await original(id), db: { getTranscriptEntries: () => [{
+        id: 'recent-goal', kind: 'message', role: 'user', content: 'Please watch for deploy regressions', timestampMs: userAt,
+      }] },
+    });
+    const runtime = new InspirationRuntime({ tm, store, now: () => now, listBindings: () => [binding()], getBinding: binding });
+    await runtime.collectObservations();
+    await runtime.tick();
+    assert.equal(calls.length, 0);
+    now += 30_001;
+    await runtime.tick();
+    assert.equal(store.read(AGENT_ID).ledger.at(-1)?.trigger, 'follow-up');
+    assert.match(calls[0]?.prompt ?? '', /Start the read-only investigation quietly/);
+    await runtime.collectObservations();
+    await runtime.tick();
+    assert.equal(store.read(AGENT_ID).followUp?.dueAt, null);
+    assert.equal(calls.length, 1);
   });
 
   it('classifies without a model and adapts ranking from recent user history alone', () => {

@@ -19,7 +19,14 @@ export const SHARED_ROOM_HISTORY_LIMIT = 24;
 export const GROUP_CHAT_TAG_PREFIX = "[Group chat: ";
 export const SLATE_HIDDEN_PROMPT_MARKER = "[SLATE_HIDDEN_PROMPT]";
 
-export interface GroupMember { id: string; name: string; description: string } export interface GroupDescription { name: string; description: string } export type GroupMessage = { speaker: { kind: "user"; name?: string } | { kind: "member"; id: string; name: string }; content: string };
+export interface GroupMember { id: string; name: string; description: string }
+export interface GroupDescription { name: string; description: string }
+export type GroupMessage = {
+  id?: string;
+  replyToMemberId?: string;
+  speaker: { kind: 'user'; name?: string } | { kind: 'member'; id: string; name: string };
+  content: string;
+};
 
 /** The order the members speak in this round: the round number turns the start, so it rotates. */
 export function orderRoundSpeakers<T>(memberIds: readonly T[], round: number): T[] {
@@ -65,38 +72,38 @@ export function memberMentionHandles(name: string): string[] {
 }
 
 /** A character that a mention may not sit next to. */
-const WORD_CHARACTER = /[a-z0-9]/;
+const WORD_CHARACTER = /[\p{L}\p{N}_]/u;
 
 /** Whether this character is one a mention may not sit next to. */
 function isWordChar(char: string | undefined): boolean {
   return char !== undefined && WORD_CHARACTER.test(char);
 }
 
-/** Whether the mention appears in the text as a whole word, at any position. */
-function hasMentionAt(lower: string, handle: string): boolean {
-  const needle = `@${handle}`;
-  let found = lower.indexOf(needle);
-  while (found >= 0) {
-    const before = lower[found - 1];
-    const after = lower[found + needle.length];
-    if (!isWordChar(before) && !isWordChar(after)) return true;
-    found = lower.indexOf(needle, found + 1);
-  }
-  return false;
-}
-
 /** The mention that calls the whole room. */
-const EVERYONE_MENTION = /(?:^|[^a-z0-9])@(everyone|all)\b/;
+const EVERYONE_MENTION = /(?:^|[^\p{L}\p{N}_])@(?:everyone|all|全体|所有人)(?![\p{L}\p{N}_])/u;
 
 /** Everyone a message mentions, in the order their members are listed, and whether it calls the whole room. */
 export function parseGroupMentions(text: string, members: readonly Pick<GroupMember, "id" | "name">[]): { isEveryone: boolean; memberIds: string[] } {
   const folded = text.toLowerCase();
-  const mentioned = new Map<string, string>();
+  const owners = new Map<string, Set<string>>();
   for (const member of members) {
-    if (mentioned.has(member.id)) continue;
-    if (memberMentionHandles(member.name).some((handle) => hasMentionAt(folded, handle))) mentioned.set(member.id, member.id);
+    for (const handle of [...memberMentionHandles(member.name), member.id.toLowerCase()]) {
+      const ids = owners.get(handle) ?? new Set<string>();
+      ids.add(member.id);
+      owners.set(handle, ids);
+    }
   }
-  return { isEveryone: EVERYONE_MENTION.test(folded), memberIds: [...mentioned.keys()] };
+  const handles = [...owners.keys()].sort((a, b) => b.length - a.length);
+  const mentioned = new Set<string>();
+  for (const match of folded.matchAll(/@/g)) {
+    const offset = match.index;
+    if (isWordChar(folded[offset - 1])) continue;
+    const start = offset + 1;
+    const handle = handles.find(name => folded.startsWith(name, start) && !isWordChar(folded[start + name.length]));
+    const ids = handle === undefined ? undefined : owners.get(handle);
+    if (ids?.size === 1) mentioned.add(ids.values().next().value!);
+  }
+  return { isEveryone: EVERYONE_MENTION.test(folded), memberIds: members.filter(member => mentioned.has(member.id)).map(({ id }) => id) };
 }
 
 /** Where the round starts: the last message the user sent, or the top of the transcript when they have said nothing. */
@@ -108,11 +115,13 @@ function roundStart(history: readonly GroupMessage[]): number {
 /** Who answers: every member when the round calls everyone or names nobody, and only the named members otherwise. */
 export function resolveResponders<T extends Pick<GroupMember, "id" | "name">>(members: readonly T[], history: readonly GroupMessage[]): T[] {
   const mentioned = new Set<string>();
+  const memberIds = new Set(members.map(({ id }) => id));
   let everyone = false;
   for (const message of history.slice(roundStart(history))) {
     const targets = parseGroupMentions(message.content, members);
     everyone ||= targets.isEveryone;
     for (const id of targets.memberIds) mentioned.add(id);
+    if (message.speaker.kind === 'user' && message.replyToMemberId && memberIds.has(message.replyToMemberId)) mentioned.add(message.replyToMemberId);
   }
   if (everyone || mentioned.size === 0) return [...members];
   return members.filter((member) => mentioned.has(member.id));
@@ -143,12 +152,13 @@ export function buildGroupRedriveNote(): string {
 
 /** One message as a transcript line, marked with who said it and, for the viewer's own, "(you)". */
 export function formatGroupLine(message: GroupMessage, viewerId: string): string {
+  const address = message.id ? `[${message.id}] ` : '';
   if (message.speaker.kind === "user") {
     const name = message.speaker.name;
-    return name ? `${name} (user): ${message.content}` : `User: ${message.content}`;
+    return `${address}${name ? `${name} (user)` : 'User'}: ${message.content}`;
   }
   const you = message.speaker.id === viewerId ? " (you)" : "";
-  return `${message.speaker.name}${you}: ${message.content}`;
+  return `${address}${message.speaker.name}${you}: ${message.content}`;
 }
 
 /** The last messages of a transcript as text, bounded; an empty transcript says so. */
