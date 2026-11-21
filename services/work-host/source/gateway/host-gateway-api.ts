@@ -215,6 +215,7 @@ export function createHostGatewayApi(
         traceparent: args.traceparent,
         enterEpochMs: args.enterEpochMs,
         composedAtMs: args.composedAtMs,
+        ...(args.requireQuickBotReply === true ? { requireQuickBotReply: true } : {}),
         awaitTurn: process.env[DISABLE_SEND_ACCEPT_RETURN_ENV] === "1"
       });
       return { accepted: true };

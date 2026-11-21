@@ -65,6 +65,7 @@ export interface SendPromptOptions {
   readonly directAddressedAcceptance?: boolean;
   readonly composedAtMs?: number;
   readonly enterEpochMs?: number;
+  readonly requireQuickBotReply?: boolean;
 }
 
 export interface EchoEntry {
@@ -341,6 +342,9 @@ export class SendPipeline {
         !this.tm.groupChat.isGroupSession(session);
       if (ackOwed)
         this.tm.ackObligations.recordAckObligationSend(session, acceptedAtMs);
+      if (ackOwed && durable && settings.requireQuickBotReply && messageEntryId) {
+        this.tm.ackObligations.armQuickBotReply(session, messageEntryId, cleanPrompt, acceptedAtMs);
+      }
       const ackGuardHandle = this.tm.ackObligations.armSendGuard(
         session,
         acceptedAtMs,

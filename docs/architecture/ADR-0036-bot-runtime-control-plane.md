@@ -142,6 +142,15 @@ substrate while keeping the control planes and their protocols separate.
 - If Work-host is unavailable, Bot reads surface a retryable error and writes
   are rejected before durable acceptance. Deletion remains idempotent.
 
+## First reply and progress
+
+For a durably accepted direct Bot prompt, Work-host schedules the first-reply
+receipt 3.75 seconds after acceptance. A substantive Bot text message published
+before the deadline satisfies it. The receipt belongs to the normal transcript
+and leaves the active turn running. Pi gets per-turn guidance for short initial
+replies and meaningful checkpoints, and title generation runs alongside the
+reply stream. Proactive wakes keep their own silent-by-default delivery policy.
+
 ## Consequences
 
 - Code mode and Bot mode can evolve their lifecycle independently without

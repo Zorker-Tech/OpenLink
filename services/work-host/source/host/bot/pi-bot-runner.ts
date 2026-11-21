@@ -23,6 +23,11 @@ const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_TOTAL_TIMEOUT_MS = 60 * 60_000;
 const ABORT_GRACE_MS = 5_000;
 const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
+const BOT_DELIVERY_GUIDANCE = [
+  'Use SendMessage promptly for the first user-facing reply. Answer simple questions directly in the first message.',
+  'For work that takes time, send one concise acknowledgement or concrete first step before lengthy work. The Host may already have shown a receipt after four seconds; skip a redundant acknowledgement.',
+  'Choose the number of messages based on meaningful progress. For heavy work, use SendMessage at useful checkpoints or blockers, then send the complete result. Avoid repeated status messages or duplicating a result already sent.',
+].join(' ');
 
 export interface PiBotRunStepOptions {
   readonly agentId: string;
@@ -87,6 +92,7 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
   const now = options.now ?? Date.now;
   const client = new PiWorkerClient(binding);
   const requestId = context.requestId;
+  const proactive = context.runOptions.requestSource === 'inspiration';
   const emit = (update: RunnerUpdate) => context.emitUpdate(update);
   const emitGateway = (payload: Record<string, unknown>) => {
     options.emitGatewayEvent?.({
@@ -101,38 +107,26 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
   };
 
   emitGateway({ phase: "started" });
+  let settled = false;
 
-  // Ask for the title before the turn so it is not starved by the turn's own
-  // provider traffic (the reference host seeds the conversation name the same
-  // way). The wait is bounded: a slow title model may only cost this grace,
-  // and a late title still updates the row while the turn is running.
-  if (options.groupMember !== true) {
-    const titlePromise = client.title(context.prompt);
-    const title = await Promise.race([
-      titlePromise,
-      new Promise<null>((resolve) => {
-        const timer = setTimeout(() => resolve(null), 3_000);
-        timer.unref?.();
-      }),
-    ]);
-    if (title !== null) {
-      emitGateway({ phase: "title", title });
-    } else {
-      void titlePromise
-        .then((late) => { if (late !== null) emitGateway({ phase: "title", title: late }); })
-        .catch(() => undefined);
-    }
+  // Titles are useful metadata, but neither acceptance nor an actual reply
+  // should wait for the title model.
+  if (options.groupMember !== true && !proactive) {
+    void client.title(context.prompt).then(title => {
+      if (title !== null && !settled) emitGateway({ phase: 'title', title });
+    }).catch(() => undefined);
   }
 
   let finalText = "";
   let usage: Record<string, number> | undefined;
-  let settled = false;
   let aborted = false;
   let failure: string | undefined;
   let assistantError: string | undefined;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let totalTimer: ReturnType<typeof setTimeout> | undefined;
   const emittedToolStates = new Set<string>();
+  const deliveredText = new Set<string>();
+  const deliveryKey = (content: string) => content.trim().replace(/\s+/g, ' ');
 
   const emitToolCall = (id: string | undefined, name: string | undefined, status: string, summary?: string) => {
     if (id === undefined || id.length === 0) return;
@@ -180,7 +174,10 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
     }, options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS);
     totalTimer.unref?.();
 
-    const promptInput: PiWorkerPromptInput = { message: context.prompt };
+    const promptInput: PiWorkerPromptInput = {
+      message: context.prompt,
+      ...(proactive || context.runOptions.hidden === true ? {} : { deliveryGuidance: BOT_DELIVERY_GUIDANCE }),
+    };
     const response = await client.prompt(promptInput);
     if (response.body === null) throw new Error("BOT_WORKER_EMPTY_STREAM");
 
@@ -211,7 +208,9 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
           // of waiting for the final assistant text.
           const message = recordOf(event.message);
           const content = typeof message?.content === "string" ? message.content.trim() : "";
-          if (content.length > 0) {
+          const key = deliveryKey(content);
+          if (content.length > 0 && !deliveredText.has(key)) {
+            deliveredText.add(key);
             emit({
               type: "send-message",
               message: { type: "text", content: content.slice(0, 4000) },
@@ -326,14 +325,14 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
   // message the user asked for.
   const suppressFinalMessage = context.runOptions.suppressFinalMessage === true;
   if (!suppressFinalMessage) {
-    if (finalText.trim().length > 0) {
+    if (finalText.trim().length > 0 && !deliveredText.has(deliveryKey(finalText))) {
       emit({
         type: "send-message",
         message: { type: "text", content: finalText },
         timestampMs: now(),
         ...(typeof context.runOptions.ackToken === "string" ? { ackToken: context.runOptions.ackToken } : {}),
       });
-    } else {
+    } else if (!deliveredText.size) {
       // A tool-only turn still needs a durable completion marker. It is an
       // activity card, not an invented assistant reply.
       emit({

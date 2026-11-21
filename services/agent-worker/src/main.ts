@@ -247,9 +247,11 @@ type WorkerPromptAttachment = {
   relativePath?: string; sizeBytes: number; sha256: string; contentBase64: string
 }
 
-async function readPrompt(request: IncomingMessage): Promise<{ message: string; attachments: WorkerPromptAttachment[] }> {
-  const body = await readRequestJson(request, 16 * 1024 * 1024) as { message?: unknown; attachments?: unknown }
+async function readPrompt(request: IncomingMessage): Promise<{ message: string; attachments: WorkerPromptAttachment[]; deliveryGuidance?: string }> {
+  const body = await readRequestJson(request, 16 * 1024 * 1024) as { message?: unknown; attachments?: unknown; deliveryGuidance?: unknown }
   const message = typeof body.message === 'string' ? body.message.trim() : ''
+  const deliveryGuidance = typeof body.deliveryGuidance === 'string' ? body.deliveryGuidance.trim() : undefined
+  if (deliveryGuidance && deliveryGuidance.length > 2_048) throw new Error('deliveryGuidance is invalid')
   if (message.length > 10_000) throw new Error('message is invalid')
   if (body.attachments !== undefined && (!Array.isArray(body.attachments) || body.attachments.length > 24)) throw new Error('attachments are invalid')
   let encodedImageBytes = 0
@@ -322,7 +324,7 @@ async function readPrompt(request: IncomingMessage): Promise<{ message: string; 
     return { type: 'image' as const, mediaType, url, ...(filename ? { filename } : {}) }
   })
   if (!message && !attachments.length) throw new Error('message is invalid')
-  return { message, attachments }
+  return { message, attachments, ...(deliveryGuidance ? { deliveryGuidance } : {}) }
 }
 
 async function readExtensionUiResponse(request: IncomingMessage): Promise<AgentExtensionUiResponse> {
@@ -467,6 +469,7 @@ class SdkAgentRuntime {
   private modelSetupPromise?: Promise<ModelSetup>
   private titlePromise?: Promise<string | null>
   private busy = false
+  private deliveryGuidance?: string
   private activeAbort?: () => void
   private cancelRequested = false
   private activeResponse?: ServerResponse
@@ -747,9 +750,10 @@ class SdkAgentRuntime {
     }
   }
 
-  async prompt(message: string, response: ServerResponse, signal: AbortSignal, attachments: WorkerPromptAttachment[] = []): Promise<void> {
+  async prompt(message: string, response: ServerResponse, signal: AbortSignal, attachments: WorkerPromptAttachment[] = [], deliveryGuidance?: string): Promise<void> {
     if (this.busy) throw new Error('Agent is already processing a prompt')
     this.busy = true
+    this.deliveryGuidance = deliveryGuidance
     this.activeResponse = response
     this.activeSignal = signal
     try {
@@ -864,6 +868,7 @@ class SdkAgentRuntime {
         this.cancelPendingUi()
       }
     } finally {
+      this.deliveryGuidance = undefined
       this.busy = false
       this.cancelRequested = false
       this.activeResponse = undefined
@@ -1066,6 +1071,10 @@ class SdkAgentRuntime {
         this.worker.projectMemoryExtensionPath,
         this.worker.desktopExtensionPath,
       ]),
+      extensionFactories: [pi => {
+        pi.on('before_agent_start', event => this.deliveryGuidance
+          ? { systemPrompt: event.systemPrompt + '\n\n' + this.deliveryGuidance } : undefined)
+      }],
       ...(this.worker.runtimePolicy ? { appendSystemPrompt: [this.worker.runtimePolicy] } : {}),
     })
     await resourceLoader.reload()
@@ -1407,7 +1416,7 @@ const server = createServer((request, response) => {
       response.writeHead(404).end()
       return
     }
-    const { message, attachments } = await readPrompt(request)
+    const { message, attachments, deliveryGuidance } = await readPrompt(request)
     await ensureRuntimeReady()
     response.writeHead(200, {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
@@ -1418,7 +1427,8 @@ const server = createServer((request, response) => {
     response.flushHeaders?.()
     const abortController = new AbortController()
     response.once('close', () => { if (!response.writableEnded) abortController.abort() })
-    await runtime.prompt(message, response, abortController.signal, attachments)
+    if (runtime instanceof SdkAgentRuntime) await runtime.prompt(message, response, abortController.signal, attachments, deliveryGuidance)
+    else await runtime.prompt(message, response, abortController.signal, attachments)
     response.end()
   })().catch((error) => {
     const message = error instanceof Error ? error.message : String(error)

@@ -608,7 +608,7 @@ export function BotWorkspace({
       return
     }
     if (update.type === 'entry') {
-      if (update.entry.kind === 'agent-message') {
+      if (update.entry.kind === 'agent-message' && !update.entry.hostReceipt) {
         setPendingMap((previous) => (previous[botId] ? { ...previous, [botId]: null } : previous))
       }
       setDetails((previous) => {

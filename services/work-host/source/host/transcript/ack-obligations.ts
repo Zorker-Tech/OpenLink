@@ -8,10 +8,14 @@
 import { randomUUID } from "node:crypto";
 import { slateErrorDetail } from "../ports/telemetry.ts";
 import { classifyAgentError, isDeliveryOwed } from "./turn-runtime.ts";
+import { createSendMessageEntry } from './send-message-shaping.ts';
+import { allocateTranscriptEntryId } from './transcript-entry-ids.ts';
+import { getTranscript } from './transcript-store.ts';
 import type { Disposable, TranscriptManagerLike } from "./transcript-hub.ts";
 
 export const MAX_ACK_REDRIVES = 3;
 export const ACK_REDRIVE_IDLE_DELAY_MS = 5_000;
+export const QUICK_BOT_REPLY_MS = 3_750;
 
 /** The recoveryPrompt a redrive sends: it has to make the agent actually answer, not think about answering. */
 export function buildAckRedrivePrompt(): string {
@@ -35,8 +39,62 @@ function redriveConversationHistory(transcript: any[], recoveryPrompt: string, r
 export class AckObligations {
   readonly ackRedriveTimers = new Map<string, Disposable>();
   readonly ackRunTokens = new Map<string, Set<string>>();
+  readonly #quickBotReplies = new Map<string, { userMessageId: string; receipt: string; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(readonly tm: TranscriptManagerLike) {}
+
+  armQuickBotReply(conversation: any, userMessageId: string, prompt: string, acceptedAtMs: number): void {
+    const receipt = /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(prompt) ? 'メッセージを受け取りました。'
+      : /\p{Script=Han}/u.test(prompt) ? '收到你的消息。' : 'I received your message.';
+    const pending = this.#quickBotReplies.get(conversation.id);
+    if (pending) {
+      pending.userMessageId = userMessageId;
+      pending.receipt = receipt;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const current = this.#quickBotReplies.get(conversation.id);
+      this.#quickBotReplies.delete(conversation.id);
+      if (!current || this.tm.disposed) return;
+      this.#deliverQuickBotReply(conversation, current.userMessageId, current.receipt);
+    }, Math.max(0, acceptedAtMs + QUICK_BOT_REPLY_MS - Date.now()));
+    timer.unref();
+    this.#quickBotReplies.set(conversation.id, { userMessageId, receipt, timer });
+  }
+
+  clearQuickBotReplies(): void {
+    for (const { timer } of this.#quickBotReplies.values()) clearTimeout(timer);
+    this.#quickBotReplies.clear();
+  }
+
+  #deliverQuickBotReply(conversation: any, userMessageId: string, receipt: string): void {
+    const active = this.tm.sessions.activeSession?.id === conversation.id;
+    try {
+      const entries = active ? getTranscript() : conversation.db.getTranscriptEntries();
+      const anchor = entries.findIndex((entry: any) => entry.id === userMessageId);
+      if (anchor < 0 || entries.slice(anchor + 1).some((entry: any) => (
+        entry.kind === 'send-message' && entry.message?.type === 'text' && typeof entry.message.content === 'string' && entry.message.content.trim()
+      ))) return;
+      const entry = {
+        ...createSendMessageEntry(allocateTranscriptEntryId(entries, 'send-message'), { type: 'text', content: receipt }, Date.now()),
+        hostReceipt: true,
+      };
+      let persisted = false;
+      if (active) {
+        this.tm.appendEntry(entry, { persistBeforeEmit: true, onPersistOutcome: (value: boolean) => { persisted = value; } });
+      } else {
+        persisted = conversation.db.appendTranscriptEntry(entry);
+        if (persisted) this.tm.sessionStore.markSessionActivity(conversation);
+      }
+      if (persisted) {
+        const token = this.mintAckRunToken(conversation.id);
+        this.fulfillAckObligation(conversation.id, token);
+        this.retireAckRunToken(conversation.id, token);
+      }
+    } catch (error) {
+      this.reportRedriveError(conversation.id, error);
+    }
+  }
 
   /** Whether this host can owe anything at all: it has the ackStore and a run queue. */
   private canOweAck(): boolean {

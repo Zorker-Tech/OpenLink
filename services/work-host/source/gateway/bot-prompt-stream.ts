@@ -181,6 +181,7 @@ export async function handleBotPromptStream(
   void dependencies.api.sendPrompt({
     agentId: body.agentId,
     prompt: body.prompt,
+    requireQuickBotReply: true,
     ...(body.clientNonce === undefined ? {} : { clientNonce: body.clientNonce }),
     ...(body.replyToId === undefined ? {} : { replyToId: body.replyToId }),
   }).catch((error: unknown) => {

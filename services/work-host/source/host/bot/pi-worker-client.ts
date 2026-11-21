@@ -18,6 +18,7 @@ const INSPIRATION_COMPLETE_TIMEOUT_MS = 90_000;
 export interface PiWorkerPromptInput {
   readonly message: string;
   readonly images?: ReadonlyArray<{ readonly type: "image"; readonly data: string; readonly mimeType: string }>;
+  readonly deliveryGuidance?: string;
 }
 
 export class PiWorkerError extends Error {
@@ -75,6 +76,7 @@ export class PiWorkerClient {
         headers: this.headers(),
         body: JSON.stringify({
           message: input.message,
+          ...(input.deliveryGuidance === undefined ? {} : { deliveryGuidance: input.deliveryGuidance }),
           ...(input.images === undefined || input.images.length === 0 ? {} : { attachments: input.images }),
         }),
         cache: "no-store",

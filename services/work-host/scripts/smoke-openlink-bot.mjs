@@ -108,6 +108,11 @@ const substrate = createServer((request, response) => {
       const body = await readJson(request)
       assert(typeof body.message === 'string' && body.message.length > 0, 'Pi worker received an empty prompt')
       response.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store' })
+      if (body.message === 'hello Bot') {
+        assert(body.deliveryGuidance?.includes('SendMessage'), 'Work-host did not supply Bot delivery guidance')
+        await delay(5_100)
+        response.write(`${JSON.stringify({ type: 'send-message', message: { content: 'I verified the first checkpoint.' } })}\n`)
+      }
       response.write(`${JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: assistantText } })}\n`)
       response.write(`${JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: assistantText }], usage: { input: 2, output: 5 } } })}\n`)
       response.write(`${JSON.stringify({ type: 'agent_settled' })}\n`)
@@ -187,6 +192,14 @@ try {
   const streamText = await stream.text()
   assert(stream.ok, `Bot prompt stream failed with HTTP ${stream.status}: ${streamText.slice(0, 2000)}`)
   const frames = streamText.split('\n').filter(Boolean).map((line) => JSON.parse(line))
+  const transcript = frames.filter(frame => frame.channel === 'transcript').map(frame => frame.payload?.entry).filter(Boolean)
+  const accepted = transcript.find(entry => entry.kind === 'message' && entry.role === 'user' && entry.content === 'hello Bot')
+  const receipt = transcript.find(entry => entry.hostReceipt === true)
+  assert(accepted && receipt, 'Work-host did not publish a receipt during the slow Worker turn')
+  assert(receipt.timestampMs - accepted.timestampMs <= 4_000, 'The receipt missed the four-second deadline')
+  const partialIndex = transcript.findIndex(entry => entry.message?.content === 'I verified the first checkpoint.')
+  const finalIndex = transcript.findIndex(entry => entry.message?.content === assistantText)
+  assert(partialIndex > transcript.indexOf(receipt) && finalIndex > partialIndex, 'Receipt, progress and final text must be delivered in order')
   assert(
     frames.some((frame) => frame.channel === 'transcript'
       && frame.payload?.entry?.kind === 'send-message'

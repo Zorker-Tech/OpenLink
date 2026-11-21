@@ -351,6 +351,7 @@ export class TranscriptManager {
     for (const armed of this.ackObligations.ackRedriveTimers.values())
       armed.dispose();
     this.ackObligations.ackRedriveTimers.clear();
+    this.ackObligations.clearQuickBotReplies();
     this.ackObligations.ackRunTokens.clear();
     for (const batch of this.automationRuntime.pendingEventFireBatches.values()) {
       if (batch.timer != null) clearTimeout(batch.timer);

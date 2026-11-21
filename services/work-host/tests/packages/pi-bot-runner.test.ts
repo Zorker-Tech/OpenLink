@@ -91,7 +91,9 @@ describe("the Pi-backed Bot run step", () => {
     const titleRequests = requests.filter((request) => request.url.endsWith("/v1/title"));
     assert.equal(promptRequests.length, 1);
     assert.equal(promptRequests[0]!.url, "http://worker.example/v1/events");
-    assert.deepEqual(promptRequests[0]!.body, { message: "hello" });
+    const promptBody = promptRequests[0]!.body as { message: string; deliveryGuidance: string };
+    assert.equal(promptBody.message, "hello");
+    assert.match(promptBody.deliveryGuidance, /SendMessage/);
     assert.equal(promptRequests[0]!.headers.get("authorization"), "Bearer worker-token");
     assert.equal(titleRequests.length, 1);
     assert.deepEqual(titleRequests[0]!.body, { message: "hello" });
@@ -123,6 +125,24 @@ describe("the Pi-backed Bot run step", () => {
       channel: "bot-turn",
       payload: { agentId: AGENT_ID, requestId: "request-1", phase: "title", title: "Fix the login flow" },
     });
+  });
+
+  it('starts the reply stream while the title is still pending and suppresses duplicate final text', async () => {
+    let finishTitle!: (response: Response) => void;
+    globalThis.fetch = async (input) => String(input).endsWith('/title')
+      ? new Promise<Response>(resolve => { finishTitle = resolve; })
+      : streamOf([
+        { type: 'send-message', message: { content: 'Verified result' } },
+        { type: 'send-message', message: { content: 'Verified result' } },
+        { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Verified result' }] } },
+        { type: 'agent_settled' },
+      ]);
+    const updates: RunnerUpdate[] = [];
+    const step = createPiBotRunStep({ agentId: AGENT_ID, getBinding: binding });
+    await step(0, { signal: new AbortController().signal, emitUpdate: update => updates.push(update), prompt: 'verify',
+      runOptions: {}, requestId: 'progress', state: {}, setState: () => {} });
+    finishTitle(Response.json({ title: 'Delayed title' }));
+    assert.equal(updates.filter(({ type }) => type === 'send-message').length, 1);
   });
 
   it("turns a Pi dialog into a durable question card and an awaiting-input event", async () => {

@@ -9,7 +9,7 @@ export type BotAttachment = { name: string; kind: 'media' | 'file' }
 export type BotTranscriptEntry = Extract<
   TranscriptEntry,
   { kind: 'user-message' | 'agent-message' | 'activity' | 'system' | 'confirmation' }
-> & { attachment?: BotAttachment; requestId?: string; replyTo?: string }
+> & { attachment?: BotAttachment; requestId?: string; replyTo?: string; hostReceipt?: true }
 
 export type BotStreamUpdate =
   | { type: 'pending'; pending: PendingBeat | null }
@@ -153,6 +153,7 @@ function messageMetadata(entry: Record<string, unknown>, alternateReplyTo?: unkn
     ...(requestId ? { requestId } : {}),
     ...(replyTo ? { replyTo } : {}),
     ...(attachment ? { attachment } : {}),
+    ...(entry.hostReceipt === true ? { hostReceipt: true as const } : {}),
   }
 }
 
