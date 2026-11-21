@@ -4,7 +4,6 @@ import '@zorker/bot-demo/styles.css'
 
 import {
   END_SCREEN,
-  useAutoScroll,
   type MessageReaction,
   type TranscriptEntry,
 } from '@zorker/bot-demo'
@@ -49,6 +48,10 @@ import { useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 const ASSET_BASE = '/zorker-bot-demo'
+
+function scrollTranscriptToLatest(transcript: HTMLDivElement) {
+  transcript.scrollTo({ top: transcript.scrollHeight, behavior: 'instant' })
+}
 
 function replyExcerpt(content: string) {
   return content.replace(/\s+/g, ' ').trim().slice(0, 320)
@@ -245,6 +248,7 @@ export function BotWorkspace({
   const locale = useLocale()
   const reducedMotion = useReducedMotion()
   const transcriptRef = useRef<HTMLDivElement>(null)
+  const followingLatestRef = useRef(true)
   const loadedRef = useRef(new Set<string>())
   const warmingRef = useRef(new Set<string>())
   const skipWarmOnceRef = useRef(new Set<string>())
@@ -316,7 +320,29 @@ export function BotWorkspace({
   const botUnreadCount = bots.reduce((count, bot) => count + (bot.unread ? 1 : 0), 0)
   const paletteSessions = rows.map(({ session, name }) => ({ session, name }))
 
-  useAutoScroll(transcriptRef, [activeId, activeTranscript.length, activePending, activeConfirmations.length, activeBot?.name])
+  const attachTranscript = useCallback((transcript: HTMLDivElement | null) => {
+    if (!transcript) return
+    transcriptRef.current = transcript
+    followingLatestRef.current = true
+    setAwayFromLatest(false)
+    scrollTranscriptToLatest(transcript)
+
+    // Fonts, media and the composer can change the height after the first paint.
+    const resize = new ResizeObserver(() => {
+      if (followingLatestRef.current) scrollTranscriptToLatest(transcript)
+    })
+    resize.observe(transcript)
+    if (transcript.firstElementChild) resize.observe(transcript.firstElementChild)
+    return () => {
+      resize.disconnect()
+      transcriptRef.current = null
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const transcript = transcriptRef.current
+    if (transcript && followingLatestRef.current) scrollTranscriptToLatest(transcript)
+  }, [activeId, activeDetail?.transcript, activePending, activeConfirmations.length])
 
   useLayoutEffect(() => {
     activeIdRef.current = activeId
@@ -788,6 +814,8 @@ export function BotWorkspace({
     const optimisticId = `${OPTIMISTIC_USER_ENTRY_PREFIX}${clientNonce}`
     const optimistic = { ...optimisticUserEntry(optimisticId, content, sentReply?.id), clientNonce }
 
+    followingLatestRef.current = true
+    setAwayFromLatest(false)
     setDraft('')
     setReplyTarget(null)
     setError(null)
@@ -871,8 +899,10 @@ export function BotWorkspace({
 
   const jumpToMessage = useCallback((entryId: string) => {
     window.requestAnimationFrame(() => {
-      transcriptRef.current?.querySelector(`[data-entry-id="${CSS.escape(entryId)}"]`)
-        ?.scrollIntoView({ block: 'center' })
+      const target = transcriptRef.current?.querySelector(`[data-entry-id="${CSS.escape(entryId)}"]`)
+      if (!target) return
+      followingLatestRef.current = false
+      target.scrollIntoView({ block: 'center' })
     })
   }, [])
 
@@ -1092,7 +1122,9 @@ export function BotWorkspace({
                         void reactToBotMessage(activeId, entry.id, emoji)
                       }}
                       onScroll={({ currentTarget: transcript }) => {
-                        setAwayFromLatest(transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight > 100)
+                        const away = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight > 100
+                        followingLatestRef.current = !away
+                        setAwayFromLatest(away)
                       }}
                       onSuggestion={useSuggestion}
                       onTakeOver={openComputer}
@@ -1147,7 +1179,7 @@ export function BotWorkspace({
                       ) : null}
                       screen={END_SCREEN}
                       session={activeSession!}
-                      transcriptRef={transcriptRef}
+                      transcriptRef={attachTranscript}
                     />
                   </>
                 )}
