@@ -41,6 +41,7 @@ import {
   type BotTranscriptEntry,
 } from '@/lib/bot-transcript'
 import { useLocale } from '@/lib/i18n/client'
+import { botDetailFromTimeline, decodeBotTimelineCache, encodeBotTimelineCache, mergeBotTimelineSnapshot } from '@/lib/bot-transcript-cache'
 import type { OrganizationSummary } from '@/lib/organizations'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
 import { ArrowDown, Reply } from 'lucide-react'
@@ -106,10 +107,12 @@ type BotWorkspaceProps = {
   avatarUrl: string | null
   email: string
   initialBot: BotDetail | null
+  initialBotId?: string
   initialBots: BotSummary[]
   models: readonly ConfiguredModelOption[]
   nickname: string
   organizations: OrganizationSummary[]
+  transcriptCacheKey?: string
   workspaceSlug: string
   workHostReady: boolean
 }
@@ -238,10 +241,12 @@ export function BotWorkspace({
   avatarUrl,
   email,
   initialBot,
+  initialBotId,
   initialBots,
   models,
   nickname,
   organizations,
+  transcriptCacheKey,
   workspaceSlug,
   workHostReady,
 }: BotWorkspaceProps) {
@@ -249,7 +254,9 @@ export function BotWorkspace({
   const reducedMotion = useReducedMotion()
   const transcriptRef = useRef<HTMLDivElement>(null)
   const followingLatestRef = useRef(true)
-  const loadedRef = useRef(new Set<string>())
+  const loadedRef = useRef(new Set(initialBot ? [initialBot.id] : []))
+  const loadingDetailsRef = useRef(new Set<string>())
+  const prefetchingRef = useRef(new Set<string>())
   const warmingRef = useRef(new Set<string>())
   const skipWarmOnceRef = useRef(new Set<string>())
   const [collapsed, setCollapsed] = useSidebarCollapsed()
@@ -257,12 +264,13 @@ export function BotWorkspace({
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
   const [systemLight, setSystemLight] = useState(false)
   const [bots, setBots] = useState<BotSummary[]>(initialBots)
-  const [activeId, setActiveId] = useState(initialBot?.id ?? initialBots[0]?.id ?? '')
-  const [unreadBoundary, setUnreadBoundary] = useState(() => ({ id: activeId, after: unreadAfter(initialBot ?? initialBots[0]) }))
+  const [activeId, setActiveId] = useState(initialBot?.id ?? initialBotId ?? initialBots[0]?.id ?? '')
+  const [unreadBoundary, setUnreadBoundary] = useState(() => ({ id: activeId, after: unreadAfter(initialBot ?? initialBots.find(bot => bot.id === activeId)) }))
   const activeIdRef = useRef(activeId)
   const [details, setDetails] = useState<Record<string, BotDetail>>(
     initialBot ? { [initialBot.id]: initialBot } : {},
   )
+  const detailsRef = useRef(details)
   const [pendingMap, setPendingMap] = useState<Record<string, BotPendingBeat | null>>({})
   const [taskTitleMap, setTaskTitleMap] = useState<Record<string, string>>({})
   const [taskStateMap, setTaskStateMap] = useState<Record<string, string | null>>({})
@@ -318,6 +326,7 @@ export function BotWorkspace({
     }
   }), [bots, details])
   const botUnreadCount = bots.reduce((count, bot) => count + (bot.unread ? 1 : 0), 0)
+  const subscribedBots = useMemo(() => bots.map(bot => `${bot.id}:${bot.workAgentId}`).sort().join(','), [bots])
   const paletteSessions = rows.map(({ session, name }) => ({ session, name }))
 
   const attachTranscript = useCallback((transcript: HTMLDivElement | null) => {
@@ -348,6 +357,40 @@ export function BotWorkspace({
     activeIdRef.current = activeId
   }, [activeId])
 
+  useLayoutEffect(() => { detailsRef.current = details }, [details])
+
+  useLayoutEffect(() => {
+    if (!transcriptCacheKey) return
+    try {
+      const cached = window.sessionStorage.getItem(transcriptCacheKey)
+      if (!cached) return
+      const restored = decodeBotTimelineCache(cached, initialBots)
+      detailsRef.current = { ...restored, ...detailsRef.current }
+      setDetails(previous => ({ ...restored, ...previous }))
+    } catch {}
+  }, [initialBots, transcriptCacheKey])
+
+  const persistTranscripts = useEffectEvent(() => {
+    if (!transcriptCacheKey) return
+    const selected = bots.find(bot => bot.id === activeId)
+    const ordered = selected ? [selected, ...bots.filter(bot => bot.id !== activeId)] : bots
+    const snapshots = ordered.flatMap(bot => details[bot.id]?.workAgentId === bot.workAgentId ? [details[bot.id]!] : [])
+    if (!snapshots.length) return
+    try { window.sessionStorage.setItem(transcriptCacheKey, encodeBotTimelineCache(snapshots)) } catch {}
+  })
+
+  useEffect(() => {
+    if (!transcriptCacheKey || Object.keys(details).length === 0) return
+    const save = () => persistTranscripts()
+    const timer = window.setTimeout(save, 250)
+    window.addEventListener('pagehide', save)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('pagehide', save)
+    }
+  }, [activeId, bots, details, transcriptCacheKey])
+  useEffect(() => () => persistTranscripts(), [])
+
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('openlink-theme') as ThemeMode | null
     if (savedTheme === 'system' || savedTheme === 'light' || savedTheme === 'dark') setThemeMode(savedTheme)
@@ -371,9 +414,9 @@ export function BotWorkspace({
   }
 
   const loadBot = useCallback(async (botId: string, force = false) => {
-    const cached = details[botId]
-    if (!force && cached && (cached.transcript.length > 0 || loadedRef.current.has(botId) || !cached.lastEntryText)) return
-    const readStartedAt = Date.now()
+    if (loadingDetailsRef.current.has(botId) || (!force && loadedRef.current.has(botId))) return
+    loadingDetailsRef.current.add(botId)
+    const before = detailsRef.current[botId]?.transcript ?? []
     setLoadingMap((previous) => ({ ...previous, [botId]: true }))
     setDetailFailures((previous) => previous[botId] ? { ...previous, [botId]: false } : previous)
     try {
@@ -385,11 +428,8 @@ export function BotWorkspace({
       loadedRef.current.add(botId)
       const loaded = payload.bot
       setDetails((previous) => {
-        const pending = previous[botId]?.transcript.filter(entry => entry.id.startsWith(OPTIMISTIC_USER_ENTRY_PREFIX) || (entry.timestampMs ?? 0) >= readStartedAt) ?? []
-        const stored = new Set(loaded.transcript.map(entry => entry.id))
-        const accepted = new Set(loaded.transcript.map(entry => entry.clientNonce).filter(Boolean))
-        const missed = pending.filter(entry => !stored.has(entry.id) && (!entry.clientNonce || !accepted.has(entry.clientNonce)))
-        return { ...previous, [botId]: { ...loaded, transcript: [...loaded.transcript, ...missed] } }
+        const transcript = mergeBotTimelineSnapshot(loaded.transcript, before, previous[botId]?.transcript ?? [])
+        return { ...previous, [botId]: { ...loaded, transcript } }
       })
       setBots((previous) => previous.map((bot) => (
         bot.id === botId
@@ -418,15 +458,59 @@ export function BotWorkspace({
       )))
     } catch (loadError) {
       setDetailFailures((previous) => ({ ...previous, [botId]: true }))
-      setError(loadError instanceof Error ? friendlyRuntimeError(loadError.message) : 'The Bot could not be loaded.')
+      if (botId === activeIdRef.current && !detailsRef.current[botId]) {
+        setError(loadError instanceof Error ? friendlyRuntimeError(loadError.message) : 'The Bot could not be loaded.')
+      }
     } finally {
+      loadingDetailsRef.current.delete(botId)
       setLoadingMap((previous) => ({ ...previous, [botId]: false }))
     }
-  }, [details])
+  }, [])
 
   useEffect(() => {
     if (activeId) void loadBot(activeId)
   }, [activeId, loadBot])
+
+  const prefetchTimeline = useCallback(async (bot: BotSummary, signal?: AbortSignal) => {
+    if (!workHostReady || detailsRef.current[bot.id] || prefetchingRef.current.has(bot.id) ||
+        prefetchingRef.current.size >= 3 || signal?.aborted) return
+    prefetchingRef.current.add(bot.id)
+    try {
+      const response = await fetch(`/api/bots/${encodeURIComponent(bot.id)}?view=timeline`, { cache: 'no-store', signal })
+      if (!response.ok) return
+      const data = await response.json() as { transcript?: BotTranscriptEntry[] }
+      if (!Array.isArray(data.transcript) || signal?.aborted || (!data.transcript.length && bot.lastEntryText)) return
+      const detail = botDetailFromTimeline(bot, data.transcript)
+      setDetails(previous => previous[bot.id] ? previous : { ...previous, [bot.id]: detail })
+    } catch {} finally {
+      prefetchingRef.current.delete(bot.id)
+    }
+  }, [workHostReady])
+
+  const prefetchActiveTimeline = useEffectEvent(() => {
+    if (activeBot) void prefetchTimeline(activeBot)
+  })
+  useEffect(() => {
+    if (activeId && workHostReady) prefetchActiveTimeline()
+  }, [activeId, workHostReady])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const recent = initialBots.filter(bot => bot.id !== activeIdRef.current).slice(0, 8)
+    const timer = window.setTimeout(() => {
+      const prefetch = async (offset: number) => {
+        for (let index = offset; index < recent.length && !controller.signal.aborted; index += 2) {
+          await prefetchTimeline(recent[index]!, controller.signal)
+        }
+      }
+      void prefetch(0)
+      void prefetch(1)
+    }, 100)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [initialBots, prefetchTimeline])
 
   const warmBot = useCallback(async (botId: string) => {
     if (warmingRef.current.has(botId)) return
@@ -519,7 +603,7 @@ export function BotWorkspace({
     setPaletteView('search')
     setPaletteQuery('')
     markViewed(botId)
-    void loadBot(botId, true)
+    void loadBot(botId)
   }, [bots, loadBot, markViewed])
 
   const applyRoutines = useCallback((botId: string, routines: BotRoutine[]) => {
@@ -707,7 +791,7 @@ export function BotWorkspace({
       return
     }
     if (update.type === 'error') {
-      setError(friendlyRuntimeError(update.message))
+      if (activeIdRef.current === botId) setError(friendlyRuntimeError(update.message))
       setPendingMap((previous) => ({ ...previous, [botId]: null }))
       return
     }
@@ -749,22 +833,25 @@ export function BotWorkspace({
     setError(friendlyRuntimeError(payload?.error?.message || 'BOT_REACTION_FAILED'))
   }, [])
 
-  const catchUpBotEvents = useEffectEvent((botId: string) => { void loadBot(botId, true) })
+  const catchUpBotEvents = useEffectEvent(() => {
+    loadedRef.current.clear()
+    if (activeIdRef.current) void loadBot(activeIdRef.current, true)
+  })
 
-  // A Bot is not request-scoped. Keep the active Bot's projection open so a
-  // routine run, a channel reply, or any other turn started outside this tab
-  // lands in the timeline without a manual refresh.
+  // Keep cached conversations current even while their chats are offscreen.
   useEffect(() => {
-    if (!workHostReady || !activeId) return
-    const source = new EventSource(`/api/bots/${encodeURIComponent(activeId)}/events`)
-    source.onopen = () => catchUpBotEvents(activeId)
+    if (!workHostReady || !subscribedBots) return
+    const source = new EventSource(`/api/bots/events?workspace=${encodeURIComponent(workspaceSlug)}`)
+    source.onopen = () => catchUpBotEvents()
+    source.onerror = () => loadedRef.current.clear()
     source.onmessage = (event) => {
       try {
-        applyUpdate(activeId, JSON.parse(event.data) as BotStreamUpdate)
+        const { botId, update } = JSON.parse(event.data) as { botId: string; update: BotStreamUpdate }
+        if (typeof botId === 'string' && update) applyUpdate(botId, update)
       } catch {}
     }
     return () => source.close()
-  }, [activeId, applyUpdate, workHostReady])
+  }, [applyUpdate, subscribedBots, workHostReady, workspaceSlug])
 
   const resolveBotConfirmation = useCallback(async (
     botId: string,
@@ -1042,6 +1129,10 @@ export function BotWorkspace({
           onCloseMobile={() => setMobileOpen(false)}
           onNewAgent={() => openPalette('create')}
           onSelect={selectBot}
+          onPrefetch={(botId) => {
+            const bot = bots.find(item => item.id === botId)
+            if (bot) void prefetchTimeline(bot)
+          }}
           onThemeChange={handleThemeChange}
           onToggle={() => {
             if (window.matchMedia('(min-width: 768px)').matches) setCollapsed((value) => !value)

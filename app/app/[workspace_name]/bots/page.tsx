@@ -1,7 +1,6 @@
 import { BotWorkspace } from '@/components/bot/bot-workspace'
 import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
-import { getBotDetail, listBots } from '@/lib/bots'
-import type { BotDetail } from '@/lib/bot-types'
+import { listBots } from '@/lib/bots'
 import { listOrganizations } from '@/lib/organizations'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { getWorkHostHealth, isWorkHostConfigured } from '@/lib/work-host-client.server'
@@ -49,19 +48,11 @@ export default async function WorkspaceBotsPage({
   const nickname = (profile as { nickname?: string } | null)?.nickname ?? workspace.name
   const workHostReady = isWorkHostConfigured() && workHostHealth?.ok === true
   const selected = bots.find((bot) => bot.id === requestedBotId) ?? bots[0] ?? null
-  let initialBot: BotDetail | null = null
-  // Do not make the page wait on a Work-host transcript read when its health
-  // check already failed; the client loads the detail and shows the real error.
-  if (selected && workHostReady) {
-    try {
-      initialBot = await getBotDetail(supabase, user.id, selected)
-    } catch (error) {
-      console.error('[openlink-bots] initial detail failed', error)
-    }
-  }
+  const transcriptCacheKey = `openlink:bot-timelines:${user.id}:${workspace.id}`
 
   return (
     <BotWorkspace
+      key={transcriptCacheKey}
       activeWorkspace={{
         name: workspace.name,
         slug: workspace.slug,
@@ -70,7 +61,9 @@ export default async function WorkspaceBotsPage({
       }}
       avatarUrl={getAvatarUrl(user)}
       email={user.email ?? nickname}
-      initialBot={initialBot}
+      initialBot={null}
+      initialBotId={selected?.id}
+      transcriptCacheKey={transcriptCacheKey}
       initialBots={bots}
       models={models}
       nickname={nickname}

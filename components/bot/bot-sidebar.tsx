@@ -35,6 +35,7 @@ type BotSidebarProps = {
   workspaceSlug: string
   onCloseMobile: () => void
   onNewAgent: () => void
+  onPrefetch?: (sessionId: string) => void
   onSelect: (sessionId: string) => void
   onThemeChange: (mode: ThemeMode) => void
   onToggle: () => void
@@ -96,7 +97,7 @@ function navigateRows(event: KeyboardEvent<HTMLDivElement>) {
 
 export function BotSidebar({
   activeId, activeWorkspace, avatarUrl, botUnreadCount, collapsed, email, mobileOpen, nickname,
-  organizations, rows, themeMode, workspaceSlug, onCloseMobile, onNewAgent, onSelect, onThemeChange, onToggle,
+  organizations, rows, themeMode, workspaceSlug, onCloseMobile, onNewAgent, onPrefetch, onSelect, onThemeChange, onToggle,
 }: BotSidebarProps) {
   const t = useT()
   const locale = useLocale()
@@ -237,6 +238,8 @@ export function BotSidebar({
             data-bot-select=""
             draggable={!isHidden}
             onClick={() => select(id)}
+            onFocus={() => onPrefetch?.(id)}
+            onPointerEnter={() => onPrefetch?.(id)}
             onDragStart={(event) => {
               event.dataTransfer.setData(DRAG_TYPE, id)
               event.dataTransfer.effectAllowed = 'move'

@@ -6,6 +6,8 @@ import {
   markBotViewed,
   updateBot,
 } from '@/lib/bots'
+import { normalizeWorkHostTranscript } from '@/lib/bot-transcript'
+import { getBotAgentTranscriptTail } from '@/lib/work-host-client.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -18,7 +20,7 @@ function errorResponse(code: string, status: number) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ bot_id: string }> },
 ) {
   const { bot_id: botId } = await params
@@ -27,6 +29,14 @@ export async function GET(
   if (!user) return errorResponse('AUTH_REQUIRED', 401)
   const bot = await getBot(supabase, user.id, botId)
   if (!bot) return errorResponse('BOT_NOT_FOUND', 404)
+  if (new URL(request.url).searchParams.get('view') === 'timeline') {
+    try {
+      const transcript = normalizeWorkHostTranscript(await getBotAgentTranscriptTail(bot.workAgentId))
+      return Response.json({ transcript }, { headers: { 'Cache-Control': 'no-store' } })
+    } catch {
+      return errorResponse('BOT_READ_FAILED', 502)
+    }
+  }
   await markBotViewed(supabase, user.id, bot.id).catch(() => undefined)
   try {
     const detail = await getBotDetail(supabase, user.id, bot)

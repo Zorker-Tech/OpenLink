@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createTimelineTimeFormatter, foldTimeline } from '../../packages/zorker-bot-demo/dist/app/timeline-rows.js'
 import { createMessageMentionMatcher, splitMessagePrompt } from '../../lib/bot-message-content.ts'
+import { decodeBotTimelineCache, encodeBotTimelineCache, mergeBotTimelineSnapshot } from '../../lib/bot-transcript-cache.ts'
 
 import {
   OPTIMISTIC_USER_ENTRY_PREFIX,
@@ -20,6 +21,26 @@ function user(id, timestampMs, content = id) {
 function agent(id, timestampMs, content = id) {
   return { kind: 'agent-message', id, content, timestampMs }
 }
+
+test('timeline cache stores a bounded stable tail and restores only matching work identities', () => {
+  const bot = { id: 'room', workAgentId: 'agent', runtimeStatus: 'ready', kind: 'bot' }
+  const transcript = Array.from({ length: 100 }, (_, index) => user(`m${index}`, index + 1))
+  const optimistic = optimisticUserEntry(`${OPTIMISTIC_USER_ENTRY_PREFIX}unsent`, 'draft')
+  const encoded = encodeBotTimelineCache([{ ...bot, transcript: [...transcript, optimistic] }])
+  assert.deepEqual(decodeBotTimelineCache(encoded, [bot]).room.transcript, transcript.slice(-80))
+  assert.deepEqual(decodeBotTimelineCache(encoded, [{ ...bot, workAgentId: 'different' }]), {})
+  assert.deepEqual(decodeBotTimelineCache(encoded, []), {})
+})
+
+test('a full snapshot preserves an intervening stream update and reconciles optimistic sends by nonce', () => {
+  const original = user('m1', 1)
+  const updated = { ...original, reactions: [{ emoji: '👍', by: 'me' }] }
+  const later = agent('m2', 2)
+  const optimistic = { ...optimisticUserEntry(`${OPTIMISTIC_USER_ENTRY_PREFIX}nonce`, 'hello'), clientNonce: 'nonce' }
+  const accepted = { ...user('m3', 3, 'hello'), clientNonce: 'nonce' }
+  const result = mergeBotTimelineSnapshot([original, accepted], [original], [updated, later, optimistic])
+  assert.deepEqual(result, [updated, accepted, later])
+})
 
 test('prompt links and group mentions preserve the original text, punctuation and whitespace', () => {
   const mentions = createMessageMentionMatcher([

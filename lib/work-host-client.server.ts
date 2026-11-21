@@ -246,6 +246,13 @@ export async function getBotAgentTranscript(agentId: string): Promise<Record<str
   throw lastError
 }
 
+export async function getBotAgentTranscriptTail(agentId: string): Promise<Record<string, unknown>[]> {
+  const result = await request<{ entries: Record<string, unknown>[] }>(
+    'getAgentTranscriptTail', { id: agentId, limit: 120 }, { timeoutMs: 6_000 },
+  )
+  return Array.isArray(result?.entries) ? result.entries : []
+}
+
 export interface WorkHostMemory {
   id: string
   content: string
