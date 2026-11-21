@@ -3,7 +3,8 @@ import { afterEach, describe, it } from "node:test";
 
 import type { BotRuntimeBinding } from "../../source/host/bot/bot-runtime-store.ts";
 import { createPiBotRunStep } from "../../source/host/bot/pi-bot-runner.ts";
-import { parseFirstBotReply } from "../../source/host/bot/first-bot-reply.ts";
+import { generateFirstBotReply, parseFirstBotReply } from "../../source/host/bot/first-bot-reply.ts";
+import { PiWorkerClient } from "../../source/host/bot/pi-worker-client.ts";
 import type { RunnerUpdate } from "../../source/host/runner/runner-turn-attempt.ts";
 
 const AGENT_ID = "11111111-1111-4111-8111-111111111111";
@@ -41,6 +42,28 @@ const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
 describe("the Pi-backed Bot run step", () => {
+  it('uses a second first-reply attempt if the provider stalls, and cancels the losing request', async () => {
+    let calls = 0;
+    let firstCancelled = false;
+    globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body));
+      assert.equal(payload.latencySensitive, true);
+      if (++calls === 1) return await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          firstCancelled = true;
+          reject(new Error('Canceled'));
+        }, { once: true });
+      });
+      return Response.json({ text: '{"m":"I’ll inspect the timeline first","f":true,"e":null}' });
+    }) as typeof fetch;
+    const result = await generateFirstBotReply(new PiWorkerClient(binding()), {
+      message: 'Investigate chat loading', context: [], hasAttachments: false,
+    }, AbortSignal.timeout(4_000));
+    assert.deepEqual(result, { message: 'I’ll inspect the timeline first', needsFollowUp: true, emoji: null });
+    assert.equal(calls, 2);
+    assert.equal(firstCancelled, true);
+  });
+
   it('returns management results to the isolated group Worker without exposing its tool traffic', async () => {
     const argumentsSeen: unknown[] = [];
     const updates: RunnerUpdate[] = [];

@@ -24,6 +24,7 @@ const assistantText = 'Hello from the Bot worker'
 const proactiveText = 'The fixture has a documented rollback check, but no matching test.'
 const firstReplyText = 'Hi! What would you like to work on?'
 const genericReplyPrompt = 'Reply without a useful quick result'
+const slowQuickReplyPrompt = 'Wait for the full result if the fast reply is late'
 const completeFirstReplyPrompt = 'How many minutes are in an hour?'
 const completeFirstReplyText = 'An hour has 60 minutes.'
 const privateGroupDraft = 'This draft must never reach the public group.'
@@ -142,12 +143,20 @@ const substrate = createServer((request, response) => {
       return json(response, 200, { topLevel: ['tests'], recentFiles: ['tests/rollback.test.ts'] })
     }
     if (request.method === 'POST' && url.pathname === '/v1/inspiration/complete') {
-      const { systemPrompt, prompt, maxTokens, temperature } = await readJson(request)
+      const { systemPrompt, prompt, maxTokens, temperature, latencySensitive } = await readJson(request)
       if (systemPrompt.startsWith('Write the first conversational sentence')) {
         const dialogue = JSON.parse(prompt)
         assert(temperature === 0.85 && maxTokens === 192, 'The first-response completion did not use its own sampling options')
-        assert(systemPrompt.includes('Use the user’s language'), 'The English prompt did not specify the response language')
+        assert(systemPrompt.includes('in the user’s language') && latencySensitive, 'The first-reply request did not select the latency-sensitive path')
         const finished = dialogue.latestUserMessage === completeFirstReplyPrompt
+        if (dialogue.latestUserMessage === burstPrompt) {
+          await delay(200)
+          return json(response, 200, { text: JSON.stringify({ m: 'I’ll check each queued request', f: true, e: null }) })
+        }
+        if (dialogue.latestUserMessage === slowQuickReplyPrompt) {
+          await delay(4_500)
+          return json(response, 200, { text: JSON.stringify({ m: 'This arrived too late.', f: true, e: null }) })
+        }
         const firstReply = { message: finished ? completeFirstReplyText : firstReplyText, emoji: finished ? null : '👋', needsFollowUp: !finished }
         return json(response, 200, { text: dialogue.latestUserMessage === genericReplyPrompt ? '收到你的消息。' : JSON.stringify(firstReply) })
       }
@@ -340,8 +349,21 @@ try {
   assert(!fullTurnPrompts.includes(completeFirstReplyPrompt), 'The model declined a follow-up, but the host ran one')
   assert(!completeFrames.some(frame => frame.channel === 'tray' && frame.payload?.tray?.kind === 'error'), 'The host reported a failure for a completed first reply')
 
+  const slowQuickStream = await fetch(`${baseUrl}/api/bot/sendPrompt`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${gatewayToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId, prompt: slowQuickReplyPrompt }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  const slowQuickEntries = (await slowQuickStream.text()).split('\n').filter(Boolean)
+    .map(line => JSON.parse(line).payload?.entry).filter(Boolean)
+  assert(!slowQuickEntries.some(entry => entry.hostReceipt), 'A first reply arrived after its deadline')
+  assert(slowQuickEntries.some(entry => entry.message?.content === assistantText), 'The full reply did not continue after the deadline')
+
   try {
-    const send = (clientNonce, replyToId) => request(baseUrl, 'sendPrompt', { agentId, prompt: burstPrompt, acceptOnly: true, clientNonce, replyToId });
+    const send = (clientNonce, replyToId) => request(baseUrl, 'sendPrompt', {
+      agentId, prompt: burstPrompt, acceptOnly: true, requireQuickBotReply: true, clientNonce, replyToId,
+    });
     const first = await send('burst-first-send');
     const startedBy = Date.now() + 5_000;
     while (burstStarted === 0 && Date.now() < startedBy) await delay(30);
@@ -355,6 +377,16 @@ try {
     const acceptedEntries = stored.filter(entry => entry.content === burstPrompt);
     assert(acceptedEntries.map(entry => entry.id).join(',') === [first.entryId, second.entryId, third.entryId].join(','), 'Queued messages were missing or out of order');
     assert(acceptedEntries[1].replyTo === first.entryId, 'The queued reply did not keep its target');
+    const quickDeadline = Date.now() + 3_500;
+    let quickReplies;
+    while (Date.now() < quickDeadline) {
+      const entries = await request(baseUrl, 'getAgentTranscript', { id: agentId });
+      quickReplies = entries.filter(entry => entry.hostReceipt && acceptedEntries.some(sent => sent.id === entry.firstBotReplyTo));
+      if (quickReplies.length === 3) break;
+      await delay(50);
+    }
+    assert(quickReplies?.length === 3, 'A new send cancelled another message’s first reply');
+    assert(quickReplies.every(reply => reply.timestampMs - acceptedEntries.find(sent => sent.id === reply.firstBotReplyTo).timestampMs <= 4_000), 'A queued first reply missed its budget');
   } finally {
     releaseBurst();
   }

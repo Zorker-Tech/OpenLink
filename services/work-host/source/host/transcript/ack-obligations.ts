@@ -17,10 +17,10 @@ import type { Disposable, TranscriptEntry, TranscriptManagerLike } from "./trans
 
 export const MAX_ACK_REDRIVES = 3;
 export const ACK_REDRIVE_IDLE_DELAY_MS = 5_000;
-const QUICK_BOT_REPLY_TIMEOUT_MS = 6_000;
+const QUICK_BOT_REPLY_TIMEOUT_MS = 4_000;
 
 type FirstBotReplyGenerator = (agentId: string, input: FirstBotReplyInput, signal: AbortSignal) => Promise<FirstBotReply | null>;
-type PendingQuickReply = { messageId: string; controller: AbortController; settled: Promise<void> };
+type PendingQuickReply = { controller: AbortController; settled: Promise<void> };
 
 function quotableFirstReply(entry: TranscriptEntry): string {
   return entry.kind === 'send-message' ? quotableEntryText(entry).trim() : '';
@@ -59,20 +59,22 @@ export class AckObligations {
 
   armQuickBotReply(conversation: any, userMessageId: string, prompt: string, acceptedAtMs: number, hasAttachments = false): void {
     const generate = this.#firstBotReplyGenerator;
-    const remaining = acceptedAtMs + QUICK_BOT_REPLY_TIMEOUT_MS - Date.now();
+    const deadline = acceptedAtMs + QUICK_BOT_REPLY_TIMEOUT_MS;
+    const remaining = deadline - Date.now();
     if (!generate || remaining <= 0) return;
-    this.#cancelQuickBotReply(conversation.id);
+    const key = `${conversation.id}:${userMessageId}`;
+    if (this.#quickBotReplies.has(key)) return;
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(remaining)]);
-    const settled = this.#generateQuickBotReply(conversation, userMessageId, prompt, hasAttachments, generate, signal).finally(() => {
-      if (this.#quickBotReplies.get(conversation.id)?.controller === controller) this.#quickBotReplies.delete(conversation.id);
+    const settled = this.#generateQuickBotReply(conversation, userMessageId, prompt, hasAttachments, generate, signal, deadline).finally(() => {
+      if (this.#quickBotReplies.get(key)?.controller === controller) this.#quickBotReplies.delete(key);
     });
-    this.#quickBotReplies.set(conversation.id, { messageId: userMessageId, controller, settled });
+    this.#quickBotReplies.set(key, { controller, settled });
   }
 
   async firstBotReplyContext(agentId: string, messageId: string, signal: AbortSignal): Promise<FirstBotReplyContext> {
-    const pending = this.#quickBotReplies.get(agentId);
-    if (pending?.messageId === messageId) {
+    const pending = this.#quickBotReplies.get(`${agentId}:${messageId}`);
+    if (pending) {
       const cancel = () => pending.controller.abort();
       if (signal.aborted) cancel();
       signal.addEventListener('abort', cancel, { once: true });
@@ -80,9 +82,9 @@ export class AckObligations {
     }
     if (signal.aborted) return { reply: null, recentCompletedTurns: [] };
 
-    const entries: TranscriptEntry[] = this.tm.sessions.getAgentTranscriptTail(agentId, { limit: 40 }).entries;
+    const entries: TranscriptEntry[] = this.tm.sessions.getAgentTranscriptTail(agentId, { limit: 200 }).entries;
     const anchor = entries.findIndex(entry => entry.id === messageId);
-    const current = anchor < 0 ? undefined : entries.slice(anchor + 1).find(entry => entry.firstBotReplyTo === messageId);
+    const current = entries.find(entry => entry.firstBotReplyTo === messageId);
     const message = current ? quotableFirstReply(current) : '';
     const reply = message && typeof current?.firstBotReplyNeedsFollowUp === 'boolean'
       ? { message, emoji: typeof current.firstBotReplyEmoji === 'string' ? current.firstBotReplyEmoji : null, needsFollowUp: current.firstBotReplyNeedsFollowUp }
@@ -104,21 +106,25 @@ export class AckObligations {
     this.#quickBotReplies.clear();
   }
 
-  #cancelQuickBotReply(agentId: string): void {
-    this.#quickBotReplies.get(agentId)?.controller.abort();
-    this.#quickBotReplies.delete(agentId);
+  #cancelQuickBotReplies(agentId: string): void {
+    for (const [key, pending] of this.#quickBotReplies) {
+      if (!key.startsWith(`${agentId}:`)) continue;
+      pending.controller.abort();
+      this.#quickBotReplies.delete(key);
+    }
   }
 
-  async #generateQuickBotReply(conversation: any, userMessageId: string, message: string, hasAttachments: boolean, generate: FirstBotReplyGenerator, signal: AbortSignal): Promise<void> {
+  async #generateQuickBotReply(conversation: any, userMessageId: string, message: string, hasAttachments: boolean, generate: FirstBotReplyGenerator, signal: AbortSignal, deadline: number): Promise<void> {
     try {
       const entries: TranscriptEntry[] = this.tm.sessions.activeSession?.id === conversation.id ? getTranscript() : conversation.db.getTranscriptEntries();
-      const context = entries.slice(-8).flatMap<FirstBotReplyInput['context'][number]>((entry) => {
+      const anchor = entries.findIndex(entry => entry.id === userMessageId);
+      const context = (anchor < 0 ? entries.slice(-8) : entries.slice(Math.max(0, anchor - 8), anchor)).flatMap<FirstBotReplyInput['context'][number]>((entry) => {
         const content = dialogueContent(entry);
         if (entry.id === userMessageId || typeof content !== 'string' || !content.trim() || content.startsWith('[SLATE_HIDDEN_PROMPT]')) return [];
         return [{ role: entry.role === 'user' ? 'user' : 'assistant', text: content.slice(0, 280) }];
       }).slice(-3);
       const reply = await generate(conversation.id, { message, context, hasAttachments }, signal);
-      if (reply && !signal.aborted && !this.tm.disposed) this.#deliverQuickBotReply(conversation, userMessageId, reply);
+      if (reply && !signal.aborted && !this.tm.disposed && Date.now() < deadline) this.#deliverQuickBotReply(conversation, userMessageId, reply);
     } catch (error) {
       if (!signal.aborted) this.reportRedriveError(conversation.id, error);
     }
@@ -129,7 +135,7 @@ export class AckObligations {
     try {
       const entries: TranscriptEntry[] = active ? getTranscript() : conversation.db.getTranscriptEntries();
       const anchor = entries.findIndex(entry => entry.id === userMessageId && isUserWrittenMessage(entry));
-      if (anchor < 0 || entries.slice(anchor + 1).some(entry => isUserWrittenMessage(entry) || quotableFirstReply(entry))) return;
+      if (anchor < 0 || entries.some(entry => entry.firstBotReplyTo === userMessageId)) return;
       const entry = {
         ...createSendMessageEntry(allocateTranscriptEntryId(entries, 'send-message'), { type: 'text', content: receipt.message }, Date.now()),
         hostReceipt: true,
@@ -152,9 +158,11 @@ export class AckObligations {
           } catch (error) { this.reportRedriveError(conversation.id, error); }
         }
         this.tm.roster.emit({ type: 'appended', entry }, conversation.id);
-        const token = this.mintAckRunToken(conversation.id);
-        this.fulfillAckObligation(conversation.id, token);
-        this.retireAckRunToken(conversation.id, token);
+        if (entries.findLastIndex(isUserWrittenMessage) === anchor) {
+          const token = this.mintAckRunToken(conversation.id);
+          this.fulfillAckObligation(conversation.id, token);
+          this.retireAckRunToken(conversation.id, token);
+        }
       }
     } catch (error) {
       this.reportRedriveError(conversation.id, error);
@@ -251,7 +259,6 @@ export class AckObligations {
     if (!this.canOweAck()) return;
     const owed = this.tm.ackObligationStore!.get(agent);
     if (owed == null) return;
-    this.#cancelQuickBotReply(agent);
     this.tm.ackObligationStore!.clear(agent);
     this.clearAckRedriveTimer(agent);
     const nowMs = Date.now();
@@ -267,7 +274,7 @@ export class AckObligations {
   }
 
   markAckObligationLost(agent: string, reason: "agent_deleted" | "max_redrives"): void {
-    this.#cancelQuickBotReply(agent);
+    this.#cancelQuickBotReplies(agent);
     if (!this.canOweAck()) return;
     const owed = this.tm.ackObligationStore!.get(agent);
     if (owed == null) return;

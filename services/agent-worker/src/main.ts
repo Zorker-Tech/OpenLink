@@ -597,6 +597,8 @@ class SdkAgentRuntime {
     prompt: string
     maxTokens?: number
     temperature?: number
+    latencySensitive?: boolean
+    signal?: AbortSignal
   }): Promise<{ text: string; usage?: Record<string, number>; costUsd: number }> {
     const setup = await this.modelSetup()
     const model = setup.selected.model
@@ -611,8 +613,15 @@ class SdkAgentRuntime {
     }, {
       maxTokens: input.maxTokens ?? 1_024,
       temperature: input.temperature ?? 0.9,
-      timeoutMs: 60_000,
+      timeoutMs: input.latencySensitive ? 4_000 : 60_000,
       maxRetries: 0,
+      signal: input.signal,
+      ...(input.latencySensitive && model.provider === 'deepseek' && model.api === 'openai-completions' ? {
+        onPayload(payload: unknown) {
+          return payload && typeof payload === 'object' && !Array.isArray(payload)
+            ? { ...payload, thinking: { type: 'disabled' } } : undefined
+        },
+      } : {}),
     })
     if (message.stopReason === 'error' || message.stopReason === 'aborted') {
       throw new Error(message.errorMessage ?? `Inspiration completion ended with ${message.stopReason}`)
@@ -1507,12 +1516,15 @@ const server = createServer((request, response) => {
       const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : ''
       const maxTokens = body?.maxTokens === undefined ? 1_024 : Number(body.maxTokens)
       const temperature = body?.temperature === undefined ? 0.9 : Number(body.temperature)
+      const latencySensitive = body?.latencySensitive === true
       if (!systemPrompt || systemPrompt.length > 16_000) throw new Error('systemPrompt is invalid')
       if (!prompt || prompt.length > 24_000) throw new Error('prompt is invalid')
       if (!Number.isSafeInteger(maxTokens) || maxTokens < 64 || maxTokens > 4_096) throw new Error('maxTokens is invalid')
       if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw new Error('temperature is invalid')
-      await ensureRuntimeReady()
-      const result = await runtime.completeForInspiration({ systemPrompt, prompt, maxTokens, temperature })
+      const lifetime = new AbortController()
+      response.once('close', () => { if (!response.writableEnded) lifetime.abort() })
+      if (!latencySensitive) await ensureRuntimeReady()
+      const result = await runtime.completeForInspiration({ systemPrompt, prompt, maxTokens, temperature, latencySensitive, signal: lifetime.signal })
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       response.end(JSON.stringify(result))
       return
@@ -1550,6 +1562,7 @@ const server = createServer((request, response) => {
     else await runtime.prompt(message, response, abortController.signal, attachments)
     response.end()
   })().catch((error) => {
+    if (response.destroyed) return
     const message = error instanceof Error ? error.message : String(error)
     if (response.headersSent) {
       if (!response.writableEnded) response.end(`${JSON.stringify({ type: 'extension_error', error: message, terminal: true })}\n`)

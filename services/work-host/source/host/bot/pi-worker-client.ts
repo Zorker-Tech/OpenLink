@@ -179,6 +179,7 @@ export class PiWorkerClient {
     prompt: string;
     maxTokens?: number;
     temperature?: number;
+    latencySensitive?: boolean;
   }, signal?: AbortSignal): Promise<{ text: string; usage?: Record<string, number>; costUsd: number } | null> {
     try {
       const response = await fetch(`${this.binding.workerUrl}/v1/inspiration/complete`, {
@@ -189,6 +190,7 @@ export class PiWorkerClient {
           prompt: input.prompt,
           ...(input.maxTokens === undefined ? {} : { maxTokens: input.maxTokens }),
           ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
+          ...(input.latencySensitive ? { latencySensitive: true } : {}),
         }),
         cache: "no-store",
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(INSPIRATION_COMPLETE_TIMEOUT_MS)]) : AbortSignal.timeout(INSPIRATION_COMPLETE_TIMEOUT_MS),
