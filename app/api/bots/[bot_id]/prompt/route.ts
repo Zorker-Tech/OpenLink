@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { BotStreamUpdate, BotTranscriptEntry } from '@/lib/bot-transcript'
 import { botUpdatesFromWorkHostFrame } from '@/lib/bot-work-host-stream'
 import { ensureBotRuntimeProjection, getBot } from '@/lib/bots'
-import { BotRuntimeError, streamBotPrompt, warmBotRuntime } from '@/lib/bot-runtime.server'
+import { BotRuntimeError, queueBotPrompt, streamBotPrompt, warmBotRuntime } from '@/lib/bot-runtime.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -54,7 +54,7 @@ export async function POST(
 
   // Validate the turn before touching the runtime: an invalid request must
   // not warm or provision a Bot sandbox.
-  let body: { message?: unknown; clientNonce?: unknown; replyToId?: unknown }
+  let body: { message?: unknown; clientNonce?: unknown; replyToId?: unknown; acceptOnly?: unknown }
   try {
     const payload: unknown = await request.json()
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return errorResponse('INVALID_BODY', 400)
@@ -67,6 +67,7 @@ export async function POST(
   const clientNonce = typeof body.clientNonce === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(body.clientNonce)
     ? body.clientNonce
     : undefined
+  if (body.acceptOnly === true && !clientNonce) return errorResponse('INVALID_SEND_NONCE', 400)
   const replyToId = typeof body.replyToId === 'string' ? body.replyToId.trim() : ''
   if (body.replyToId !== undefined && !/^[^\u0000-\u001f\u007f]{1,256}$/.test(replyToId)) {
     return errorResponse('INVALID_REPLY_TARGET', 400)
@@ -101,7 +102,7 @@ export async function POST(
   if (bot.kind === 'group') {
     const results = await Promise.allSettled(bot.memberIds.map(async (memberId) => {
       const member = await getBot(supabase, user.id, memberId)
-      if (!member || member.kind !== 'bot') return
+      if (!member || member.kind !== 'bot') throw new BotRuntimeError('BOT_RUNTIME_UNAVAILABLE', 'BOT_RUNTIME_UNAVAILABLE', 503, true)
       const projected = await ensureBotRuntimeProjection(supabase, user.id, member)
       await warmBotRuntime(supabase, user.id, projected)
     }))
@@ -116,6 +117,10 @@ export async function POST(
 
   let upstream: Response
   try {
+    if (body.acceptOnly === true && clientNonce) {
+      const receipt = await queueBotPrompt(bot, message, clientNonce, replyToId || undefined)
+      return Response.json(receipt, { headers: { 'Cache-Control': 'no-store' } })
+    }
     upstream = await streamBotPrompt(bot, message, clientNonce, replyToId || undefined)
   } catch (error) {
     if (error instanceof BotRuntimeError) return errorResponse(error.code, error.status, error.retryable)

@@ -40,7 +40,7 @@ export interface BotInspirationCandidate {
 export interface BotInspirationRecord {
   id: string
   createdAt: number
-  trigger: 'stochastic' | 'manual' | 'nomination' | 'event'
+  trigger: 'stochastic' | 'manual' | 'nomination' | 'event' | 'follow-up'
   lens: string
   candidate: BotInspirationCandidate | null
   decision: 'woke' | 'skipped' | 'duplicate' | 'budget' | 'quiet' | 'cap' | 'unavailable' | 'error'

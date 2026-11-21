@@ -24,9 +24,9 @@ const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 const serverTimeZone = () => 'UTC'
 
 function sameAuthor(left: TranscriptEntry | undefined, right: TranscriptEntry | undefined) {
-  if (left?.kind === 'user-message' && right?.kind === 'user-message') return !left.attachment && !right.attachment
+  if (left?.kind === 'user-message' && right?.kind === 'user-message') return !left.attachment && !right.attachment && !right.replyTo
   if (left?.kind !== 'agent-message' || right?.kind !== 'agent-message') return false
-  return !left.attachment && !right.attachment && (left.author?.id ?? '') === (right.author?.id ?? '')
+  return !left.attachment && !right.attachment && !right.replyTo && (left.author?.id ?? '') === (right.author?.id ?? '')
 }
 
 const EMPTY_SUGGESTIONS = [
@@ -48,6 +48,10 @@ export type AppTranscriptProps = {
   replyTargetId?: string
   unreadAfter?: number
   renderMessage?: (content: string) => ReactNode
+  renderPrompt?: (content: string) => ReactNode
+  renderGroupAuthor?: (author: { id: string; name: string }) => ReactNode
+  renderGroupAvatar?: (author: { id: string; name: string }) => ReactNode
+  renderReplyReference?: (entry: Extract<TranscriptEntry, { kind: 'agent-message' | 'user-message' }>) => ReactNode
   renderMessageActions?: MessageBubbleProps['renderActions']
   renderMessageMenu?: MessageBubbleProps['renderMenu']
   transcriptRef: Ref<HTMLDivElement>
@@ -73,6 +77,10 @@ export function AppTranscript({
   replyTargetId,
   unreadAfter,
   renderMessage,
+  renderPrompt,
+  renderGroupAuthor,
+  renderGroupAvatar,
+  renderReplyReference,
   renderMessageActions,
   renderMessageMenu,
   transcriptRef,
@@ -90,7 +98,7 @@ export function AppTranscript({
   const dateTime = locale && createTimelineTimeFormatter(locale, day, Date.now())
   const rows = useMemo(() => foldTimeline(entries, day, unreadAfter), [entries, day, unreadAfter])
 
-  const renderEntry = (entry: TranscriptEntry, groupPosition: MessageBubbleProps['groupPosition'], showAuthor: boolean) => {
+  const renderEntry = (entry: TranscriptEntry, groupPosition: MessageBubbleProps['groupPosition']) => {
     switch (entry.kind) {
       case 'system':
         return <SystemEntry assetBase={assetBase} entry={entry} />
@@ -101,12 +109,11 @@ export function AppTranscript({
       case 'confirmation':
         return <ConfirmationCard entry={entry} />
       case 'agent-message':
-      case 'user-message':
-        return (
+      case 'user-message': {
+        const author = session.isGroup && entry.kind === 'agent-message' ? entry.author : undefined
+        const message = (
           <>
-            {showAuthor && session.isGroup && entry.kind === 'agent-message' && entry.author?.name ? (
-              <div className="zbd-app-group-author">{entry.author.name}</div>
-            ) : null}
+            {entry.replyTo && renderReplyReference ? <div className="zbd-app-message-reference" data-side={entry.kind === 'user-message' ? 'user' : 'agent'}>{renderReplyReference(entry)}</div> : null}
             <MessageBubble
               assetBase={assetBase}
               entry={entry}
@@ -115,10 +122,26 @@ export function AppTranscript({
               onReply={getReplyAction?.(entry)}
               renderActions={renderMessageActions}
               renderContent={renderMessage}
+              renderUserContent={renderPrompt}
               renderMenu={renderMessageMenu}
             />
           </>
         )
+        if (!author?.name) return message
+        const startsRun = groupPosition === 'single' || groupPosition === 'start'
+        const endsRun = groupPosition === 'single' || groupPosition === 'end'
+        return (
+          <div className="zbd-app-author-run">
+            <div className="zbd-app-author-gutter">
+              {endsRun ? renderGroupAvatar?.(author) ?? <span aria-hidden="true" className="zbd-app-author-fallback">{Array.from(author.name)[0]}</span> : null}
+            </div>
+            <div className="zbd-app-author-messages">
+              {startsRun ? <div className="zbd-app-group-author">{renderGroupAuthor?.(author) ?? author.name}</div> : null}
+              {message}
+            </div>
+          </div>
+        )
+      }
     }
   }
 
@@ -146,7 +169,7 @@ export function AppTranscript({
           const divider = unread ? <div className="zbd-timeline-unread" role="separator" aria-label="Unread messages">Unread messages</div> : null
           const renderGroupedEntries = () => grouped.map((member, offset) => (
             <div data-entry-id={member.id} data-reply-target={member.id === replyTargetId ? '' : undefined} key={member.id}>
-              {renderEntry(member, 'single', offset === 0)}
+              {renderEntry(member, offset === 0 ? 'start' : offset === grouped.length - 1 ? 'end' : 'middle')}
             </div>
           ))
           const visible = kind === 'tools' ? (
@@ -158,7 +181,7 @@ export function AppTranscript({
             <div className="zbd-timeline-group" role="group" aria-label={kind === 'attachments' ? 'Attachments' : 'Routine updates'}>
               {renderGroupedEntries()}
             </div>
-          ) : renderEntry(entry, groupPosition, !joinsPrevious)
+          ) : renderEntry(entry, groupPosition)
 
           return (
             <div

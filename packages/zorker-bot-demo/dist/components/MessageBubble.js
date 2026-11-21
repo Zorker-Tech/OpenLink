@@ -58,7 +58,7 @@ function ReplyIcon() {
 function CheckIcon() {
     return (_jsx("svg", { "aria-hidden": "true", viewBox: "0 0 16 16", children: _jsx("path", { d: "m3.5 8.4 2.8 2.8 6.2-6.4", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.5" }) }));
 }
-export function MessageBubble({ entry, assetBase, showTimestamp = false, timestampLabel, renderContent, groupPosition = 'single', onReact, onReply, renderActions, renderMenu, }) {
+export function MessageBubble({ entry, assetBase, showTimestamp = false, timestampLabel, renderContent, renderUserContent, groupPosition = 'single', onReact, onReply, renderActions, renderMenu, }) {
     const isUser = entry.kind === 'user-message';
     const groups = useMemo(() => groupReactions(entry.reactions ?? []), [entry.reactions]);
     const [reactionState, setReactionState] = useState({ current: groups, rendered: groups });
@@ -95,7 +95,7 @@ export function MessageBubble({ entry, assetBase, showTimestamp = false, timesta
             copyTimer.current = setTimeout(() => setCopied(false), 1_600);
         }).catch(() => undefined);
     };
-    const bubble = (_jsx("div", { className: `${isUser ? 'zbd-bubble zbd-bubble-user' : 'zbd-bubble zbd-bubble-agent'}${markdown ? ' zbd-bubble-markdown' : ''}`, "data-group-position": groupPosition, children: attachment ? (_jsxs("div", { className: "zbd-attachment-card", "data-kind": attachment.kind, children: [_jsx("span", { "aria-hidden": "true", className: "zbd-attachment-format", children: attachment.name.match(/\.([a-z0-9]{1,5})$/i)?.[1]?.toUpperCase() ?? (attachment.kind === 'media' ? 'MEDIA' : 'FILE') }), _jsx("span", { className: "zbd-attachment-name", title: attachment.name, children: attachment.name })] })) : isUser ? entry.content : renderContent ? renderContent(entry.content) : _jsx(RichText, { assetBase: assetBase, content: entry.content }) }));
+    const bubble = (_jsx("div", { className: `${isUser ? 'zbd-bubble zbd-bubble-user' : 'zbd-bubble zbd-bubble-agent'}${markdown ? ' zbd-bubble-markdown' : ''}`, "data-group-position": groupPosition, children: attachment ? (_jsxs("div", { className: "zbd-attachment-card", "data-kind": attachment.kind, children: [_jsx("span", { "aria-hidden": "true", className: "zbd-attachment-format", children: attachment.name.match(/\.([a-z0-9]{1,5})$/i)?.[1]?.toUpperCase() ?? (attachment.kind === 'media' ? 'MEDIA' : 'FILE') }), _jsx("span", { className: "zbd-attachment-name", title: attachment.name, children: attachment.name })] })) : isUser ? renderUserContent?.(entry.content) ?? entry.content : renderContent ? renderContent(entry.content) : _jsx(RichText, { assetBase: assetBase, content: entry.content }) }));
     const react = onReact ? (emoji) => onReact(entry, emoji) : undefined;
     const menuActions = {
         entry, copy, react, reply: onReply,

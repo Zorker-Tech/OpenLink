@@ -13,7 +13,7 @@ type BotComputerProps = {
 
 type BotComputerPaneProps = BotComputerProps & {
   routines: readonly BotRoutine[]
-  onEditRoutine: (routine: BotRoutine | null) => void
+  onEditRoutine: (routine: BotRoutine) => void
   onRunRoutine: (routine: BotRoutine) => void
   onToggleRoutine: (routine: BotRoutine, isEnabled: boolean) => void
 }
@@ -83,9 +83,7 @@ export function BotComputerPane({
               </div>
             ))
           ) : (
-            <button className="zbd-app-routine-empty w-full" onClick={() => onEditRoutine(null)} type="button">
-              Nothing scheduled yet. Create a routine to have {botName} work on a schedule.
-            </button>
+            <p className="zbd-app-routine-empty w-full">Ask {botName} to schedule a routine.</p>
           )}
         </div>
       </div>

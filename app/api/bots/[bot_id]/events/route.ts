@@ -85,6 +85,7 @@ export async function GET(
       const decoder = new TextDecoder()
       let buffer = ''
       let closed = false
+      controller.enqueue(encoder.encode(': connected\n\n'))
       const send = (update: BotStreamUpdate) => {
         if (closed) return
         try {

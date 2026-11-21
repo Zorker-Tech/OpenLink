@@ -6,17 +6,17 @@ import { useEffect, useState } from 'react'
 
 type BotRoutineDialogProps = {
   botName: string
-  routine?: BotRoutine | null
+  routine: BotRoutine
   onClose: () => void
   onDelete?: () => Promise<void>
   onSave: (spec: { name: string; prompt: string; schedule: string; isEnabled: boolean }) => Promise<void>
 }
 
 export function BotRoutineDialog({ botName, routine, onClose, onDelete, onSave }: BotRoutineDialogProps) {
-  const [name, setName] = useState(routine?.name ?? '')
-  const [prompt, setPrompt] = useState(routine?.prompt ?? '')
-  const [schedule, setSchedule] = useState(routine?.schedule ?? '0 9 * * 1-5')
-  const [isEnabled, setIsEnabled] = useState(routine?.isEnabled ?? true)
+  const [name, setName] = useState(routine.name)
+  const [prompt, setPrompt] = useState(routine.prompt)
+  const [schedule, setSchedule] = useState(routine.schedule)
+  const [isEnabled, setIsEnabled] = useState(routine.isEnabled)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,9 +49,9 @@ export function BotRoutineDialog({ botName, routine, onClose, onDelete, onSave }
   return (
     <div className="zbd-app-palette-layer">
       <button aria-label="Close routine" className="zbd-app-palette-scrim" onClick={() => { if (!saving) onClose() }} type="button" />
-      <div aria-label={routine ? 'Edit routine' : 'Create a routine'} aria-modal="true" className="zbd-app-palette zbd-app-create-palette" role="dialog">
+      <div aria-label="Edit routine" aria-modal="true" className="zbd-app-palette zbd-app-create-palette" role="dialog">
         <div className="zbd-app-palette-search">
-          <span className="zbd-app-palette-to">{routine ? 'Edit routine' : 'New routine'}</span>
+          <span className="zbd-app-palette-to">Edit routine</span>
           <button aria-label="Close routine" className="zbd-app-create-back" disabled={saving} onClick={onClose} type="button">
             <X className="size-4" />
           </button>
@@ -121,7 +121,7 @@ export function BotRoutineDialog({ botName, routine, onClose, onDelete, onSave }
           <button className="zbd-app-create-cancel" disabled={saving} onClick={onClose} type="button">Cancel</button>
           <button className="zbd-app-create-submit" disabled={saving} onClick={() => void submit()} type="button">
             {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Clock className="size-4" />}
-            {saving ? 'Saving' : routine ? 'Save routine' : 'Create routine'}
+            {saving ? 'Saving' : 'Save routine'}
             {!saving ? <ArrowRight className="size-4" /> : null}
           </button>
         </div>

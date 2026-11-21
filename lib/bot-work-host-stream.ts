@@ -1,5 +1,6 @@
 import { normalizeWorkHostEntry, type BotStreamUpdate } from './bot-transcript.ts'
 import { pendingBotConfirmationsFromWorkHostEntries } from './bot-confirmations.ts'
+import { isBotControlLabel } from '../services/work-host/source/shared/bot-delivery-text.ts'
 
 function recordOf(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -29,6 +30,47 @@ function toolAvatarState(tool: unknown, detail?: unknown, target?: unknown): str
   if (name === 'task' && target === 'computerUse') return 'computing'
   if (/^(shell|external(shell|write)|boxshell|shelltoolcall)$/.test(name) && typeof detail === 'string' && detail.trim()) return 'writing'
   return toolAvatarStates.get(name) ?? 'working'
+}
+
+export function workHostBotAvatarState(value: unknown): string | null {
+  const agent = recordOf(value)
+  if (agent?.isRunning !== true) return null
+  if (agent.isComposingMessage === true) return 'streaming'
+  const activity = recordOf(agent.currentActivity)
+  return agent.isRetrying === true ? 'waiting'
+    : activity?.kind === 'thinking' ? 'thinking'
+    : activity?.kind === 'tool' ? toolAvatarState(activity.tool, activity.detail, activity.target) : 'working'
+}
+
+export function botRailActivityFromWorkHostFrame(value: unknown): { agentId: string; state: string | null; memberId?: string } | null {
+  const frame = recordOf(value)
+  const payload = recordOf(frame?.payload)
+  if (!payload) return null
+  if (frame?.channel === 'agent-upserted') {
+    const agent = recordOf(payload.agent)
+    return typeof agent?.id === 'string' && typeof agent.isRunning === 'boolean'
+      ? { agentId: agent.id, state: workHostBotAvatarState(agent) } : null
+  }
+  if (typeof payload.agentId !== 'string') return null
+  const agentId = payload.agentId
+  if (frame?.channel === 'bot-turn' && payload.groupMember !== true) {
+    if (payload.phase === 'started') return { agentId, state: 'working' }
+    if (payload.phase === 'ended') return { agentId, state: null }
+    if (payload.phase === 'awaiting-input') return { agentId, state: 'waiting' }
+  }
+  if (frame?.channel !== 'transcript') return null
+  if (payload.type === 'group-turn') {
+    if (payload.phase === 'started') return { agentId, state: 'working' }
+    if (payload.phase === 'ended') return { agentId, state: null }
+  }
+  if (payload.type === 'group-member') {
+    const member = recordOf(payload.member)
+    const phase = payload.phase
+    if (typeof member?.id === 'string' && (phase === 'reading' || phase === 'working' || phase === 'speaking' || phase === 'idle')) {
+      return { agentId, memberId: member.id, state: phase === 'speaking' ? 'sending' : phase === 'idle' ? 'working' : phase }
+    }
+  }
+  return null
 }
 
 function activityFromTool(item: Record<string, unknown>): BotStreamUpdate | null {
@@ -84,13 +126,23 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
 
   if (channel === 'transcript') {
     const type = typeof payload.type === 'string' ? payload.type : ''
+    if (type === 'group-member' && typeof payload.epoch === 'number') {
+      const member = recordOf(payload.member)
+      const phase = payload.phase
+      if (phase === 'idle') return [{ type: 'pending', pending: { label: 'Group discussion', showLabel: true, state: 'working', groupEpoch: payload.epoch } }]
+      if (typeof member?.id !== 'string' || typeof member.name !== 'string' || (phase !== 'reading' && phase !== 'working' && phase !== 'speaking')) return []
+      const activity = phase === 'reading' ? 'Reading' : phase === 'speaking' ? 'Replying' : 'Working'
+      return [{ type: 'pending', pending: { label: `${member.name} · ${activity}`, showLabel: true, state: phase === 'speaking' ? 'sending' : phase, groupEpoch: payload.epoch,
+        groupMember: { id: member.id, name: member.name, phase } } }]
+    }
     if (type === 'group-turn') {
       const phase = typeof payload.phase === 'string' ? payload.phase : ''
-      if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'working' } }]
+      if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'working',
+        ...(typeof payload.epoch === 'number' ? { groupEpoch: payload.epoch } : {}) } }]
       if (phase === 'ended') {
         const updates: BotStreamUpdate[] = [{ type: 'pending', pending: null }]
         if (payload.ok === false) updates.push({ type: 'error', message: 'BOT_GROUP_TURN_FAILED' })
-        updates.push({ type: 'done' })
+        updates.push({ type: 'done', group: true })
         return updates
       }
       return []
@@ -136,12 +188,15 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
 
   if (channel === 'bot-turn') {
     const phase = typeof payload.phase === 'string' ? payload.phase : ''
+    if (phase === 'management') return [{ type: 'management', routines: payload.routines === true }]
     if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'working' } }]
     if (phase === 'status' && typeof payload.label === 'string' && payload.label.trim()) {
       const label = payload.label.trim().slice(0, 200)
+      if (isBotControlLabel(label)) return []
       return [{ type: 'pending', pending: { label, showLabel: true, state: 'working' } }]
     }
     if (phase === 'title' && typeof payload.title === 'string' && payload.title.trim()) {
+      if (isBotControlLabel(payload.title)) return []
       // The worker's LLM title is a task summary, not a tool label: it replaces
       // the optimistic prompt excerpt without touching the avatar state.
       return [{ type: 'title', title: payload.title.trim().slice(0, 120) }]

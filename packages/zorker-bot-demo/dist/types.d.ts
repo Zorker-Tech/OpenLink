@@ -43,6 +43,7 @@ export type AgentMessageEntry = {
     id: string;
     content: string;
     timestampMs: number;
+    replyTo?: string;
     author?: {
         id: string;
         name: string;
@@ -55,6 +56,7 @@ export type UserMessageEntry = {
     id: string;
     content: string;
     timestampMs: number;
+    replyTo?: string;
     reactions?: MessageReaction[];
     attachment?: TranscriptAttachment;
 };

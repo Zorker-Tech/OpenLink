@@ -1,4 +1,4 @@
-import { createBot, createBotGroup, listBots, BotInputError, resolveBotWorkspace } from '@/lib/bots'
+import { createBot, listBots, BotInputError, resolveBotWorkspace } from '@/lib/bots'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -38,29 +38,20 @@ export async function POST(request: Request) {
   } catch {
     return errorResponse('INVALID_BODY', 400)
   }
+  if (!body || Array.isArray(body) || typeof body !== 'object') return errorResponse('INVALID_BODY', 400)
+  if (body.kind === 'group' || body.memberIds !== undefined) return errorResponse('BOT_GROUP_REQUIRES_BOT', 400)
   const workspaceSlug = typeof body.workspaceSlug === 'string' ? body.workspaceSlug.trim() : ''
   if (!workspaceSlug) return errorResponse('WORKSPACE_REQUIRED', 400)
   try {
-    const isGroup = body.kind === 'group' || body.memberIds !== undefined
-    const bot = isGroup
-      ? await createBotGroup(supabase, user.id, {
-        workspaceSlug,
-        name: body.name,
-        description: body.description,
-        avatarShape: body.avatarShape,
-        avatarColor: body.avatarColor,
-        avatarPngBase64: body.avatarPngBase64,
-        memberIds: body.memberIds,
-      })
-      : await createBot(supabase, user.id, {
-        workspaceSlug,
-        name: body.name,
-        description: body.description,
-        avatarShape: body.avatarShape,
-        avatarColor: body.avatarColor,
-        avatarPngBase64: body.avatarPngBase64,
-        model: body.model,
-      })
+    const bot = await createBot(supabase, user.id, {
+      workspaceSlug,
+      name: body.name,
+      description: body.description,
+      avatarShape: body.avatarShape,
+      avatarColor: body.avatarColor,
+      avatarPngBase64: body.avatarPngBase64,
+      model: body.model,
+    })
     return Response.json({ bot }, {
       status: 201,
       headers: { 'Cache-Control': 'no-store' },

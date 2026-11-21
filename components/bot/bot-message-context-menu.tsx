@@ -4,28 +4,17 @@ import { ContextMenu } from '@base-ui/react/context-menu'
 import { QUICK_REACTIONS } from '@zorker/bot-demo/components/EmojiPicker'
 import type { MessageMenuActions } from '@zorker/bot-demo/components/MessageBubble'
 import { Clipboard, Copy, Reply, SmilePlus } from 'lucide-react'
-import { cloneElement, type ReactElement, type ReactNode } from 'react'
+import type { ReactElement } from 'react'
 
 import { useOpenLinkTheme } from '@/components/ui/theme-scope'
 
-export function BotMessageContextMenu({ bubble, actions, requestId, replyReference }: {
+export function BotMessageContextMenu({ bubble, actions, requestId }: {
   bubble: ReactElement
   actions: MessageMenuActions
   requestId?: string
-  replyReference?: { excerpt: string; onJump?: () => void }
 }) {
   const theme = useOpenLinkTheme()
   const { reply } = actions
-  const message = bubble as ReactElement<{ children: ReactNode }>
-  const trigger = replyReference ? cloneElement(message, undefined, (
-    <>
-      <button className="bot-sent-reply" disabled={!replyReference.onJump} onClick={replyReference.onJump} title={replyReference.excerpt} type="button">
-        <Reply aria-hidden="true" size={13} />
-        <span>{replyReference.excerpt}</span>
-      </button>
-      {message.props.children}
-    </>
-  )) : message
 
   return (
     <ContextMenu.Root>
@@ -37,7 +26,7 @@ export function BotMessageContextMenu({ bubble, actions, requestId, replyReferen
         onMouseDown={(event) => {
           if (event.button === 2) event.preventDefault()
         }}
-        render={trigger}
+        render={bubble}
         tabIndex={0}
       />
       <ContextMenu.Portal>

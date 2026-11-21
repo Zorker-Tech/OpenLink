@@ -380,6 +380,8 @@ export const MessageResponse = memo(
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     nextProps.isAnimating === prevProps.isAnimating &&
+    nextProps.components === prevProps.components &&
+    nextProps.rehypePlugins === prevProps.rehypePlugins &&
     nextProps.flattenTables === prevProps.flattenTables
 );
 

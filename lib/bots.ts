@@ -1074,6 +1074,7 @@ export async function createBot(
     avatarPngBase64?: unknown
     model: unknown
   },
+  operation?: { id: string; projectId: string },
 ): Promise<BotSummary> {
   const workspace = await getAccessibleWorkspace(supabase, input.workspaceSlug)
   if (!workspace) throw new BotInputError('BOT_WORKSPACE_NOT_FOUND')
@@ -1085,7 +1086,11 @@ export async function createBot(
   const requestedModel = normalizeModel(input.model)
   const selectedModel = await resolveConfiguredModelSelection(supabase, userId, requestedModel)
   if (!selectedModel) throw new BotInputError('BOT_MODEL_REQUIRED')
-  const project = await ensureDraftProject(supabase, userId, workspace)
+  const projectId = operation?.projectId ?? (await ensureDraftProject(supabase, userId, workspace)).id
+  const { count, error: firstBotError } = operation ? { count: null, error: null } : await supabase
+    .schema('openlink').from('bots').select('id', { count: 'exact', head: true })
+    .eq('user_id', userId).eq('workspace_id', workspace.id).eq('kind', 'bot')
+  if (firstBotError) throw firstBotError
   let createdAgentId: string | null = null
   try {
     const created = await createBotAgent({
@@ -1093,6 +1098,8 @@ export async function createBot(
       description,
       avatarShape,
       avatarColor,
+      introduction: count === 0,
+      origin: operation ? 'agent' : 'user',
     })
     createdAgentId = created.agent.id
     if (avatarPngBase64) await setBotAgentAvatar(created.agent.id, avatarPngBase64)
@@ -1105,7 +1112,8 @@ export async function createBot(
       .insert({
         user_id: userId,
         workspace_id: workspace.id,
-        project_id: project.id,
+        ...(operation ? { id: operation.id } : {}),
+        project_id: projectId,
         runtime_session_id: null,
         runtime_status: 'pending',
         work_agent_id: created.agent.id,
@@ -1141,6 +1149,7 @@ export async function createBotGroup(
     avatarPngBase64?: unknown
     memberIds: unknown
   },
+  operationId?: string,
 ): Promise<BotSummary> {
   const workspace = await getAccessibleWorkspace(supabase, input.workspaceSlug)
   if (!workspace) throw new BotInputError('BOT_WORKSPACE_NOT_FOUND')
@@ -1152,7 +1161,7 @@ export async function createBotGroup(
   const memberIds = normalizeGroupMemberIds(input.memberIds)
   if (!memberIds.length) throw new BotInputError('BOT_GROUP_MEMBER_REQUIRED')
   const members = await readGroupMemberBots(supabase, userId, workspace.id, memberIds)
-  const botId = randomUUID()
+  const botId = operationId ?? randomUUID()
   let createdAgentId: string | null = null
   try {
     const created = await createWorkHostGroup({

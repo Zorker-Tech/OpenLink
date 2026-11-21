@@ -1,5 +1,6 @@
 import { ensureBotRuntimeProjection, getBot, updateBotRuntimeState } from '@/lib/bots'
 import { BotRuntimeError, warmBotRuntime } from '@/lib/bot-runtime.server'
+import { kickstartBotAgent } from '@/lib/work-host-client.server'
 import { createClient } from '@/utils/supabase/server'
 
 export const runtime = 'nodejs'
@@ -37,6 +38,9 @@ export async function POST(
     await updateBotRuntimeState(supabase, user.id, bot.id, { status: 'provisioning' })
     const result = await warmBotRuntime(supabase, user.id, bot)
     await updateBotRuntimeState(supabase, user.id, bot.id, { status: 'ready' })
+    await kickstartBotAgent(bot.workAgentId).catch((error) => {
+      console.error('[openlink-bots] introduction could not be started', error)
+    })
     return Response.json({
       ready: result.ready,
       agent: result.agent,

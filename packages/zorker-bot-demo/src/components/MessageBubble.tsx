@@ -28,6 +28,7 @@ export type MessageBubbleProps = {
   showTimestamp?: boolean
   timestampLabel?: string
   renderContent?: (content: string) => ReactNode
+  renderUserContent?: (content: string) => ReactNode
   /** Where this message sits in a consecutive run by the same author. */
   groupPosition?: 'single' | 'start' | 'middle' | 'end'
   /** Toggle a reaction on this message. Omit to keep the transcript read-only. */
@@ -122,6 +123,7 @@ export function MessageBubble({
   showTimestamp = false,
   timestampLabel,
   renderContent,
+  renderUserContent,
   groupPosition = 'single',
   onReact,
   onReply,
@@ -175,7 +177,7 @@ export function MessageBubble({
           </span>
           <span className="zbd-attachment-name" title={attachment.name}>{attachment.name}</span>
         </div>
-      ) : isUser ? entry.content : renderContent ? renderContent(entry.content) : <RichText assetBase={assetBase} content={entry.content} />}
+      ) : isUser ? renderUserContent?.(entry.content) ?? entry.content : renderContent ? renderContent(entry.content) : <RichText assetBase={assetBase} content={entry.content} />}
     </div>
   )
   const react = onReact ? (emoji: string) => onReact(entry, emoji) : undefined

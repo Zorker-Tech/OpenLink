@@ -1,8 +1,33 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { botUpdatesFromWorkHostFrame } from '../../lib/bot-work-host-stream.ts'
+import { botRailActivityFromWorkHostFrame, botUpdatesFromWorkHostFrame } from '../../lib/bot-work-host-stream.ts'
 import { normalizeWorkHostTranscript, pendingConfirmationsFromTranscript, transcriptFromAgentEvents } from '../../lib/bot-transcript.ts'
+
+test('the rail projects live tool, group member and completion states without message text', () => {
+  assert.deepEqual(botRailActivityFromWorkHostFrame({ channel: 'agent-upserted', payload: {
+    agent: { id: 'bot-host', isRunning: true, currentActivity: { kind: 'tool', tool: 'read' } },
+  } }), { agentId: 'bot-host', state: 'reading' })
+  assert.deepEqual(botRailActivityFromWorkHostFrame({ channel: 'transcript', payload: {
+    agentId: 'room-host', type: 'group-member', phase: 'speaking', member: { id: 'member-host' }, text: 'private',
+  } }), { agentId: 'room-host', memberId: 'member-host', state: 'sending' })
+  assert.deepEqual(botRailActivityFromWorkHostFrame({ channel: 'transcript', payload: {
+    agentId: 'room-host', type: 'group-turn', phase: 'ended',
+  } }), { agentId: 'room-host', state: null })
+  assert.equal(botRailActivityFromWorkHostFrame({ channel: 'transcript', payload: {
+    agentId: 'room-host', type: 'appended', entry: { content: 'private' },
+  } }), null)
+})
+
+test('group member activity projects only identity and the public status', () => {
+  const updates = botUpdatesFromWorkHostFrame({ channel: 'transcript', payload: {
+    type: 'group-member', epoch: 7, phase: 'speaking', member: { id: 'member-1', name: 'Jamie' }, text: 'Private draft',
+  } })
+  assert.deepEqual(updates, [{ type: 'pending', pending: {
+    label: 'Jamie · Replying', showLabel: true, state: 'sending', groupEpoch: 7,
+    groupMember: { id: 'member-1', name: 'Jamie', phase: 'speaking' },
+  } }])
+})
 
 test('a Work-host user message becomes a Bot timeline entry', () => {
   const updates = botUpdatesFromWorkHostFrame({
@@ -96,7 +121,7 @@ test('turn and group lifecycles drive the pending state and terminate the stream
   ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'transcript', payload: { agentId: 'group-1', type: 'group-turn', phase: 'ended', ok: true } }), [
     { type: 'pending', pending: null },
-    { type: 'done' },
+    { type: 'done', group: true },
   ])
 })
 

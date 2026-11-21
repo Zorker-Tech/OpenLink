@@ -45,6 +45,10 @@ export interface WorkHostAgent {
   hasUnread?: boolean
 }
 
+export async function listWorkHostBotActivity(signal?: AbortSignal): Promise<WorkHostAgent[]> {
+  return request('listAgents', {}, { timeoutMs: 6_000, signal })
+}
+
 export interface WorkHostCreateAgentResult {
   agent: WorkHostAgent
   transcript: unknown[]
@@ -157,15 +161,21 @@ export async function createBotAgent(input: {
   description: string
   avatarShape: string
   avatarColor: string
+  introduction?: boolean
+  origin?: 'user' | 'agent'
 }): Promise<WorkHostCreateAgentResult> {
   return await request<WorkHostCreateAgentResult>('createBackgroundAgent', {
     name: input.name,
     description: input.description,
     avatarShape: input.avatarShape,
     avatarColor: input.avatarColor,
-    origin: 'user',
-    isIntroductionSuppressed: true,
+    origin: input.origin ?? 'user',
+    isIntroductionSuppressed: input.introduction !== true,
   }, { timeoutMs: 60_000 })
+}
+
+export async function kickstartBotAgent(agentId: string): Promise<void> {
+  await request('kickstartAgent', { id: agentId }, { timeoutMs: 10_000 })
 }
 
 export async function createBotGroup(input: {
@@ -341,7 +351,7 @@ export interface WorkHostInspirationConfig {
 export interface WorkHostInspirationRecord {
   id: string
   createdAt: number
-  trigger: 'stochastic' | 'manual' | 'nomination' | 'event'
+  trigger: 'stochastic' | 'manual' | 'nomination' | 'event' | 'follow-up'
   lens: string
   candidate: {
     title: string
@@ -558,6 +568,34 @@ export async function sendBotPromptStream(input: {
     throw new WorkHostError(detail || `Work Host rejected sendBotPrompt`, response.status, 'sendBotPrompt')
   }
   return response
+}
+
+export async function acceptBotPrompt(input: {
+  agentId: string
+  prompt: string
+  clientNonce: string
+  replyToId?: string
+}): Promise<{ accepted: true; entryId: string }> {
+  let failure: WorkHostError | undefined
+  try {
+    const result = await request<{ accepted?: boolean; entryId?: string }>(
+      'sendPrompt', { ...input, acceptOnly: true, requireQuickBotReply: true }, { timeoutMs: 30_000 },
+    )
+    if (result?.accepted && typeof result.entryId === 'string') return { accepted: true, entryId: result.entryId }
+  } catch (error) {
+    if (!(error instanceof WorkHostError) || error.status < 500) throw error
+    failure = error
+  }
+  // A host that closes the command late can still have a durable receipt.
+  const status = await request<{
+    outcome?: string
+    record?: { agentId?: string; status?: string; echoEntryId?: string }
+  }>('promptAcceptanceStatus', { accountSlot: 'host', clientNonce: input.clientNonce }, { timeoutMs: 5_000 })
+  if (status?.outcome === 'found' && status.record?.agentId === input.agentId
+      && status.record.status === 'accepted' && typeof status.record.echoEntryId === 'string') {
+    return { accepted: true, entryId: status.record.echoEntryId }
+  }
+  throw failure ?? new WorkHostError('The send could not be confirmed', 503, 'sendPrompt')
 }
 
 export async function getBotAgentAvatar(agentId: string, version?: string | null): Promise<WorkHostAvatar | null> {

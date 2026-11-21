@@ -161,22 +161,29 @@ unprocessed messages also become eligible after a day. Attempts are at least
 up to five opening and ten closing messages from the new window. The durable
 checkpoint stores the summary, weights and last included message identity.
 
-The model scores classified observations before divergence. Every proposed
-action requires a separate gate approval, including singleton candidates.
+The model scores classified observations before divergence. File observations,
+periodic discovery, nominations, and follow-ups after substantive messages have
+independent schedules. Every proposed action requires gate approval, including
+singleton candidates. The gate can approve a read-only investigation before a
+notification is warranted.
 Every provisioned Bot is subscribed automatically, including after a Work-host
 restart. An active user turn takes priority over automatic work. An approved
-wake can investigate silently and send progress or results when useful. The
+wake can investigate silently and send verified results when useful. A structured
+final finding can be delivered if the wake did not call SendMessage. The
 subscription ledger accounts for model calls and wake usage without applying
 daily run or spend quotas.
 
 ## First reply and progress
 
-For a durably accepted direct Bot prompt, Work-host schedules the first-reply
-receipt 3.75 seconds after acceptance. A substantive Bot text message published
-before the deadline satisfies it. The receipt belongs to the normal transcript
-and leaves the active turn running. Pi gets per-turn guidance for short initial
-replies and meaningful checkpoints, and title generation runs alongside the
-reply stream. Proactive wakes keep their own silent-by-default delivery policy.
+For a durably accepted direct Bot prompt, Work-host starts a short, tool-free
+completion for the first reply. Its English prompt uses a fresh seed, and it
+answers in the user's language. It targets the first four seconds, with a
+six-second maximum attempt window. The model may include a single emoji reaction
+for the originating user message and decide that the first reply completes the
+turn. An invalid or late result leaves delivery to the normal turn. When work
+remains, Pi receives the exact delivered reply and can end silently if it has
+nothing to add. Recent turns completed by the first reply are carried forward
+as dialogue context. Proactive wakes retain their own delivery policy.
 
 ## Consequences
 

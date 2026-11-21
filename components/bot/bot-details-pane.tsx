@@ -8,7 +8,6 @@ import type { BotTranscriptEntry } from '@/lib/bot-transcript'
 import {
   Activity,
   Brain,
-  CalendarPlus,
   Clock3,
   Cpu,
   FileText,
@@ -32,8 +31,10 @@ type BotDetailsPaneProps = {
   transcript: readonly BotTranscriptEntry[]
   onClose: () => void
   onEditProfile: () => void
-  onEditRoutine: (routine: BotRoutine | null) => void
+  onEditRoutine: (routine: BotRoutine) => void
   onOpenComputer: () => void
+  onOpenMember?: (id: string) => void
+  onMentionMember?: (name: string) => void
   onShowAttachment: (entryId: string) => void
   onToggleRoutine: (routine: BotRoutine, isEnabled: boolean) => void
 }
@@ -203,6 +204,8 @@ export function BotDetailsPane({
   onEditProfile,
   onEditRoutine,
   onOpenComputer,
+  onOpenMember,
+  onMentionMember,
   onShowAttachment,
   onToggleRoutine,
 }: BotDetailsPaneProps) {
@@ -390,15 +393,6 @@ export function BotDetailsPane({
             {tab === 'activity' ? (
               <>
                 <Section
-                  action={(
-                    <button
-                      className="text-[12px] font-medium text-[var(--app-muted)] transition-colors hover:text-[var(--app-foreground)]"
-                      onClick={() => onEditRoutine(null)}
-                      type="button"
-                    >
-                      New routine
-                    </button>
-                  )}
                   id="bot-details-routines"
                   title="Upcoming"
                 >
@@ -427,25 +421,31 @@ export function BotDetailsPane({
                         />
                       </div>
                     )) : (
-                      <button
-                        className="flex h-11 w-full items-center justify-center gap-2 px-3 text-[13px] text-[var(--app-muted)] transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]"
-                        onClick={() => onEditRoutine(null)}
-                        type="button"
-                      >
-                        <CalendarPlus className="size-4" />
-                        No routines yet
-                      </button>
+                      <EmptyCard>Ask {bot.name} to schedule a routine.</EmptyCard>
                     )}
                   </div>
                 </Section>
-                <Section
+                {bot.kind === 'group' ? (
+                  <Section id="bot-details-members" title="Members" action={
+                    <button className="text-[12px] text-[var(--app-muted)] hover:text-[var(--app-foreground)]" onClick={onEditProfile} type="button">Manage members</button>
+                  }>
+                    <div className="divide-y divide-[var(--app-border)] rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)]">
+                      {bot.members.map((member) => (
+                        <div className="flex min-h-11 items-center gap-1 px-2" key={member.id}>
+                          <button aria-label={`Open chat with ${member.name}`} className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-start hover:bg-[var(--app-hover)]" disabled={!onOpenMember} onClick={() => onOpenMember?.(member.id)} type="button">
+                            <AgentAvatar color={member.avatarColor} interactive={false} shape={member.avatarShape} size={28} theme={theme} />
+                            <span className="min-w-0 truncate text-[13px]">{member.name}</span>
+                          </button>
+                          <button aria-label={`Mention ${member.name}`} className="grid size-8 shrink-0 place-items-center rounded-md text-[var(--app-muted)] hover:bg-[var(--app-hover)]" disabled={!onMentionMember} onClick={() => onMentionMember?.(member.name)} title={`Mention ${member.name}`} type="button">@</button>
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+                ) : <Section
                   action={<span className="text-[12px] leading-4 text-[var(--app-subtle-foreground)]">{computerState(bot)}</span>}
                   id="bot-details-computer"
                   title="Computer"
                 >
-                  {bot.kind === 'group' ? (
-                    <EmptyCard>Not available for groups</EmptyCard>
-                  ) : (
                     <div
                       aria-label={`Open ${bot.name}'s computer`}
                       className="group relative block aspect-video w-full cursor-pointer overflow-hidden rounded-lg border border-[var(--app-control-border)] bg-black text-left transition-colors hover:border-[var(--app-focus-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-focus-ring)]"
@@ -471,8 +471,7 @@ export function BotDetailsPane({
                         Open computer
                       </span>
                     </div>
-                  )}
-                </Section>
+                </Section>}
                 <details className="bot-profile-disclosure">
                   <summary>About and capabilities</summary>
                   <div className="space-y-5 px-3 pb-3 pt-1">

@@ -15,6 +15,18 @@ export type AppTranscriptProps = {
     replyTargetId?: string;
     unreadAfter?: number;
     renderMessage?: (content: string) => ReactNode;
+    renderPrompt?: (content: string) => ReactNode;
+    renderGroupAuthor?: (author: {
+        id: string;
+        name: string;
+    }) => ReactNode;
+    renderGroupAvatar?: (author: {
+        id: string;
+        name: string;
+    }) => ReactNode;
+    renderReplyReference?: (entry: Extract<TranscriptEntry, {
+        kind: 'agent-message' | 'user-message';
+    }>) => ReactNode;
     renderMessageActions?: MessageBubbleProps['renderActions'];
     renderMessageMenu?: MessageBubbleProps['renderMenu'];
     transcriptRef: Ref<HTMLDivElement>;
@@ -30,5 +42,5 @@ export type AppTranscriptProps = {
         kind: 'agent-message' | 'user-message';
     }>) => (() => void) | undefined;
 };
-export declare function AppTranscript({ entries, pending, status, screen, cardStatus, assetBase, session, displayName, locale, replyTargetId, unreadAfter, renderMessage, renderMessageActions, renderMessageMenu, transcriptRef, onScroll, onOpenComputer, onTakeOver, onFinishComputer, onSuggestion, onReact, getReplyAction, }: AppTranscriptProps): import("react").JSX.Element;
+export declare function AppTranscript({ entries, pending, status, screen, cardStatus, assetBase, session, displayName, locale, replyTargetId, unreadAfter, renderMessage, renderPrompt, renderGroupAuthor, renderGroupAvatar, renderReplyReference, renderMessageActions, renderMessageMenu, transcriptRef, onScroll, onOpenComputer, onTakeOver, onFinishComputer, onSuggestion, onReact, getReplyAction, }: AppTranscriptProps): import("react").JSX.Element;
 //# sourceMappingURL=AppTranscript.d.ts.map

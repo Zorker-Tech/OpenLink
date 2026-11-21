@@ -290,6 +290,7 @@ export function BotSidebar({
   return (
     <>
       <WorkspaceNavigation
+        activeBotSessionId={activeId}
         activePage={t('Bot')}
         botUnreadCount={botUnreadCount}
         collapsed={collapsed}

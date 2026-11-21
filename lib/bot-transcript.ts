@@ -1,6 +1,7 @@
 import type { OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
 import type { PendingBeat, TranscriptAttachment, TranscriptEntry } from '@zorker/bot-demo'
 import { botConfirmationRequest, type BotConfirmationRequest } from './bot-confirmations.ts'
+import { isSilentBotReply } from '../services/work-host/source/shared/bot-delivery-text.ts'
 
 export type BotActivityStatus = 'running' | 'done' | 'failed'
 
@@ -9,17 +10,23 @@ export type BotAttachment = TranscriptAttachment
 export type BotTranscriptEntry = Extract<
   TranscriptEntry,
   { kind: 'user-message' | 'agent-message' | 'activity' | 'system' | 'confirmation' }
-> & { attachment?: BotAttachment; requestId?: string; replyTo?: string; hostReceipt?: true }
+> & { attachment?: BotAttachment; requestId?: string; replyTo?: string; clientNonce?: string; hostReceipt?: true }
+
+export type BotPendingBeat = PendingBeat & {
+  groupEpoch?: number
+  groupMember?: { id: string; name: string; phase: 'reading' | 'working' | 'speaking' }
+}
 
 export type BotStreamUpdate =
-  | { type: 'pending'; pending: PendingBeat | null }
+  | { type: 'pending'; pending: BotPendingBeat | null }
+  | { type: 'management'; routines: boolean }
   | { type: 'avatar-state'; state: string | null }
   | { type: 'title'; title: string }
   | { type: 'entry'; entry: BotTranscriptEntry }
   | { type: 'delta'; id: string; delta: string }
   | { type: 'confirmation'; request: BotConfirmationRequest }
   | { type: 'confirmation-resolved'; id: string }
-  | { type: 'done' }
+  | { type: 'done'; group?: true }
   | { type: 'error'; message: string }
 
 export const OPTIMISTIC_USER_ENTRY_PREFIX = 'optimistic-user-'
@@ -48,15 +55,14 @@ export function reconcileOptimisticUserEntry(
   transcript: BotTranscriptEntry[],
   entry: BotTranscriptEntry,
 ): BotTranscriptEntry[] {
-  const hasDurable = transcript.some((candidate) => candidate.id === entry.id)
   if (entry.kind !== 'user-message') return upsertBotTranscriptEntry(transcript, entry)
   const optimisticIndex = transcript.findIndex((candidate) => (
     candidate.kind === 'user-message'
     && candidate.id.startsWith(OPTIMISTIC_USER_ENTRY_PREFIX)
-    && candidate.content === entry.content
+    && (entry.clientNonce ? candidate.id === `${OPTIMISTIC_USER_ENTRY_PREFIX}${entry.clientNonce}` : candidate.content === entry.content && !candidate.clientNonce)
   ))
   if (optimisticIndex === -1) {
-    return hasDurable ? transcript : upsertBotTranscriptEntry(transcript, entry)
+    return upsertBotTranscriptEntry(transcript, entry)
   }
   const optimisticId = transcript[optimisticIndex].id
   const next = transcript.filter((candidate) => candidate.id !== entry.id)
@@ -151,7 +157,8 @@ function reactionsOf(value: unknown): BotMessageReaction[] | undefined {
 
 function messageMetadata(entry: Record<string, unknown>, alternateReplyTo?: unknown) {
   const requestId = safeId(entry.requestId ?? entry.boxRequestId, '')
-  const replyTo = safeId(entry.replyTo ?? alternateReplyTo, '')
+  const replyTo = safeId(entry.replyTo ?? entry.replyToId ?? entry.reply_to ?? alternateReplyTo, '')
+  const clientNonce = safeId(entry.clientNonce, '')
   const stored = entry.attachment
   const value = stored && typeof stored === 'object' && !Array.isArray(stored)
     ? stored as Record<string, unknown> : null
@@ -163,6 +170,7 @@ function messageMetadata(entry: Record<string, unknown>, alternateReplyTo?: unkn
   return {
     ...(requestId ? { requestId } : {}),
     ...(replyTo ? { replyTo } : {}),
+    ...(clientNonce ? { clientNonce } : {}),
     ...(attachment ? { attachment } : {}),
     ...(entry.hostReceipt === true ? { hostReceipt: true as const } : {}),
   }
@@ -176,6 +184,7 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
   if (kind === 'message') {
     const content = text(entry.content)
     if (!content) return null
+    if (entry.role === 'assistant' && (entry.isStreaming === true || isSilentBotReply(content))) return null
     if (entry.role === 'user' && content.startsWith(HIDDEN_PROMPT_PREFIX)) return null
     const reactions = reactionsOf(entry.reactions)
     const metadata = messageMetadata(entry)
@@ -282,7 +291,7 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
 
   if (type === 'text') {
     const content = text(message.content)
-    if (!content) return null
+    if (!content || entry.streaming === true || isSilentBotReply(content)) return null
     const reactions = reactionsOf(entry.reactions)
     const author = messageAuthor(entry.author)
     return {
@@ -290,7 +299,7 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
       id,
       content,
       timestampMs: at,
-      ...messageMetadata(entry, message.reply_to),
+      ...messageMetadata(entry, message.reply_to ?? message.replyTo ?? (entry.hostReceipt === true ? entry.firstBotReplyTo : undefined)),
       ...(author ? { author } : {}),
       ...(reactions ? { reactions } : {}),
     }
@@ -505,7 +514,7 @@ export function fromDurableGroupEntry(payload: unknown): BotTranscriptEntry | nu
   }
   if (kind === 'agent-message') {
     const content = text(record.content)
-    if (!content) return null
+    if (!content || isSilentBotReply(content)) return null
     const author = record.author && typeof record.author === 'object' && !Array.isArray(record.author)
       ? record.author as Record<string, unknown>
       : null

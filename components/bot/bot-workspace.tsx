@@ -5,7 +5,6 @@ import '@zorker/bot-demo/styles.css'
 import {
   END_SCREEN,
   useAutoScroll,
-  type PendingBeat,
   type MessageReaction,
   type TranscriptEntry,
 } from '@zorker/bot-demo'
@@ -20,7 +19,7 @@ import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
 import { BotWorkspaceView } from '@/components/bot/bot-workspace-view'
 import { BotDetailsPane } from '@/components/bot/bot-details-pane'
-import { BotMarkdown } from '@/components/bot/bot-markdown'
+import { BotMarkdown, BotPrompt } from '@/components/bot/bot-markdown'
 import { BotMessageActions } from '@/components/bot/bot-message-actions'
 import { BotMessageContextMenu } from '@/components/bot/bot-message-context-menu'
 import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
@@ -39,14 +38,15 @@ import {
   previewFromEntries,
   reconcileOptimisticUserEntry,
   type BotStreamUpdate,
+  type BotPendingBeat,
   type BotTranscriptEntry,
 } from '@/lib/bot-transcript'
 import { useLocale } from '@/lib/i18n/client'
 import type { OrganizationSummary } from '@/lib/organizations'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, Reply } from 'lucide-react'
 import { useReducedMotion } from 'motion/react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 const ASSET_BASE = '/zorker-bot-demo'
 
@@ -154,10 +154,6 @@ function toggleReactionRows(
     : [...rows, { emoji, by }]
 }
 
-function renderBotMarkdown(content: string) {
-  return <BotMarkdown content={content} />
-}
-
 function providerErrorMessage(value: string): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
   let message = normalized
@@ -263,7 +259,7 @@ export function BotWorkspace({
   const [details, setDetails] = useState<Record<string, BotDetail>>(
     initialBot ? { [initialBot.id]: initialBot } : {},
   )
-  const [pendingMap, setPendingMap] = useState<Record<string, PendingBeat | null>>({})
+  const [pendingMap, setPendingMap] = useState<Record<string, BotPendingBeat | null>>({})
   const [taskTitleMap, setTaskTitleMap] = useState<Record<string, string>>({})
   const [taskStateMap, setTaskStateMap] = useState<Record<string, string | null>>({})
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
@@ -272,7 +268,7 @@ export function BotWorkspace({
   const [draft, setDraft] = useState('')
   const [replyTarget, setReplyTarget] = useState<{ botId: string; id: string; excerpt: string } | null>(null)
   const [awayFromLatest, setAwayFromLatest] = useState(false)
-  const [sending, setSending] = useState(false)
+  const sendQueues = useRef(new Map<string, Promise<void>>())
   const [creating, setCreating] = useState(initialBots.length === 0)
   const [onboardingName, setOnboardingName] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -282,7 +278,7 @@ export function BotWorkspace({
   const [computerOpen, setComputerOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [routineEditor, setRoutineEditor] = useState<{ routine: BotRoutine | null } | null>(null)
+  const [routineEditor, setRoutineEditor] = useState<BotRoutine | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const activeBot = bots.find((bot) => bot.id === activeId) ?? null
@@ -297,9 +293,9 @@ export function BotWorkspace({
   const activeReply = replyTarget?.botId === activeId ? replyTarget : null
   const activeConfirmations: ComposerConfirmationRequest[] = activeDetail?.pendingConfirmations ?? []
   const activePending = pendingMap[activeId] ?? null
-  // The title is the LLM-written task summary, never a raw tool label. Until
-  // the host delivers one, the optimistic prompt excerpt (or "Working") keeps
-  // the row populated.
+  const activeGroupSpeaker = activePending?.groupMember
+    ? activeBot?.members.find(member => member.workAgentId === activePending.groupMember?.id) : undefined
+  // The active turn supplies its task title over the event stream.
   const activeTaskTitle = taskTitleMap[activeId] || ''
   const activeTaskState = taskStateMap[activeId] ?? activePending?.state ?? 'working'
   const activeWarming = activeId ? warmingMap[activeId] === true : false
@@ -351,6 +347,7 @@ export function BotWorkspace({
   const loadBot = useCallback(async (botId: string, force = false) => {
     const cached = details[botId]
     if (!force && cached && (cached.transcript.length > 0 || loadedRef.current.has(botId) || !cached.lastEntryText)) return
+    const readStartedAt = Date.now()
     setLoadingMap((previous) => ({ ...previous, [botId]: true }))
     setDetailFailures((previous) => previous[botId] ? { ...previous, [botId]: false } : previous)
     try {
@@ -360,7 +357,14 @@ export function BotWorkspace({
         throw new Error(friendlyRuntimeError(payload?.error?.message || 'BOT_READ_FAILED'))
       }
       loadedRef.current.add(botId)
-      setDetails((previous) => ({ ...previous, [botId]: payload.bot! }))
+      const loaded = payload.bot
+      setDetails((previous) => {
+        const pending = previous[botId]?.transcript.filter(entry => entry.id.startsWith(OPTIMISTIC_USER_ENTRY_PREFIX) || (entry.timestampMs ?? 0) >= readStartedAt) ?? []
+        const stored = new Set(loaded.transcript.map(entry => entry.id))
+        const accepted = new Set(loaded.transcript.map(entry => entry.clientNonce).filter(Boolean))
+        const missed = pending.filter(entry => !stored.has(entry.id) && (!entry.clientNonce || !accepted.has(entry.clientNonce)))
+        return { ...previous, [botId]: { ...loaded, transcript: [...loaded.transcript, ...missed] } }
+      })
       setBots((previous) => previous.map((bot) => (
         bot.id === botId
           ? {
@@ -534,14 +538,11 @@ export function BotWorkspace({
     schedule: string
     isEnabled: boolean
   }) => {
-    if (!activeBot) return
-    const routine = routineEditor?.routine && routineEditor.routine.id ? routineEditor.routine : null
+    if (!activeBot || !routineEditor) return
     const response = await fetch(
-      routine
-        ? `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`
-        : `/api/bots/${encodeURIComponent(activeBot.id)}/routines`,
+      `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routineEditor.id)}`,
       {
-        method: routine ? 'PATCH' : 'POST',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(spec),
         cache: 'no-store',
@@ -552,7 +553,7 @@ export function BotWorkspace({
   }, [activeBot, applyRoutines, readRoutines, routineEditor])
 
   const deleteRoutine = useCallback(async () => {
-    const routine = routineEditor?.routine
+    const routine = routineEditor
     if (!activeBot || !routine?.id) return
     const response = await fetch(
       `/api/bots/${encodeURIComponent(activeBot.id)}/routines/${encodeURIComponent(routine.id)}`,
@@ -562,9 +563,47 @@ export function BotWorkspace({
     setRoutineEditor(null)
   }, [activeBot, applyRoutines, readRoutines, routineEditor])
 
+  const refreshRoster = useCallback(async () => {
+    const response = await fetch(`/api/bots?workspace=${encodeURIComponent(workspaceSlug)}`, { cache: 'no-store' }).catch(() => null)
+    if (!response?.ok) return
+    const data = await response.json().catch(() => null) as { bots?: BotSummary[] } | null
+    const current = data?.bots
+    if (!Array.isArray(current)) return
+    setBots(previous => {
+      const previousById = new Map(previous.map(bot => [bot.id, bot]))
+      return current.map(bot => {
+        const local = previousById.get(bot.id)
+        return local && local.updatedAt > bot.updatedAt ? local : bot
+      })
+    })
+  }, [workspaceSlug])
+
+  useEffect(() => {
+    if (!workHostReady) return
+    const refreshIfVisible = () => { if (!document.hidden) void refreshRoster() }
+    const timer = window.setInterval(refreshIfVisible, 25_000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.clearInterval(timer)
+    }
+  }, [refreshRoster, workHostReady])
+
   const applyUpdate = useCallback((botId: string, update: BotStreamUpdate) => {
+    if (update.type === 'management') {
+      if (update.routines) {
+        void fetch(`/api/bots/${encodeURIComponent(botId)}/routines`, { cache: 'no-store' })
+          .then(readRoutines).then(routines => applyRoutines(botId, routines)).catch(() => undefined)
+      } else void refreshRoster()
+      return
+    }
     if (update.type === 'pending') {
-      setPendingMap((previous) => ({ ...previous, [botId]: update.pending }))
+      setPendingMap((previous) => {
+        const currentEpoch = previous[botId]?.groupEpoch
+        const nextEpoch = update.pending?.groupEpoch
+        return currentEpoch !== undefined && nextEpoch !== undefined && nextEpoch < currentEpoch
+          ? previous : { ...previous, [botId]: update.pending }
+      })
       return
     }
     if (update.type === 'avatar-state') {
@@ -602,7 +641,7 @@ export function BotWorkspace({
     }
     if (update.type === 'entry') {
       if (update.entry.kind === 'agent-message' && !update.entry.hostReceipt) {
-        setPendingMap((previous) => (previous[botId] ? { ...previous, [botId]: null } : previous))
+        setPendingMap((previous) => previous[botId] && previous[botId]?.groupEpoch === undefined ? { ...previous, [botId]: null } : previous)
       }
       setDetails((previous) => {
         const detail = previous[botId]
@@ -648,9 +687,9 @@ export function BotWorkspace({
     }
     if (update.type === 'done') {
       setPendingMap((previous) => ({ ...previous, [botId]: null }))
-      setSending(false)
+      if (update.group) void refreshRoster()
     }
-  }, [])
+  }, [applyRoutines, readRoutines, refreshRoster])
 
   const reactToBotMessage = useCallback(async (
     botId: string,
@@ -684,12 +723,15 @@ export function BotWorkspace({
     setError(friendlyRuntimeError(payload?.error?.message || 'BOT_REACTION_FAILED'))
   }, [])
 
+  const catchUpBotEvents = useEffectEvent((botId: string) => { void loadBot(botId, true) })
+
   // A Bot is not request-scoped. Keep the active Bot's projection open so a
   // routine run, a channel reply, or any other turn started outside this tab
   // lands in the timeline without a manual refresh.
   useEffect(() => {
     if (!workHostReady || !activeId) return
     const source = new EventSource(`/api/bots/${encodeURIComponent(activeId)}/events`)
+    source.onopen = () => catchUpBotEvents(activeId)
     source.onmessage = (event) => {
       try {
         applyUpdate(activeId, JSON.parse(event.data) as BotStreamUpdate)
@@ -735,86 +777,67 @@ export function BotWorkspace({
     })
   }, [])
 
-  const sendMessage = useCallback(async () => {
-    const content = draft.trim()
-    if (!content || sending || activeWarming || !activeBot || !activeDetail?.runtimeReady) return
+  const sendMessage = useCallback(() => {
+    const content = draft.trim().slice(0, 10_000)
+    if (!content || !activeBot || !activeDetail?.runtimeReady) return
     const botId = activeBot.id
     const sentReply = activeReply
-    let accepted = false
-    setSending(true)
-    setDraft('')
-    setReplyTarget(null)
-    setError(null)
     const clientNonce = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : `bot-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const optimisticId = `${OPTIMISTIC_USER_ENTRY_PREFIX}${clientNonce}`
+    const optimistic = { ...optimisticUserEntry(optimisticId, content, sentReply?.id), clientNonce }
+
+    setDraft('')
+    setReplyTarget(null)
+    setError(null)
     setDetails((previous) => {
       const detail = previous[botId]
       if (!detail) return previous
-      return {
-        ...previous,
-        [botId]: { ...detail, transcript: [...detail.transcript, optimisticUserEntry(optimisticId, content, sentReply?.id)] },
-      }
+      return { ...previous, [botId]: { ...detail, transcript: [...detail.transcript, optimistic] } }
     })
-    // A one-line excerpt is only the optimistic placeholder; Work-host
-    // replaces it with an LLM-written title as soon as the worker returns one.
-    const taskTitle = content.replace(/\s+/g, ' ').trim().slice(0, 72)
-    setTaskTitleMap((previous) => ({ ...previous, [botId]: taskTitle }))
-    setTaskStateMap((previous) => ({ ...previous, [botId]: null }))
-    setPendingMap((previous) => ({ ...previous, [botId]: { label: taskTitle, showLabel: true, state: 'working' } }))
-    try {
-      const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/prompt`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, clientNonce, replyToId: sentReply?.id }),
-      })
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: { message?: string } } | null
-        throw new Error(friendlyRuntimeError(payload?.error?.message || 'BOT_RUNTIME_UNAVAILABLE'))
-      }
-      if (!response.body) throw new Error('The Bot returned no response stream.')
-      accepted = true
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue
-          const data = line.slice(5).trim()
-          if (!data) continue
-          try {
-            applyUpdate(botId, JSON.parse(data) as BotStreamUpdate)
-          } catch {}
+
+    const submit = async () => {
+      try {
+        const send = () => fetch(`/api/bots/${encodeURIComponent(botId)}/prompt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: content, clientNonce, replyToId: sentReply?.id, acceptOnly: true }),
+        })
+        const response = await send().catch(send)
+        const receipt = await response.json().catch(() => null) as {
+          accepted?: boolean; entryId?: string; error?: { message?: string }
+        } | null
+        if (!response.ok || !receipt?.accepted || typeof receipt.entryId !== 'string') {
+          throw new Error(friendlyRuntimeError(receipt?.error?.message || 'BOT_RUNTIME_UNAVAILABLE'))
         }
-      }
-    } catch (sendError) {
-      if (!accepted) {
+        const entryId = receipt.entryId
+        setDetails((previous) => {
+          const detail = previous[botId]
+          if (!detail || detail.transcript.some(entry => entry.id === entryId)) return previous
+          return { ...previous, [botId]: { ...detail, transcript: reconcileOptimisticUserEntry(detail.transcript, { ...optimistic, id: entryId }) } }
+        })
+      } catch (sendError) {
         if (activeIdRef.current === botId) {
-          setDraft((current) => current || content)
-          setReplyTarget((current) => current ?? sentReply)
+          setDraft(current => current ? `${content}\n\n${current}` : content)
+          setReplyTarget(current => current ?? sentReply)
+          setError(sendError instanceof Error ? friendlyRuntimeError(sendError.message) : 'The message could not be sent.')
         }
         setDetails((previous) => {
           const detail = previous[botId]
           if (!detail) return previous
-          return {
-            ...previous,
-            [botId]: { ...detail, transcript: detail.transcript.filter((entry) => entry.id !== optimisticId) },
-          }
+          return { ...previous, [botId]: { ...detail, transcript: detail.transcript.filter(entry => entry.id !== optimisticId) } }
         })
       }
-      setError(sendError instanceof Error ? friendlyRuntimeError(sendError.message) : 'The Bot could not finish this turn.')
-    } finally {
-      setSending(false)
-      setPendingMap((previous) => ({ ...previous, [botId]: null }))
-      void loadBot(botId, true)
     }
-  }, [activeBot, activeDetail?.runtimeReady, activeReply, activeWarming, applyUpdate, draft, loadBot, sending])
+
+    // Keep acceptance ordered per chat. The model runs independently after Work-host commits the input.
+    const queued = (sendQueues.current.get(botId) ?? Promise.resolve()).then(submit)
+    sendQueues.current.set(botId, queued)
+    void queued.finally(() => {
+      if (sendQueues.current.get(botId) === queued) sendQueues.current.delete(botId)
+    })
+  }, [activeBot, activeDetail?.runtimeReady, activeReply, draft])
 
   const openPalette = useCallback((view: 'search' | 'create' = 'search') => {
     setComputerOpen(false)
@@ -1021,6 +1044,7 @@ export function BotWorkspace({
                     theme={activeTheme}
                   />
                   <span className="min-w-0 truncate">{activeBot.name}</span>
+                  {activeBot.kind === 'group' ? <span className="bot-group-member-count">{activeBot.members.length}</span> : null}
                 </button>
                 {!activeDetail ? (
                   detailFailures[activeId] && !loadingMap[activeId] ? (
@@ -1073,23 +1097,33 @@ export function BotWorkspace({
                       onSuggestion={useSuggestion}
                       onTakeOver={openComputer}
                       pending={null}
-                      renderMessage={renderBotMarkdown}
+                      renderGroupAvatar={({ id, name }) => {
+                        const member = activeBot.members.find(item => item.workAgentId === id)
+                        return member ? (
+                          <button aria-label={locale.startsWith('zh') ? `打开与 ${name} 的对话` : `Open chat with ${name}`} className="bot-group-author-avatar" onClick={() => selectBot(member.id)} type="button">
+                            <AgentAvatar color={member.avatarColor} interactive={false} shape={member.avatarShape} size={36} theme={activeTheme} />
+                          </button>
+                        ) : null
+                      }}
+                      renderMessage={(content) => <BotMarkdown content={content} members={activeBot.kind === 'group' ? activeBot.members : undefined} />}
+                      renderPrompt={(content) => <BotPrompt content={content} members={activeBot.kind === 'group' ? activeBot.members : undefined} />}
                       renderMessageActions={(actions) => <BotMessageActions actions={actions} />}
-                      renderMessageMenu={(bubble, actions) => {
-                        const message = transcriptById.get(actions.entry.id)
-                        const target = message?.replyTo ? transcriptById.get(message.replyTo) : undefined
-                        const excerpt = target?.kind === 'agent-message' || target?.kind === 'user-message'
-                          ? replyExcerpt(target.content) : 'Earlier message'
+                      renderMessageMenu={(bubble, actions) => (
+                        <BotMessageContextMenu actions={actions} bubble={bubble} requestId={transcriptById.get(actions.entry.id)?.requestId} />
+                      )}
+                      renderReplyReference={(entry) => {
+                        const target = entry.replyTo ? transcriptById.get(entry.replyTo) : undefined
+                        const repliedMessage = target?.kind === 'agent-message' || target?.kind === 'user-message' ? target : undefined
+                        const excerpt = repliedMessage ? replyExcerpt(repliedMessage.content) : locale.startsWith('zh') ? '早前消息' : 'Earlier message'
+                        const author = repliedMessage?.kind === 'agent-message'
+                          ? repliedMessage.author?.name ?? activeBot.name
+                          : repliedMessage ? locale.startsWith('zh') ? '你' : 'You' : undefined
                         return (
-                          <BotMessageContextMenu
-                            actions={actions}
-                            bubble={bubble}
-                            replyReference={message?.replyTo ? {
-                              excerpt,
-                              onJump: target ? () => jumpToMessage(target.id) : undefined,
-                            } : undefined}
-                            requestId={message?.requestId}
-                          />
+                          <button className="bot-sent-reply" disabled={!repliedMessage} onClick={repliedMessage ? () => jumpToMessage(repliedMessage.id) : undefined} title={excerpt} type="button">
+                            <Reply aria-hidden="true" size={13} />
+                            {author ? <strong>{author}</strong> : null}
+                            <span>{excerpt}</span>
+                          </button>
                         )
                       }}
                       replyTargetId={activeReply?.id}
@@ -1098,17 +1132,17 @@ export function BotWorkspace({
                         <>
                           <div aria-hidden="true" className="bot-task-avatar">
                             <AgentAvatar
-                              color={activeBot.avatarColor}
+                              color={activeGroupSpeaker?.avatarColor ?? activeBot.avatarColor}
                               interactive={false}
                               reducedMotion={reducedMotion === true}
                               renderer="complete"
-                              shape={activeBot.avatarShape}
+                              shape={activeGroupSpeaker?.avatarShape ?? activeBot.avatarShape}
                               size={36}
-                              state={activeTaskState}
+                              state={activeBot.kind === 'group' ? activePending.state ?? 'working' : activeTaskState}
                               theme={activeTheme}
                             />
                           </div>
-                          <span className="bot-task-label" role="status">{activeTaskTitle || 'Working'}</span>
+                          <span className="bot-task-label" role="status">{activeBot.kind === 'group' ? activePending.label || 'Group discussion' : activeTaskTitle || 'Working'}</span>
                         </>
                       ) : null}
                       screen={END_SCREEN}
@@ -1138,10 +1172,11 @@ export function BotWorkspace({
                     requests={activeConfirmations}
                   />
                   <AppComposer
-                    disabled={sending || activeWarming || !activeDetail?.runtimeReady}
+                    disabled={!activeDetail?.runtimeReady}
                     displayName={activeBot.name}
+                    groupMembers={activeBot.kind === 'group' ? activeBot.members : undefined}
                     onChange={setDraft}
-                    onCreateRoutine={() => setRoutineEditor({ routine: null })}
+                    showRoutine={false}
                     onSend={() => {
                       void sendMessage()
                     }}
@@ -1151,7 +1186,6 @@ export function BotWorkspace({
                       onJump: () => jumpToMessage(activeReply.id),
                     } : undefined}
                     replyPlaceholder={locale.startsWith('zh') ? '回复…' : 'Reply…'}
-                    showRoutine
                     value={draft}
                   />
                 </ComposerFloat>
@@ -1166,8 +1200,13 @@ export function BotWorkspace({
                   transcript={activeTranscript}
                   onClose={() => setDetailsOpen(false)}
                   onEditProfile={() => setProfileOpen(true)}
-                  onEditRoutine={(routine) => setRoutineEditor({ routine })}
+                  onEditRoutine={setRoutineEditor}
                   onOpenComputer={openComputer}
+                  onOpenMember={selectBot}
+                  onMentionMember={(name) => {
+                    setDraft(previous => `${previous.trimEnd()}${previous.trim() ? ' ' : ''}@${name} `)
+                    window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.zbd-app-composer-input')?.focus({ preventScroll: true }))
+                  }}
                   onShowAttachment={showAttachment}
                   onToggleRoutine={(routine, isEnabled) => { void toggleRoutine(routine, isEnabled) }}
                 />
@@ -1190,7 +1229,6 @@ export function BotWorkspace({
           <div className="zbd-root absolute inset-0 z-40" style={{ background: 'transparent', borderRadius: 0, boxShadow: 'none' }}>
                 {paletteOpen && paletteView === 'create' ? (
                   <BotCreateDialog
-                    bots={bots}
                     initialName={createInitialName}
                     models={models}
                     workHostReady={workHostReady}
@@ -1240,9 +1278,9 @@ export function BotWorkspace({
                   <BotRoutineDialog
                     botName={activeBot.name}
                     onClose={() => setRoutineEditor(null)}
-                    onDelete={routineEditor.routine ? deleteRoutine : undefined}
+                    onDelete={deleteRoutine}
                     onSave={saveRoutine}
-                    routine={routineEditor.routine}
+                    routine={routineEditor}
                   />
                 ) : null}
           </div>

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createTimelineTimeFormatter, foldTimeline } from '../../packages/zorker-bot-demo/dist/app/timeline-rows.js'
+import { createMessageMentionMatcher, splitMessagePrompt } from '../../lib/bot-message-content.ts'
 
 import {
   OPTIMISTIC_USER_ENTRY_PREFIX,
@@ -20,12 +21,52 @@ function agent(id, timestampMs, content = id) {
   return { kind: 'agent-message', id, content, timestampMs }
 }
 
+test('prompt links and group mentions preserve the original text, punctuation and whitespace', () => {
+  const mentions = createMessageMentionMatcher([
+    { id: 'one', name: 'Ada' },
+    { id: 'two', name: 'Ada (Research)' },
+    { id: 'three', name: 'Sam' },
+    { id: 'four', name: 'Sam' },
+  ])
+  const content = '**Keep this**\n@Ada (Research) https://example.com/@Ada。 Email a@Ada. @Sam'
+  const parts = splitMessagePrompt(content, mentions)
+  assert.equal(parts.map(part => part.value).join(''), content)
+  assert.deepEqual(parts.filter(part => part.kind !== 'text'), [
+    { kind: 'mention', value: '@Ada (Research)', id: 'two' },
+    { kind: 'link', value: 'https://example.com/@Ada' },
+  ])
+})
+
+test('historical assistant control markers and drafts stay out of the timeline', () => {
+  const marker = '{"message":null}'
+  assert.equal(normalizeWorkHostEntry({ id: 'hidden-1', kind: 'message', role: 'assistant', content: marker }), null)
+  assert.equal(normalizeWorkHostEntry({ id: 'hidden-2', kind: 'message', role: 'assistant', content: 'Draft', isStreaming: true }), null)
+  assert.equal(fromDurableGroupEntry(agent('hidden-3', 1, marker)), null)
+  assert.equal(normalizeWorkHostEntry({ id: 'visible', kind: 'message', role: 'user', content: marker })?.content, marker)
+})
+
 test('the durable user echo replaces the optimistic bubble in place', () => {
   const optimistic = optimisticUserEntry(`${OPTIMISTIC_USER_ENTRY_PREFIX}nonce`, 'hi')
   const durable = user('user-message-1', 2, 'hi')
   const result = reconcileOptimisticUserEntry([agent('agent-1', 1), optimistic], durable)
   assert.deepEqual(result.map((entry) => entry.id), ['agent-1', 'user-message-1'])
   assert.equal(result[1], durable)
+})
+
+test('the receipt for one send preserves the separate reference of an identical pending send', () => {
+  const first = { ...optimisticUserEntry(`${OPTIMISTIC_USER_ENTRY_PREFIX}first-send`, 'Continue', 'target-1'), clientNonce: 'first-send' }
+  const second = { ...optimisticUserEntry(`${OPTIMISTIC_USER_ENTRY_PREFIX}second-send`, 'Continue', 'target-2'), clientNonce: 'second-send' }
+  const echo = normalizeWorkHostEntry({ kind: 'message', role: 'user', id: 'second', content: 'Continue', clientNonce: 'second-send', replyTo: 'target-2' })
+  assert.deepEqual(reconcileOptimisticUserEntry([first, second], echo).map(entry => [entry.id, entry.replyTo]), [
+    [first.id, 'target-1'], ['second', 'target-2'],
+  ])
+})
+
+test('assistant reply references support host receipts and message metadata', () => {
+  const firstReply = normalizeWorkHostEntry({ kind: 'send-message', id: 'first', hostReceipt: true, firstBotReplyTo: 'original', message: { type: 'text', content: 'On it' } })
+  const quoted = normalizeWorkHostEntry({ kind: 'send-message', id: 'follow-up', message: { type: 'text', content: 'Here is the result', replyTo: 'original' } })
+  assert.equal(firstReply?.replyTo, 'original')
+  assert.equal(quoted?.replyTo, 'original')
 })
 
 test('an echo that arrives before the optimistic copy does not duplicate it', () => {

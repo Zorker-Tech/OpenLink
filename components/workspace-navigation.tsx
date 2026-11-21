@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from 'react'
 import Link from 'next/link'
+import { BotRailAvatar } from '@/components/bot/bot-rail-avatar'
 import { useT } from '@/lib/i18n/client'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
@@ -11,10 +12,11 @@ const DEFAULT_SIDEBAR_SIZING = { defaultWidth: 288, maxWidth: 420, storageKey: '
 type SidebarSizing = typeof DEFAULT_SIDEBAR_SIZING
 
 /** Shared outer app rail used by workspace and settings page shells. */
-export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount = 0, footer, onCloseMobile, onHistory, onLeave, onPeek, sidebarWidth, workspaceSlug }: {
+export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount = 0, activeBotSessionId, footer, onCloseMobile, onHistory, onLeave, onPeek, sidebarWidth, workspaceSlug }: {
   activePage?: string
   botSidebar?: { expanded: boolean; toggle: () => void; ref: Ref<HTMLButtonElement> }
   botUnreadCount?: number
+  activeBotSessionId?: string
   footer: ReactNode
   onCloseMobile: () => void
   onHistory: () => void
@@ -26,7 +28,7 @@ export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount
   const t = useT()
   const railClass = 'workspace-rail-button'
   const botLabel = botUnreadCount > 0 ? `${t('Bot')} · ${botUnreadCount}` : t('Bot')
-  const botIcon = <><img alt="" className="app-nav-icon" src={`${iconPath}bot.svg`} />{botUnreadCount > 0 ? <span aria-hidden="true" className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff453a] px-1 text-[9px] font-semibold leading-none text-white ring-2 ring-[var(--app-background)]">{botUnreadCount > 9 ? '9+' : botUnreadCount}</span> : null}</>
+  const botIcon = <><BotRailAvatar key={workspaceSlug} activeSessionId={activeBotSessionId} workspaceSlug={workspaceSlug} />{botUnreadCount > 0 ? <span aria-hidden="true" className="absolute right-0.5 top-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff453a] px-1 text-[9px] font-semibold leading-none text-white ring-2 ring-[var(--app-background)]">{botUnreadCount > 9 ? '9+' : botUnreadCount}</span> : null}</>
   return (
     <nav aria-label={t('工作区导航')} className="workspace-navigation-rail" style={{ '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <div className="flex flex-1 flex-col items-center gap-4">
@@ -55,9 +57,10 @@ export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount
 }
 
 /** The app rail stays mounted while the conversation sidebar is pinned or previewed. */
-export function WorkspaceNavigation({ activePage, botUnreadCount, children, collapsed, footer, mobileOpen, onCloseMobile, onHistory, onToggle, sidebarSizing = DEFAULT_SIDEBAR_SIZING, toggleSidebarFromBot, workspaceSlug }: {
+export function WorkspaceNavigation({ activePage, botUnreadCount, activeBotSessionId, children, collapsed, footer, mobileOpen, onCloseMobile, onHistory, onToggle, sidebarSizing = DEFAULT_SIDEBAR_SIZING, toggleSidebarFromBot, workspaceSlug }: {
   activePage?: string
   botUnreadCount?: number
+  activeBotSessionId?: string
   children: ReactNode
   collapsed: boolean
   footer: ReactNode
@@ -183,7 +186,7 @@ export function WorkspaceNavigation({ activePage, botUnreadCount, children, coll
 
   return (
     <>
-      <WorkspaceNavigationRail activePage={activePage} botSidebar={toggleSidebarFromBot ? { expanded: visible, ref: trigger, toggle: onToggle } : undefined} botUnreadCount={botUnreadCount} footer={footer} onCloseMobile={onCloseMobile} onHistory={onHistory} onLeave={leave} onPeek={toggleSidebarFromBot ? undefined : peek} sidebarWidth={sidebarWidth} workspaceSlug={workspaceSlug} />
+      <WorkspaceNavigationRail activePage={activePage} activeBotSessionId={activeBotSessionId} botSidebar={toggleSidebarFromBot ? { expanded: visible, ref: trigger, toggle: onToggle } : undefined} botUnreadCount={botUnreadCount} footer={footer} onCloseMobile={onCloseMobile} onHistory={onHistory} onLeave={leave} onPeek={toggleSidebarFromBot ? undefined : peek} sidebarWidth={sidebarWidth} workspaceSlug={workspaceSlug} />
       <div className="workspace-sidebar-slot" data-collapsed={collapsed} data-resizing={isResizing} style={{ '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
         {collapsed && !toggleSidebarFromBot && <button aria-controls="workspace-chat-sidebar" aria-expanded={previewOpen} aria-label={t('展开侧边栏')} className="workspace-sidebar-trigger" onClick={() => { setPreviewOpen(false); onToggle() }} onMouseEnter={peek} onMouseLeave={leave} ref={trigger} title={t('展开侧边栏')} type="button"><img alt="" className="app-control-icon" src={`${iconPath}sidebar.svg`} /></button>}
         {mobileOpen && <button aria-label={t('关闭侧边栏')} className="fixed inset-0 z-30 bg-[var(--app-overlay)] md:hidden" onClick={onCloseMobile} type="button" />}

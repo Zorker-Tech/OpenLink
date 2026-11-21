@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type KeyboardEvent,
@@ -19,10 +20,11 @@ export type AppComposerProps = {
   status?: ReactNode
   reply?: { excerpt: string; onJump: () => void; onCancel: () => void }
   replyPlaceholder?: string
+  groupMembers?: readonly { id: string; name: string }[]
   value: string
   onChange: (value: string) => void
   onSend: () => void
-  onCreateRoutine: () => void
+  onCreateRoutine?: () => void
 }
 
 export function AppComposer({
@@ -32,17 +34,29 @@ export function AppComposer({
   status,
   reply,
   replyPlaceholder = 'Reply…',
+  groupMembers,
   value,
   onChange,
   onSend,
   onCreateRoutine,
 }: AppComposerProps) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [caret, setCaret] = useState(0)
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [dismissedMention, setDismissedMention] = useState<string | null>(null)
+  const mentionListId = useId()
   const menuRef = useRef<HTMLDivElement>(null)
   const fieldRef = useRef<HTMLTextAreaElement>(null)
   const hasText = value.trim().length > 0
   const isReplying = reply !== undefined
   const placeholder = isReplying ? replyPlaceholder : `Message ${displayName}`
+  const mention = groupMembers && !disabled && value !== dismissedMention ? /(?:^|\s)@([^@\n]{0,64})$/u.exec(value.slice(0, caret)) : null
+  const query = mention?.[1]?.toLocaleLowerCase() ?? ''
+  const choices = mention && query === query.trimEnd() ? [
+    { id: 'everyone', name: 'Everyone', insert: 'everyone' },
+    ...(groupMembers ?? []).map(({ id, name }) => ({ id, name, insert: name })),
+  ].filter(({ name, insert }) => name.toLocaleLowerCase().includes(query) || insert.toLocaleLowerCase().startsWith(query)) : []
+  const selectedMention = Math.min(mentionIndex, Math.max(0, choices.length - 1))
 
   useEffect(() => {
     const node = fieldRef.current
@@ -71,12 +85,25 @@ export function AppComposer({
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing) return
+    if (choices.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault()
+      const direction = event.key === 'ArrowDown' ? 1 : -1
+      setMentionIndex((selectedMention + direction + choices.length) % choices.length)
+      return
+    }
+    if (choices.length && event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      insertMention(choices[selectedMention]!.insert)
+      return
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault()
       submit()
     }
     if (event.key === 'Escape') {
-      if (menuOpen) setMenuOpen(false)
+      if (choices.length) setDismissedMention(value)
+      else if (menuOpen) setMenuOpen(false)
       else reply?.onCancel()
     }
   }
@@ -84,12 +111,30 @@ export function AppComposer({
   const addContext = () => {
     const next = value.length === 0 || value.endsWith(' ') ? `${value}@` : `${value} @`
     onChange(next)
+    setCaret(next.length)
+    setMentionIndex(0)
+    setDismissedMention(null)
     setMenuOpen(false)
     window.requestAnimationFrame(() => fieldRef.current?.focus())
   }
 
+  const insertMention = (name: string) => {
+    if (!mention) return
+    const start = caret - (mention[1]?.length ?? 0) - 1
+    const added = `@${name} `
+    const next = value.slice(0, start) + added + value.slice(caret)
+    onChange(next)
+    setDismissedMention(null)
+    setCaret(start + added.length)
+    window.requestAnimationFrame(() => {
+      const field = fieldRef.current
+      field?.focus({ preventScroll: true })
+      field?.setSelectionRange(start + added.length, start + added.length)
+    })
+  }
+
   const createRoutine = () => {
-    onCreateRoutine()
+    onCreateRoutine?.()
     setMenuOpen(false)
   }
 
@@ -132,11 +177,11 @@ export function AppComposer({
               <button onClick={addContext} role="menuitem" type="button">
                 <span className="zbd-app-menu-glyph">@</span>
                 <span>
-                  <strong>Add context</strong>
-                  <small>Bring in an agent or file</small>
+                  <strong>{groupMembers ? 'Mention a member' : 'Add context'}</strong>
+                  <small>{groupMembers ? 'Address someone in this group' : 'Bring in an agent or file'}</small>
                 </span>
               </button>
-              {showRoutine ? (
+              {showRoutine && onCreateRoutine ? (
                 <button onClick={createRoutine} role="menuitem" type="button">
                   <ClockIcon size={15} />
                   <span>
@@ -149,12 +194,32 @@ export function AppComposer({
           ) : null}
         </div>
         <div className="zbd-composer-field zbd-app-composer-field">
+          {choices.length ? (
+            <ul aria-label="Group members" className="zbd-app-group-mentions" id={mentionListId} role="listbox">
+              {choices.map((choice, index) => (
+                <li aria-selected={index === selectedMention} id={`${mentionListId}-${index}`} key={choice.id} role="option">
+                  <button onClick={() => insertMention(choice.insert)} onMouseDown={(event) => event.preventDefault()} tabIndex={-1} type="button">
+                    <span aria-hidden="true">@</span> {choice.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <textarea
             aria-label={placeholder}
+            aria-autocomplete={groupMembers ? 'list' : undefined}
+            aria-controls={choices.length ? mentionListId : undefined}
+            aria-activedescendant={choices.length ? `${mentionListId}-${selectedMention}` : undefined}
             className="zbd-app-composer-input"
             disabled={disabled}
-            onChange={(event) => onChange(event.target.value)}
+            onChange={(event) => {
+              setCaret(event.currentTarget.selectionStart)
+              setMentionIndex(0)
+              setDismissedMention(null)
+              onChange(event.currentTarget.value)
+            }}
             onKeyDown={onKeyDown}
+            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
             placeholder={placeholder}
             ref={fieldRef}
             rows={1}

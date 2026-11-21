@@ -3,6 +3,7 @@ import 'server-only'
 import { resolveAgentProviderRuntimeConfiguration } from '@/lib/ai-provider-configurations.server'
 import type { BotSummary } from '@/lib/bot-types'
 import {
+  acceptBotPrompt,
   ensureBotBox,
   releaseBotBox,
   respondBotExtensionUi,
@@ -161,6 +162,14 @@ export async function streamBotPrompt(
       ...(clientNonce === undefined ? {} : { clientNonce }),
       ...(replyToId === undefined ? {} : { replyToId }),
     })
+  } catch (error) {
+    throw workHostRuntimeError(error)
+  }
+}
+
+export async function queueBotPrompt(bot: BotSummary, message: string, clientNonce: string, replyToId?: string) {
+  try {
+    return await acceptBotPrompt({ agentId: bot.workAgentId, prompt: message, clientNonce, replyToId })
   } catch (error) {
     throw workHostRuntimeError(error)
   }

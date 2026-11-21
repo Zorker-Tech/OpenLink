@@ -21,6 +21,7 @@ export type MessageBubbleProps = {
     showTimestamp?: boolean;
     timestampLabel?: string;
     renderContent?: (content: string) => ReactNode;
+    renderUserContent?: (content: string) => ReactNode;
     /** Where this message sits in a consecutive run by the same author. */
     groupPosition?: 'single' | 'start' | 'middle' | 'end';
     /** Toggle a reaction on this message. Omit to keep the transcript read-only. */
@@ -29,6 +30,6 @@ export type MessageBubbleProps = {
     renderActions?: (actions: MessageToolbarActions) => ReactNode;
     renderMenu?: (bubble: ReactElement, actions: MessageMenuActions) => ReactNode;
 };
-export declare function MessageBubble({ entry, assetBase, showTimestamp, timestampLabel, renderContent, groupPosition, onReact, onReply, renderActions, renderMenu, }: MessageBubbleProps): import("react").JSX.Element;
+export declare function MessageBubble({ entry, assetBase, showTimestamp, timestampLabel, renderContent, renderUserContent, groupPosition, onReact, onReply, renderActions, renderMenu, }: MessageBubbleProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=MessageBubble.d.ts.map
