@@ -157,9 +157,6 @@ export class SlateAgentSessionStore {
       avatarShape: profile.avatarShape?.trim() ?? current?.avatarShape ?? "",
       avatarColor: profile.avatarColor?.trim() ?? current?.avatarColor ?? "",
       instructions: profile.instructions?.trim() ?? current?.instructions ?? "",
-      inspirationBudgetUsd: profile.inspirationBudgetUsd === undefined
-        ? current?.inspirationBudgetUsd ?? null
-        : profile.inspirationBudgetUsd,
     });
   }
   async withAgentDb<Result>(agentId: string, operation: (db: SlateAgentDb, dbPath: string) => Result | Promise<Result>): Promise<Result> { const dbPath = getAgentDbPath(this.rootDir, agentId), db = new SlateAgentDb(dbPath); try { return await operation(db, dbPath); } finally { db.close(); } }

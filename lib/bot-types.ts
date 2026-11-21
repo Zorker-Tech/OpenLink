@@ -18,15 +18,11 @@ export interface BotInspirationCadence {
   meanIntervalMs: number
   minIntervalMs: number
   maxIntervalMs: number
-  dailyCap: number
   burstChance: number
 }
 
 export interface BotInspirationConfig {
-  enabled: boolean
   cadence: BotInspirationCadence
-  quietHours: { startHour: number; endHour: number }
-  budgetUsdPerDay: number | null
   lenses: string[]
   topics: string[]
 }
@@ -106,7 +102,6 @@ export interface BotSummary {
   providerId: string | null
   modelId: string | null
   /** Daily proactive-spend cap in USD; null means unlimited. */
-  inspirationBudgetUsd: number | null
   lastEntryText: string
   lastActivityAt: string
   lastViewedAt: string

@@ -93,6 +93,7 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
   const client = new PiWorkerClient(binding);
   const requestId = context.requestId;
   const proactive = context.runOptions.requestSource === 'inspiration';
+  const onInspirationUsage = context.runOptions.onInspirationUsage;
   const emit = (update: RunnerUpdate) => context.emitUpdate(update);
   const emitGateway = (payload: Record<string, unknown>) => {
     options.emitGatewayEvent?.({
@@ -258,6 +259,11 @@ async function runPiBotTurn(options: PiBotRunStepOptions, context: RunStepContex
           if (messageUsage !== undefined) usage = messageUsage;
           const record = recordOf(message);
           if (record !== null && record.role === "assistant") {
+            const usageCost = recordOf(recordOf(record.usage)?.cost)?.total;
+            const costUsd = typeof usageCost === 'number' && Number.isFinite(usageCost) ? Math.max(0, usageCost) : 0;
+            if (proactive && typeof onInspirationUsage === 'function') {
+              onInspirationUsage({ costUsd, tokens: messageUsage?.totalTokens ?? 0 });
+            }
             // The last assistant message is the authority: a later successful
             // retry clears an earlier provider error, and a final error fails
             // the turn even if Pi still emits `agent_settled`.

@@ -720,6 +720,7 @@ export class LocalOpenSandboxBackend {
         OPENLINK_AGENT_WORKER_PORT: '43130',
         OPENLINK_AGENT_WORKSPACE_ROOT: '/workspace',
         OPENLINK_AGENT_SESSION_ROOT: '/openlink/session',
+        ...(/^bot-/.test(sessionId) && egressEnabled ? { OPENLINK_INSPIRATION_SANDBOX_NETWORK: '1' } : {}),
         OPENLINK_DESKTOP_MODE: desktopMode,
         ...(desktopAutomation && projectRuntime ? desktopAutomationEnvironment(projectRuntime) : {}),
         ...(agentTools ? agentToolRegistryEnvironment() : {}),

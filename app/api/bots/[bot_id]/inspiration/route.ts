@@ -34,7 +34,6 @@ export async function GET(
     const inspiration = await getBotInspiration(bot.workAgentId)
     return Response.json({
       inspiration,
-      budgetUsdPerDay: bot.inspirationBudgetUsd,
       instructions: bot.instructions,
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

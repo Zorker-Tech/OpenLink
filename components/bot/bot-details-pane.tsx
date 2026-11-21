@@ -2,7 +2,6 @@
 
 import { AgentAvatar } from '@zorker/avatar'
 import { DesktopWorkbench } from '@/components/browser/desktop-workbench'
-import { BotInspirationPanel } from '@/components/bot/bot-inspiration-panel'
 import { PaneResizeHandle, usePaneResize } from '@/components/bot/bot-pane-resize'
 import type { BotInspirationState, BotRoutine, BotSummary } from '@/lib/bot-types'
 import type { BotTranscriptEntry } from '@/lib/bot-transcript'
@@ -19,7 +18,6 @@ import {
   MessageSquare,
   Monitor,
   Pencil,
-  Sparkles,
   Terminal,
   Trash2,
   Users,
@@ -491,7 +489,6 @@ export function BotDetailsPane({
                     ))}
                   </div>
                 </Section>
-                <BotInspirationPanel bot={bot} onEditProfile={onEditProfile} />
                 <details className="bot-profile-disclosure">
                   <summary>About and capabilities</summary>
                   <div className="space-y-5 px-3 pb-3 pt-1">
@@ -589,14 +586,9 @@ export function BotDetailsPane({
                           <Section id="bot-details-proactive-summary" title="Proactive subscription">
                             <div className="divide-y divide-[var(--app-border)] rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)]">
                               <InfoRow
-                                icon={<Sparkles className="size-3.5" />}
-                                label="State"
-                                value={inspiration.config.enabled ? 'On' : 'Off'}
-                              />
-                              <InfoRow
                                 icon={<Clock3 className="size-3.5" />}
                                 label="Next idea"
-                                value={inspiration.config.enabled ? formatRelative(inspiration.nextFireAt) : 'Paused'}
+                                value={formatRelative(inspiration.nextFireAt)}
                               />
                               <InfoRow
                                 icon={<Activity className="size-3.5" />}
@@ -606,7 +598,7 @@ export function BotDetailsPane({
                               <InfoRow
                                 icon={<Zap className="size-3.5" />}
                                 label="Daily runs"
-                                value={`${inspiration.usage.runs} / ${inspiration.config.cadence.dailyCap}`}
+                                value={String(inspiration.usage.runs)}
                               />
                             </div>
                           </Section>

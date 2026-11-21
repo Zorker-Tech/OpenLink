@@ -8,6 +8,7 @@
  */
 import { setTimeout as delay } from "node:timers/promises";
 import type { BotRuntimeBinding } from "./bot-runtime-store.ts";
+import { parseObservationBatch, type ObservationBatch } from '../inspiration/inspiration-observations.ts';
 
 const PROMPT_CONNECT_TIMEOUT_MS = 60_000;
 const CANCEL_TIMEOUT_MS = 5_000;
@@ -123,6 +124,20 @@ export class PiWorkerClient {
       if (typeof payload?.title !== "string") return null;
       const title = payload.title.replace(/\s+/g, " ").trim();
       return title.length > 0 ? Array.from(title).slice(0, 80).join("") : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Pull the worker's bounded metadata queue without consuming it remotely. */
+  async inspirationObservations(cursor: string | null): Promise<ObservationBatch | null> {
+    try {
+      const url = new URL(`${this.binding.workerUrl}/v1/inspiration/observations`);
+      if (cursor) url.searchParams.set('cursor', cursor);
+      const response = await fetch(url, {
+        method: 'POST', headers: this.headers(), cache: 'no-store', signal: AbortSignal.timeout(4_000),
+      });
+      return response.ok ? parseObservationBatch(await response.json()) : null;
     } catch {
       return null;
     }

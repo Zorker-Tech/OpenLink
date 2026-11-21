@@ -1,16 +1,15 @@
 /**
  * Durable per-Bot inspiration subscriptions, beside the Bot's other host files.
  *
- * The store is intentionally local to Work-host: it is a control-plane
- * subscription, not part of the shared agent transcript. A lost file is
- * recoverable as "off" rather than as a silent spend.
+ * Work-host keeps preferences, scheduling and usage beside the transcript.
  */
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { MAX_OBSERVATIONS, normalizePreferences, observationCursor, parseObservation, type InspirationObservation } from './inspiration-observations.ts';
+import { normalizePreferenceSummary } from './inspiration-preference-summary.ts';
 import {
   DEFAULT_INSPIRATION_CONFIG,
   INSPIRATION_LENSES,
-  INSPIRATION_MAX_CANDIDATES,
   INSPIRATION_MAX_LEDGER,
   INSPIRATION_STORE_VERSION,
   type InspirationCadence,
@@ -66,29 +65,18 @@ function normalizeCadence(value: unknown): InspirationCadence {
     meanIntervalMs: Math.round(mean),
     minIntervalMs: Math.round(min),
     maxIntervalMs: Math.round(max),
-    dailyCap: Math.round(clamp(finite(record?.dailyCap, DEFAULT_INSPIRATION_CONFIG.cadence.dailyCap), 1, 24)),
     burstChance: clamp(finite(record?.burstChance, DEFAULT_INSPIRATION_CONFIG.cadence.burstChance), 0, 0.5),
   };
 }
 
 export function normalizeInspirationConfig(value: unknown): InspirationConfig {
   const record = recordOf(value);
-  const quiet = recordOf(record?.quietHours);
   const lensList = Array.isArray(record?.lenses) ? record.lenses : [];
   const topicList = Array.isArray(record?.topics) ? record.topics : [];
   const lenses = [...new Set(lensList.map(lensOf).filter((lens) => lens !== "random" || lensList.length === 1))].slice(0, INSPIRATION_LENSES.length);
   const topics = [...new Set(topicList.map((topic) => text(topic, 120)).filter(Boolean))].slice(0, 20);
-  const budget = record?.budgetUsdPerDay;
   return {
-    enabled: record?.enabled === true,
     cadence: normalizeCadence(record?.cadence),
-    quietHours: {
-      startHour: Math.round(clamp(finite(quiet?.startHour, DEFAULT_INSPIRATION_CONFIG.quietHours.startHour), 0, 23)),
-      endHour: Math.round(clamp(finite(quiet?.endHour, DEFAULT_INSPIRATION_CONFIG.quietHours.endHour), 0, 23)),
-    },
-    budgetUsdPerDay: budget === null || budget === undefined
-      ? null
-      : clamp(finite(budget, 0), 0, 1_000_000),
     lenses,
     topics,
   };
@@ -164,9 +152,9 @@ function normalizeUsage(value: unknown): InspirationUsage {
   const record = recordOf(value);
   return {
     dayKey: text(record?.dayKey, 32),
-    usd: clamp(finite(record?.usd, 0), 0, 1_000_000),
-    tokens: Math.round(clamp(finite(record?.tokens, 0), 0, 100_000_000)),
-    runs: Math.round(clamp(finite(record?.runs, 0), 0, 1_000_000)),
+    usd: Math.max(0, finite(record?.usd, 0)),
+    tokens: Math.round(Math.max(0, finite(record?.tokens, 0))),
+    runs: Math.round(Math.max(0, finite(record?.runs, 0))),
   };
 }
 
@@ -175,17 +163,22 @@ export function parseInspirationState(agentId: string, value: unknown): Inspirat
   if (record === null) return null;
   const config = normalizeInspirationConfig(record.config);
   const ledger = Array.isArray(record.ledger)
-    ? record.ledger.map(normalizeRecord).filter((entry): entry is InspirationRecord => entry !== null).slice(0, INSPIRATION_MAX_LEDGER)
+    ? record.ledger.map(normalizeRecord).filter((entry): entry is InspirationRecord => entry !== null).slice(-INSPIRATION_MAX_LEDGER)
     : [];
   const nominations = Array.isArray(record.nominations)
-    ? record.nominations.map(normalizeNomination).filter((entry): entry is InspirationNomination => entry !== null).slice(0, 20)
+    ? record.nominations.map(normalizeNomination).filter((entry): entry is InspirationNomination => entry !== null).slice(-20)
     : [];
   const feedback = recordOf(record.feedback);
+  const legacyConfig = recordOf(record.config);
+  const lastDecision = ledger.at(-1)?.decision;
+  const deferredByLegacyPolicy = legacyConfig !== null && "enabled" in legacyConfig
+    && (lastDecision === "budget" || lastDecision === "cap" || lastDecision === "quiet");
   return {
     version: INSPIRATION_STORE_VERSION,
     agentId,
     config,
-    nextFireAt: typeof record.nextFireAt === "number" && Number.isFinite(record.nextFireAt) ? record.nextFireAt : null,
+    nextFireAt: !deferredByLegacyPolicy && typeof record.nextFireAt === "number" && Number.isFinite(record.nextFireAt)
+      ? record.nextFireAt : null,
     lastFiredAt: typeof record.lastFiredAt === "number" && Number.isFinite(record.lastFiredAt) ? record.lastFiredAt : null,
     ledger,
     nominations,
@@ -195,6 +188,12 @@ export function parseInspirationState(agentId: string, value: unknown): Inspirat
       dismissed: Math.round(clamp(finite(feedback?.dismissed, 0), 0, 1_000_000)),
     },
     usage: normalizeUsage(record.usage),
+    observationCursor: observationCursor(record.observationCursor),
+    observations: Array.isArray(record.observations) ? record.observations.slice(-MAX_OBSERVATIONS).map(parseObservation)
+      .filter((value): value is InspirationObservation => value !== null) : [],
+    preferences: normalizePreferences(record.preferences),
+    preferenceSummary: normalizePreferenceSummary(record.preferenceSummary),
+    preferenceSummaryAttemptAt: finite(record.preferenceSummaryAttemptAt, 0) || null,
   };
 }
 
@@ -205,7 +204,6 @@ export function defaultInspirationState(agentId: string): InspirationState {
     config: {
       ...DEFAULT_INSPIRATION_CONFIG,
       cadence: { ...DEFAULT_INSPIRATION_CONFIG.cadence },
-      quietHours: { ...DEFAULT_INSPIRATION_CONFIG.quietHours },
       lenses: [],
       topics: [],
     },
@@ -215,6 +213,11 @@ export function defaultInspirationState(agentId: string): InspirationState {
     nominations: [],
     feedback: { useful: 0, notUseful: 0, dismissed: 0 },
     usage: { dayKey: "", usd: 0, tokens: 0, runs: 0 },
+    observationCursor: null,
+    observations: [],
+    preferences: { samples: 0, weights: {} },
+    preferenceSummary: null,
+    preferenceSummaryAttemptAt: null,
   };
 }
 
@@ -224,10 +227,7 @@ export function trimInspirationState(state: InspirationState): InspirationState 
     ...state,
     ledger: state.ledger.slice(-INSPIRATION_MAX_LEDGER),
     nominations: state.nominations.slice(-20),
-    config: {
-      ...state.config,
-      lenses: state.config.lenses.slice(0, INSPIRATION_MAX_CANDIDATES),
-    },
+    observations: state.observations.slice(-MAX_OBSERVATIONS),
   };
 }
 
@@ -261,25 +261,5 @@ export class InspirationStore {
     const next = trimInspirationState(change(this.read(agentId)));
     this.write(next);
     return next;
-  }
-
-  list(): InspirationState[] {
-    let entries: string[];
-    try {
-      entries = readdirSync(this.rootDir);
-    } catch {
-      return [];
-    }
-    return entries
-      .filter((entry) => SAFE_ID.test(entry))
-      .map((agentId) => {
-        try {
-          const state = parseInspirationState(agentId, JSON.parse(readFileSync(this.pathFor(agentId), "utf8")));
-          return state;
-        } catch {
-          return null;
-        }
-      })
-      .filter((state): state is InspirationState => state !== null);
   }
 }

@@ -63,7 +63,6 @@ export async function PATCH(
       avatarPngBase64: body.avatarPngBase64,
       model: body.model,
       memberIds: body.memberIds,
-      inspirationBudgetUsd: body.inspirationBudgetUsd,
     })
     return Response.json({ bot: updated }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

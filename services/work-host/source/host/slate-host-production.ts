@@ -63,6 +63,7 @@ export function createProductionSlateHost(ports: ProductionSlateHostPorts): Slat
       const inspirationRuntime = new InspirationRuntime({
         tm: transcriptApi,
         store: new InspirationStore(getSlateAgentsRootDir()),
+        listBindings: () => botRuntimeStore.list(),
         getBinding: (agentId) => botRuntimeStore.read(agentId),
         timeZone: () => {
           const value = transcriptApi.getUserTimeZone?.()

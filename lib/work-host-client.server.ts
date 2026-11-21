@@ -197,7 +197,6 @@ export async function updateBotAgent(input: {
   name: string
   description: string
   instructions?: string
-  inspirationBudgetUsd?: number | null
   avatarShape?: string
   avatarColor?: string
 }): Promise<WorkHostAgent | null> {
@@ -207,7 +206,6 @@ export async function updateBotAgent(input: {
       name: input.name,
       description: input.description,
       ...(input.instructions === undefined ? {} : { instructions: input.instructions }),
-      ...(input.inspirationBudgetUsd === undefined ? {} : { inspirationBudgetUsd: input.inspirationBudgetUsd }),
       ...(input.avatarShape === undefined ? {} : { avatarShape: input.avatarShape }),
       ...(input.avatarColor === undefined ? {} : { avatarColor: input.avatarColor }),
     },
@@ -331,15 +329,11 @@ export interface WorkHostInspirationCadence {
   meanIntervalMs: number
   minIntervalMs: number
   maxIntervalMs: number
-  dailyCap: number
   burstChance: number
 }
 
 export interface WorkHostInspirationConfig {
-  enabled: boolean
   cadence: WorkHostInspirationCadence
-  quietHours: { startHour: number; endHour: number }
-  budgetUsdPerDay: number | null
   lenses: string[]
   topics: string[]
 }

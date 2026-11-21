@@ -23,6 +23,7 @@ import { handleBrowserMcpRequest } from './browser-mcp.js'
 import { discoverInstructionResources } from './instruction-resources.js'
 import { handleDesktopMcpRequest } from './desktop-mcp.js'
 import { createGitBaseline, collectGitSnapshot, type GitWorkingTreeBaseline } from './git-snapshot.js'
+import { InspirationObserverHost } from './inspiration-observer-host.js'
 
 const FILE_PREVIEW_LIMIT = 192 * 1024
 
@@ -1117,7 +1118,7 @@ class SdkAgentRuntime {
         defineTool({
           name: 'NominateBot',
           label: 'Nominate another Bot',
-          description: 'Ask a sibling Bot to take a specific inspiration focus on its next proactive turn. Use the sibling Bot name or id. The nomination only queues if that Bot has inspiration enabled.',
+          description: 'Ask a sibling Bot to take a specific inspiration focus on its next proactive turn. Use the sibling Bot name or id.',
           promptSnippet: 'Ask a sibling Bot to explore a specific focus.',
           parameters: Type.Object({
             target: Type.String({ description: 'The sibling Bot name or id.' }),
@@ -1136,6 +1137,7 @@ class SdkAgentRuntime {
 }
 
 const worker = config()
+const inspirationObserver = new InspirationObserverHost(worker.workspaceRoot, process.env.OPENLINK_INSPIRATION_SANDBOX_NETWORK === '1')
 
 /** Extension paths may reference files that only exist after an image
  * rebuild (for example the Supabase MCP bridge). Skip missing paths instead
@@ -1395,6 +1397,20 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify(result))
       return
     }
+    if (request.method === 'POST' && url.pathname === '/v1/inspiration/observations') {
+      if (!(runtime instanceof SdkAgentRuntime)) return response.writeHead(404).end()
+      const cursor = url.searchParams.get('cursor')
+      if (cursor !== null && !/^[a-f0-9-]{36}:\d{1,16}$/i.test(cursor)) throw new Error('Observation cursor is invalid')
+      const data = inspirationObserver.pull(cursor)
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+      response.end(JSON.stringify(data))
+      return
+    }
+    if (request.method === 'DELETE' && url.pathname === '/v1/inspiration/observations') {
+      inspirationObserver.stop()
+      response.writeHead(204).end()
+      return
+    }
     if (request.method === 'POST' && url.pathname === '/v1/inspiration/complete') {
       if (!(runtime instanceof SdkAgentRuntime)) throw new Error('Inspiration requires the Pi runtime')
       const body = await readRequestJson(request, 256 * 1024) as Record<string, unknown> | null
@@ -1449,5 +1465,8 @@ server.listen(worker.port, worker.host, () => {
 })
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () => server.close(() => process.exit(0)))
+  process.once(signal, () => {
+    inspirationObserver.stop()
+    server.close(() => process.exit(0))
+  })
 }

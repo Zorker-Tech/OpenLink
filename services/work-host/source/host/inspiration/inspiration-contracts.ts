@@ -6,6 +6,8 @@
  * divergent candidates, gates them, and only then wakes the Bot with a hidden
  * prompt. The Bot may act, may send a message, or may stay silent.
  */
+import type { InspirationObservation, InspirationPreferences } from './inspiration-observations.ts';
+import type { PreferenceSummary } from './inspiration-preference-summary.ts';
 
 export const INSPIRATION_STORE_VERSION = 1;
 export const INSPIRATION_MAX_LEDGER = 100;
@@ -48,25 +50,12 @@ export interface InspirationCadence {
   meanIntervalMs: number;
   minIntervalMs: number;
   maxIntervalMs: number;
-  /** Hard anti-spam cap per local day. */
-  dailyCap: number;
   /** Probability of a second inspiration inside the same window. */
   burstChance: number;
 }
 
-export interface InspirationQuietHours {
-  /** Local hour, 0-23. */
-  startHour: number;
-  /** Local hour, 0-23; the window wraps when end <= start. */
-  endHour: number;
-}
-
 export interface InspirationConfig {
-  enabled: boolean;
   cadence: InspirationCadence;
-  quietHours: InspirationQuietHours;
-  /** Optional override; the Bot profile's daily budget is authoritative when set. */
-  budgetUsdPerDay: number | null;
   lenses: InspirationLens[];
   topics: string[];
 }
@@ -121,6 +110,11 @@ export interface InspirationState {
   nominations: InspirationNomination[];
   feedback: { useful: number; notUseful: number; dismissed: number };
   usage: InspirationUsage;
+  observationCursor: string | null;
+  observations: InspirationObservation[];
+  preferences: InspirationPreferences;
+  preferenceSummary: PreferenceSummary | null;
+  preferenceSummaryAttemptAt: number | null;
 }
 
 export interface InspirationGateResult {
@@ -136,16 +130,12 @@ export interface InspirationRunResult {
 }
 
 export const DEFAULT_INSPIRATION_CONFIG: InspirationConfig = {
-  enabled: false,
   cadence: {
     meanIntervalMs: 6 * 60 * 60_000,
     minIntervalMs: 45 * 60_000,
     maxIntervalMs: 24 * 60 * 60_000,
-    dailyCap: 3,
     burstChance: 0.08,
   },
-  quietHours: { startHour: 23, endHour: 8 },
-  budgetUsdPerDay: null,
   lenses: [],
   topics: [],
 };

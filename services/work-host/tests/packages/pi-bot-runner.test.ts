@@ -145,6 +145,30 @@ describe("the Pi-backed Bot run step", () => {
     assert.equal(updates.filter(({ type }) => type === 'send-message').length, 1);
   });
 
+  it('publishes every distinct proactive message and accounts for model usage', async () => {
+    globalThis.fetch = async () => streamOf([
+      { type: 'send-message', message: { content: 'Found a regression.' } },
+      { type: 'send-message', message: { content: 'Found a regression.' } },
+      { type: 'message_end', message: { role: 'assistant', content: [], usage: { totalTokens: 12, cost: { total: 0.01 } } } },
+      { type: 'send-message', message: { content: 'The fix passed the tests.' } },
+      { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Internal summary' }] } },
+      { type: 'agent_settled' },
+    ]);
+    const updates: RunnerUpdate[] = [];
+    const costs: number[] = [];
+    const step = createPiBotRunStep({ agentId: AGENT_ID, getBinding: binding });
+    await step(0, {
+      signal: new AbortController().signal, emitUpdate: update => updates.push(update), prompt: 'Investigate',
+      runOptions: { requestSource: 'inspiration', suppressFinalMessage: true, onInspirationUsage: ({ costUsd }: { costUsd: number }) => costs.push(costUsd) },
+      requestId: 'proactive', state: {}, setState: () => {},
+    });
+    assert.deepEqual(updates.filter(update => update.type === 'send-message').map(update => update.message), [
+      { type: 'text', content: 'Found a regression.' },
+      { type: 'text', content: 'The fix passed the tests.' },
+    ]);
+    assert.deepEqual(costs, [0.01, 0]);
+  });
+
   it("turns a Pi dialog into a durable question card and an awaiting-input event", async () => {
     globalThis.fetch = (async () => streamOf([
       { type: "extension_ui_request", id: "dialog-1", method: "confirm", title: "Continue?", message: "Deploy now?" },

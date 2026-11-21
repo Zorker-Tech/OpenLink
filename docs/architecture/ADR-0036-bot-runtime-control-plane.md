@@ -142,6 +142,33 @@ substrate while keeping the control planes and their protocols separate.
 - If Work-host is unavailable, Bot reads surface a retryable error and writes
   are rejected before durable acceptance. Deletion remains idempotent.
 
+## Proactive observations and preferences
+
+Work-host leases a background observer inside each provisioned Bot's Pi Worker. It samples regular file additions in the mounted workspace
+every five seconds. Build folders, runtime logs, dotfiles, credential files and
+symlinks are excluded. An isolated Bot network namespace supplies aggregate
+receive and transmit byte counts from `/proc/net/dev`. The observer sends
+relative paths and counters, and Work-host persists the cursor and pending
+observations beside the existing subscription ledger.
+
+Work-host assigns file categories and network direction before the model sees
+an event. Per-Bot weights follow recent user-authored dialogue and explicit
+feedback with recency decay. The deterministic classifier produces letter codes
+for each message. A preference summary becomes eligible at 12 new user
+messages or 6,000 new user-text characters with at least four messages. Four
+unprocessed messages also become eligible after a day. Attempts are at least
+45 minutes apart. The model receives the prior summary, the classifications and
+up to five opening and ten closing messages from the new window. The durable
+checkpoint stores the summary, weights and last included message identity.
+
+The model scores classified observations before divergence. Every proposed
+action requires a separate gate approval, including singleton candidates.
+Every provisioned Bot is subscribed automatically, including after a Work-host
+restart. An active user turn takes priority over automatic work. An approved
+wake can investigate silently and send progress or results when useful. The
+subscription ledger accounts for model calls and wake usage without applying
+daily run or spend quotas.
+
 ## First reply and progress
 
 For a durably accepted direct Bot prompt, Work-host schedules the first-reply

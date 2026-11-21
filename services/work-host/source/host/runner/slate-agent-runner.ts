@@ -880,6 +880,8 @@ export class SlateAgentRunner<T = unknown> {
       readonly suppressFinalMessage?: boolean;
       /** The inspiration record this turn belongs to. */
       readonly inspirationId?: string;
+      /** Record the cost and token usage of each proactive model response. */
+      readonly onInspirationUsage?: (usage: { costUsd: number; tokens: number }) => void;
     } = {},
   ): Promise<T | SlateAgentRunnerResult | undefined> {
     const trimmed = prompt.trim();
