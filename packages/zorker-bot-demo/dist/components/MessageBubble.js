@@ -58,7 +58,7 @@ function ReplyIcon() {
 function CheckIcon() {
     return (_jsx("svg", { "aria-hidden": "true", viewBox: "0 0 16 16", children: _jsx("path", { d: "m3.5 8.4 2.8 2.8 6.2-6.4", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "1.5" }) }));
 }
-export function MessageBubble({ entry, assetBase, showTimestamp = false, timestampLabel, renderContent, groupPosition = 'single', onReact, onReply, renderMenu, }) {
+export function MessageBubble({ entry, assetBase, showTimestamp = false, timestampLabel, renderContent, groupPosition = 'single', onReact, onReply, renderActions, renderMenu, }) {
     const isUser = entry.kind === 'user-message';
     const groups = useMemo(() => groupReactions(entry.reactions ?? []), [entry.reactions]);
     const [reactionState, setReactionState] = useState({ current: groups, rendered: groups });
@@ -71,10 +71,13 @@ export function MessageBubble({ entry, assetBase, showTimestamp = false, timesta
         });
         setReactionState({ current: groups, rendered: [...rendered, ...nextByEmoji.values()] });
     }
-    const markdown = !isUser && renderContent !== undefined;
+    const attachment = entry.attachment;
+    const markdown = !attachment && !isUser && renderContent !== undefined;
     const [pickerOpen, setPickerOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const bubbleWrapRef = useRef(null);
     const reactButtonRef = useRef(null);
+    const pickerAnchorRef = useRef(null);
     const copyTimer = useRef(null);
     useEffect(() => () => {
         if (copyTimer.current)
@@ -92,9 +95,16 @@ export function MessageBubble({ entry, assetBase, showTimestamp = false, timesta
             copyTimer.current = setTimeout(() => setCopied(false), 1_600);
         }).catch(() => undefined);
     };
-    const bubble = (_jsx("div", { className: `${isUser ? 'zbd-bubble zbd-bubble-user' : 'zbd-bubble zbd-bubble-agent'}${markdown ? ' zbd-bubble-markdown' : ''}`, "data-group-position": groupPosition, children: isUser ? entry.content : renderContent ? renderContent(entry.content) : _jsx(RichText, { assetBase: assetBase, content: entry.content }) }));
+    const bubble = (_jsx("div", { className: `${isUser ? 'zbd-bubble zbd-bubble-user' : 'zbd-bubble zbd-bubble-agent'}${markdown ? ' zbd-bubble-markdown' : ''}`, "data-group-position": groupPosition, children: attachment ? (_jsxs("div", { className: "zbd-attachment-card", "data-kind": attachment.kind, children: [_jsx("span", { "aria-hidden": "true", className: "zbd-attachment-format", children: attachment.name.match(/\.([a-z0-9]{1,5})$/i)?.[1]?.toUpperCase() ?? (attachment.kind === 'media' ? 'MEDIA' : 'FILE') }), _jsx("span", { className: "zbd-attachment-name", title: attachment.name, children: attachment.name })] })) : isUser ? entry.content : renderContent ? renderContent(entry.content) : _jsx(RichText, { assetBase: assetBase, content: entry.content }) }));
     const react = onReact ? (emoji) => onReact(entry, emoji) : undefined;
-    return (_jsxs(_Fragment, { children: [showTimestamp ? (_jsx("div", { className: "zbd-time-separator", suppressHydrationWarning: true, children: timestampLabel ?? formatTime(entry.timestampMs) })) : null, _jsx("div", { className: isUser ? 'zbd-message-row zbd-message-row-user' : 'zbd-message-row', children: _jsxs("div", { className: isUser ? 'zbd-bubble-wrap zbd-bubble-wrap-user' : 'zbd-bubble-wrap', children: [onReact || onReply || entry.content ? (_jsxs("div", { className: "zbd-message-actions", "data-side": isUser ? 'user' : 'agent', children: [onReact ? (_jsx("button", { "aria-expanded": pickerOpen, "aria-haspopup": "dialog", "aria-label": "Add a reaction", className: "zbd-message-action", onClick: () => setPickerOpen((open) => !open), ref: reactButtonRef, title: "Add a reaction", type: "button", children: _jsx(SmileIcon, {}) })) : null, onReply ? (_jsx("button", { "aria-label": "Reply", className: "zbd-message-action", onClick: onReply, title: "Reply", type: "button", children: _jsx(ReplyIcon, {}) })) : null, _jsx("button", { "aria-label": copied ? 'Copied' : 'Copy message', className: "zbd-message-action", onClick: () => copy(), title: copied ? 'Copied' : 'Copy message', type: "button", children: copied ? _jsx(CheckIcon, {}) : _jsx(CopyIcon, {}) })] })) : null, renderMenu ? renderMenu(bubble, { entry, copy, react, reply: onReply, openEmojiPicker: () => setPickerOpen(true) }) : bubble, reactionState.rendered.length > 0 ? (_jsx("span", { className: isUser ? 'zbd-reactions zbd-reactions-user' : 'zbd-reactions zbd-reactions-agent', children: reactionState.rendered.map((group) => {
+    const menuActions = {
+        entry, copy, react, reply: onReply,
+        openEmojiPicker: () => {
+            pickerAnchorRef.current = null;
+            setPickerOpen(true);
+        },
+    };
+    return (_jsxs(_Fragment, { children: [showTimestamp ? (_jsx("div", { className: "zbd-time-separator", suppressHydrationWarning: true, children: timestampLabel ?? formatTime(entry.timestampMs) })) : null, _jsx("div", { className: isUser ? 'zbd-message-row zbd-message-row-user' : 'zbd-message-row', children: _jsxs("div", { className: isUser ? 'zbd-bubble-wrap zbd-bubble-wrap-user' : 'zbd-bubble-wrap', ref: bubbleWrapRef, children: [!renderActions && (onReact || onReply || entry.content) ? (_jsxs("div", { className: "zbd-message-actions", "data-side": isUser ? 'user' : 'agent', children: [onReact ? (_jsx("button", { "aria-expanded": pickerOpen, "aria-haspopup": "dialog", "aria-label": "Add a reaction", className: "zbd-message-action", onClick: () => setPickerOpen((open) => !open), ref: reactButtonRef, title: "Add a reaction", type: "button", children: _jsx(SmileIcon, {}) })) : null, onReply ? (_jsx("button", { "aria-label": "Reply", className: "zbd-message-action", onClick: onReply, title: "Reply", type: "button", children: _jsx(ReplyIcon, {}) })) : null, _jsx("button", { "aria-label": copied ? 'Copied' : 'Copy message', className: "zbd-message-action", onClick: () => copy(), title: copied ? 'Copied' : 'Copy message', type: "button", children: copied ? _jsx(CheckIcon, {}) : _jsx(CopyIcon, {}) })] })) : null, renderMenu ? renderMenu(bubble, menuActions) : bubble, reactionState.rendered.length > 0 ? (_jsx("span", { className: isUser ? 'zbd-reactions zbd-reactions-user' : 'zbd-reactions zbd-reactions-agent', children: reactionState.rendered.map((group) => {
                                 const mine = group.by.includes('me');
                                 const leaving = !groups.some(({ emoji }) => emoji === group.emoji);
                                 return (_jsxs("button", { "aria-hidden": leaving || undefined, "aria-label": `${group.emoji} reaction from ${group.by.map(authorLabel).join(', ')}`, "aria-pressed": mine, className: mine ? 'zbd-reaction zbd-reaction-mine' : 'zbd-reaction', "data-leaving": leaving || undefined, disabled: leaving, onAnimationEnd: (event) => {
@@ -104,7 +114,15 @@ export function MessageBubble({ entry, assetBase, showTimestamp = false, timesta
                                             ? state
                                             : { ...state, rendered: state.rendered.filter(({ emoji }) => emoji !== group.emoji) });
                                     }, onClick: () => react?.(group.emoji), title: group.by.map(authorLabel).join(', '), type: "button", children: [_jsx("span", { className: "zbd-reaction-emoji", children: group.emoji }), group.by.length > 1 ? _jsx("span", { className: "zbd-reaction-count", children: group.by.length }) : null] }, group.emoji));
-                            }) })) : null, pickerOpen && onReact ? (_jsx(EmojiPicker, { anchor: reactButtonRef.current, onClose: () => setPickerOpen(false), onPick: (emoji) => {
+                            }) })) : null, renderActions ? renderActions({
+                            ...menuActions,
+                            copied,
+                            pickerOpen,
+                            toggleEmojiPicker: (anchor) => {
+                                pickerAnchorRef.current = anchor;
+                                setPickerOpen((open) => !open);
+                            },
+                        }) : null, pickerOpen && onReact ? (_jsx(EmojiPicker, { anchor: pickerAnchorRef.current ?? reactButtonRef.current ?? bubbleWrapRef.current, onClose: () => setPickerOpen(false), onPick: (emoji) => {
                                 onReact(entry, emoji);
                                 setPickerOpen(false);
                             } })) : null] }) })] }));

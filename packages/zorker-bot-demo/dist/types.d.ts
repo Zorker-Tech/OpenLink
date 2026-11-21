@@ -33,6 +33,11 @@ export type MessageReaction = {
     emoji: string;
     by: string;
 };
+export type TranscriptAttachment = {
+    name: string;
+    kind: 'media' | 'file';
+    batchId?: string;
+};
 export type AgentMessageEntry = {
     kind: 'agent-message';
     id: string;
@@ -43,6 +48,7 @@ export type AgentMessageEntry = {
         name: string;
     };
     reactions?: MessageReaction[];
+    attachment?: TranscriptAttachment;
 };
 export type UserMessageEntry = {
     kind: 'user-message';
@@ -50,6 +56,7 @@ export type UserMessageEntry = {
     content: string;
     timestampMs: number;
     reactions?: MessageReaction[];
+    attachment?: TranscriptAttachment;
 };
 export type SystemEntryData = {
     kind: 'system';

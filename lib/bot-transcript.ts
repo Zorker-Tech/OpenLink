@@ -1,10 +1,10 @@
 import type { OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
-import type { PendingBeat, TranscriptEntry } from '@zorker/bot-demo'
+import type { PendingBeat, TranscriptAttachment, TranscriptEntry } from '@zorker/bot-demo'
 import { botConfirmationRequest, type BotConfirmationRequest } from './bot-confirmations.ts'
 
 export type BotActivityStatus = 'running' | 'done' | 'failed'
 
-export type BotAttachment = { name: string; kind: 'media' | 'file' }
+export type BotAttachment = TranscriptAttachment
 
 export type BotTranscriptEntry = Extract<
   TranscriptEntry,
@@ -13,6 +13,7 @@ export type BotTranscriptEntry = Extract<
 
 export type BotStreamUpdate =
   | { type: 'pending'; pending: PendingBeat | null }
+  | { type: 'avatar-state'; state: string | null }
   | { type: 'title'; title: string }
   | { type: 'entry'; entry: BotTranscriptEntry }
   | { type: 'delta'; id: string; delta: string }
@@ -87,6 +88,14 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function messageAuthor(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const id = text(record.id).trim()
+  const name = text(record.name).trim()
+  return id && name ? { id, name } : undefined
+}
+
 function isMediaFile(name: string) {
   return /\.(?:avif|gif|heic|jpeg|jpg|png|svg|webp|m4a|mp3|ogg|wav|webm|mov|mp4)$/i.test(name)
 }
@@ -148,7 +157,9 @@ function messageMetadata(entry: Record<string, unknown>, alternateReplyTo?: unkn
     ? stored as Record<string, unknown> : null
   const name = text(value?.name).trim()
   const kind = value?.kind
-  const attachment: BotAttachment | undefined = name && (kind === 'media' || kind === 'file') ? { name, kind } : undefined
+  const batchId = safeId(value?.batchId, '')
+  const attachment: BotAttachment | undefined = name && (kind === 'media' || kind === 'file')
+    ? { name, kind, ...(batchId ? { batchId } : {}) } : undefined
   return {
     ...(requestId ? { requestId } : {}),
     ...(replyTo ? { replyTo } : {}),
@@ -190,7 +201,13 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
   if (kind === 'user-attachment') {
     const name = text(entry.file_name) || text(entry.file_path).split(/[/\\]/).at(-1) || 'Attachment'
     const isMedia = typeof entry.width === 'number' || typeof entry.height === 'number' || isMediaFile(name)
-    return { kind: 'user-message', id, content: `[${name}]`, timestampMs: at, ...messageMetadata(entry), attachment: { name, kind: isMedia ? 'media' : 'file' } }
+    const batchId = safeId(entry.batchId, '')
+    const reactions = reactionsOf(entry.reactions)
+    return {
+      kind: 'user-message', id, content: `[${name}]`, timestampMs: at,
+      ...messageMetadata(entry), ...(reactions ? { reactions } : {}),
+      attachment: { name, kind: isMedia ? 'media' : 'file', ...(batchId ? { batchId } : {}) },
+    }
   }
 
   if (kind === 'notice') {
@@ -267,28 +284,29 @@ export function normalizeWorkHostEntry(entry: Record<string, unknown>): BotTrans
     const content = text(message.content)
     if (!content) return null
     const reactions = reactionsOf(entry.reactions)
-    const author = entry.author && typeof entry.author === 'object' && !Array.isArray(entry.author)
-      ? entry.author as Record<string, unknown>
-      : null
-    const authorId = text(author?.id).trim()
-    const authorName = text(author?.name).trim()
+    const author = messageAuthor(entry.author)
     return {
       kind: 'agent-message',
       id,
       content,
       timestampMs: at,
       ...messageMetadata(entry, message.reply_to),
-      ...(authorId && authorName ? { author: { id: authorId, name: authorName } } : {}),
+      ...(author ? { author } : {}),
       ...(reactions ? { reactions } : {}),
     }
   }
 
   if (type === 'image' || type === 'video' || type === 'attachment') {
     const name = text(message.file_name) || text(message.alt) || 'Attachment'
+    const batchId = safeId(entry.batchId ?? message.batchId, '')
+    const author = messageAuthor(entry.author)
+    const reactions = reactionsOf(entry.reactions)
     return {
       kind: 'agent-message', id, content: `[${name}]`, timestampMs: at,
       ...messageMetadata(entry, message.reply_to),
-      attachment: { name, kind: type !== 'attachment' || isMediaFile(name) ? 'media' : 'file' },
+      ...(author ? { author } : {}),
+      ...(reactions ? { reactions } : {}),
+      attachment: { name, kind: type !== 'attachment' || isMediaFile(name) ? 'media' : 'file', ...(batchId ? { batchId } : {}) },
     }
   }
 

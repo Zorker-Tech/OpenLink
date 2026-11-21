@@ -13,25 +13,24 @@ import {
   AppCommandPalette,
   AppComposer,
   AppTranscript,
-  formatSidebarTime,
   type AppSession,
-  type AppSidebarRow,
 } from '@zorker/bot-demo/app'
 import { AgentAvatar, resolveColor } from '@zorker/avatar'
-import { MessageResponse } from '@/components/ai-elements/message'
 import type { ThemeMode } from '@/components/account-drawer'
 import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/components/chat-confirmation-dock'
 import { BotWorkspaceView } from '@/components/bot/bot-workspace-view'
 import { BotDetailsPane } from '@/components/bot/bot-details-pane'
+import { BotMarkdown } from '@/components/bot/bot-markdown'
+import { BotMessageActions } from '@/components/bot/bot-message-actions'
 import { BotMessageContextMenu } from '@/components/bot/bot-message-context-menu'
 import { BotCreateDialog } from '@/components/bot/bot-create-dialog'
 import { BotOnboarding } from '@/components/bot/bot-onboarding'
 import { BotProfileDialog } from '@/components/bot/bot-profile-dialog'
 import { BotRoutineDialog } from '@/components/bot/bot-routine-dialog'
-import { BotSidebar } from '@/components/bot/bot-sidebar'
+import { BotSidebar, type BotSidebarRow } from '@/components/bot/bot-sidebar'
 import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
 import { PageTransition } from '@/components/ui/page-transition'
-import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
+import type { ActiveWorkspaceSummary } from '@/components/workspace-switcher'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
 import type { BotDetail, BotRoutine, BotSummary } from '@/lib/bot-types'
 import {
@@ -46,12 +45,19 @@ import { useLocale } from '@/lib/i18n/client'
 import type { OrganizationSummary } from '@/lib/organizations'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
 import { ArrowDown } from 'lucide-react'
+import { useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 const ASSET_BASE = '/zorker-bot-demo'
 
 function replyExcerpt(content: string) {
   return content.replace(/\s+/g, ' ').trim().slice(0, 320)
+}
+
+function unreadAfter(bot: BotSummary | undefined) {
+  if (!bot?.unread) return undefined
+  const viewed = Date.parse(bot.lastViewedAt)
+  return Number.isFinite(viewed) ? viewed : undefined
 }
 
 function ComposerFloat({ children, transcriptRef }: {
@@ -101,7 +107,6 @@ type BotWorkspaceProps = {
   models: readonly ConfiguredModelOption[]
   nickname: string
   organizations: OrganizationSummary[]
-  personalWorkspace: PersonalWorkspaceSummary
   workspaceSlug: string
   workHostReady: boolean
 }
@@ -133,18 +138,6 @@ function botToSession(bot: BotSummary, transcript: BotTranscriptEntry[], routine
   }
 }
 
-function taskAvatarState(label: string | null | undefined): string {
-  const value = (label ?? '').toLowerCase()
-  if (/think|思考|想/.test(value)) return 'thinking'
-  if (/search|find|grep|搜索|查找|检索/.test(value)) return 'searching'
-  if (/read|cat|file|读取|查看/.test(value)) return 'reading'
-  if (/run|command|bash|shell|exec|运行|执行|命令/.test(value)) return 'running'
-  if (/write|edit|code|写|编辑|代码/.test(value)) return 'coding'
-  if (/browser|chrome|navigate|web|打开|浏览|网页/.test(value)) return 'controlling'
-  if (/computer|desktop|屏幕|桌面/.test(value)) return 'computing'
-  return 'working'
-}
-
 /**
  * Mirror Work-host's reaction toggle locally. The server remains authoritative;
  * this only makes the chip respond on the same frame as the click.
@@ -162,7 +155,7 @@ function toggleReactionRows(
 }
 
 function renderBotMarkdown(content: string) {
-  return <MessageResponse className="zbd-app-markdown">{content}</MessageResponse>
+  return <BotMarkdown content={content} />
 }
 
 function providerErrorMessage(value: string): string {
@@ -250,11 +243,11 @@ export function BotWorkspace({
   models,
   nickname,
   organizations,
-  personalWorkspace,
   workspaceSlug,
   workHostReady,
 }: BotWorkspaceProps) {
   const locale = useLocale()
+  const reducedMotion = useReducedMotion()
   const transcriptRef = useRef<HTMLDivElement>(null)
   const loadedRef = useRef(new Set<string>())
   const warmingRef = useRef(new Set<string>())
@@ -265,14 +258,16 @@ export function BotWorkspace({
   const [systemLight, setSystemLight] = useState(false)
   const [bots, setBots] = useState<BotSummary[]>(initialBots)
   const [activeId, setActiveId] = useState(initialBot?.id ?? initialBots[0]?.id ?? '')
+  const [unreadBoundary, setUnreadBoundary] = useState(() => ({ id: activeId, after: unreadAfter(initialBot ?? initialBots[0]) }))
   const activeIdRef = useRef(activeId)
   const [details, setDetails] = useState<Record<string, BotDetail>>(
     initialBot ? { [initialBot.id]: initialBot } : {},
   )
   const [pendingMap, setPendingMap] = useState<Record<string, PendingBeat | null>>({})
   const [taskTitleMap, setTaskTitleMap] = useState<Record<string, string>>({})
-  const [taskStateMap, setTaskStateMap] = useState<Record<string, string>>({})
+  const [taskStateMap, setTaskStateMap] = useState<Record<string, string | null>>({})
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
+  const [detailFailures, setDetailFailures] = useState<Record<string, boolean>>({})
   const [warmingMap, setWarmingMap] = useState<Record<string, boolean>>({})
   const [draft, setDraft] = useState('')
   const [replyTarget, setReplyTarget] = useState<{ botId: string; id: string; excerpt: string } | null>(null)
@@ -306,20 +301,20 @@ export function BotWorkspace({
   // the host delivers one, the optimistic prompt excerpt (or "Working") keeps
   // the row populated.
   const activeTaskTitle = taskTitleMap[activeId] || ''
-  const activeTaskState = taskStateMap[activeId] || (activePending ? taskAvatarState(activePending.label) : 'thinking')
+  const activeTaskState = taskStateMap[activeId] ?? activePending?.state ?? 'working'
   const activeWarming = activeId ? warmingMap[activeId] === true : false
   const activeSession = activeBot ? botToSession(activeBot, activeTranscript, activeDetail?.routines) : null
   const activeTheme = themeMode === 'light' || (themeMode === 'system' && systemLight) ? 'light' : 'dark'
 
-  const rows: AppSidebarRow[] = useMemo(() => bots.map((bot) => {
+  const rows: BotSidebarRow[] = useMemo(() => bots.map((bot) => {
     const transcript = details[bot.id]?.transcript ?? []
     const preview = bot.lastEntryText || (transcript.length ? previewFromEntries(transcript) : '')
     return {
       session: botToSession(bot, transcript, details[bot.id]?.routines),
       name: bot.name,
       preview: preview || 'No messages yet',
-      time: formatSidebarTime(Date.parse(bot.lastActivityAt) || Date.now(), Date.now()),
       unread: bot.unread,
+      members: bot.kind === 'group' ? bot.members : undefined,
     }
   }), [bots, details])
   const botUnreadCount = bots.reduce((count, bot) => count + (bot.unread ? 1 : 0), 0)
@@ -357,12 +352,14 @@ export function BotWorkspace({
     const cached = details[botId]
     if (!force && cached && (cached.transcript.length > 0 || loadedRef.current.has(botId) || !cached.lastEntryText)) return
     setLoadingMap((previous) => ({ ...previous, [botId]: true }))
+    setDetailFailures((previous) => previous[botId] ? { ...previous, [botId]: false } : previous)
     try {
       const response = await fetch(`/api/bots/${encodeURIComponent(botId)}`, { cache: 'no-store' })
       const payload = await response.json().catch(() => null) as { bot?: BotDetail; error?: { message?: string } } | null
       if (!response.ok || !payload?.bot) {
         throw new Error(friendlyRuntimeError(payload?.error?.message || 'BOT_READ_FAILED'))
       }
+      loadedRef.current.add(botId)
       setDetails((previous) => ({ ...previous, [botId]: payload.bot! }))
       setBots((previous) => previous.map((bot) => (
         bot.id === botId
@@ -390,9 +387,9 @@ export function BotWorkspace({
           : bot
       )))
     } catch (loadError) {
+      setDetailFailures((previous) => ({ ...previous, [botId]: true }))
       setError(loadError instanceof Error ? friendlyRuntimeError(loadError.message) : 'The Bot could not be loaded.')
     } finally {
-      loadedRef.current.add(botId)
       setLoadingMap((previous) => ({ ...previous, [botId]: false }))
     }
   }, [details])
@@ -478,6 +475,7 @@ export function BotWorkspace({
   }, [])
 
   const selectBot = useCallback((botId: string) => {
+    setUnreadBoundary({ id: botId, after: unreadAfter(bots.find((bot) => bot.id === botId)) })
     setActiveId(botId)
     setError(null)
     setDraft('')
@@ -492,7 +490,7 @@ export function BotWorkspace({
     setPaletteQuery('')
     markViewed(botId)
     void loadBot(botId, true)
-  }, [loadBot, markViewed])
+  }, [bots, loadBot, markViewed])
 
   const applyRoutines = useCallback((botId: string, routines: BotRoutine[]) => {
     setDetails((previous) => {
@@ -566,16 +564,11 @@ export function BotWorkspace({
 
   const applyUpdate = useCallback((botId: string, update: BotStreamUpdate) => {
     if (update.type === 'pending') {
-      const pending = update.pending
-      if (pending) {
-        const label = (pending.label ?? '').trim()
-        const generic = !label || /^(working|thinking)$/i.test(label)
-        setTaskStateMap((previous) => ({
-          ...previous,
-          [botId]: pending.state ?? (generic ? 'thinking' : taskAvatarState(label)),
-        }))
-      }
-      setPendingMap((previous) => ({ ...previous, [botId]: pending }))
+      setPendingMap((previous) => ({ ...previous, [botId]: update.pending }))
+      return
+    }
+    if (update.type === 'avatar-state') {
+      setTaskStateMap((previous) => previous[botId] === update.state ? previous : { ...previous, [botId]: update.state })
       return
     }
     if (update.type === 'title') {
@@ -768,8 +761,8 @@ export function BotWorkspace({
     // replaces it with an LLM-written title as soon as the worker returns one.
     const taskTitle = content.replace(/\s+/g, ' ').trim().slice(0, 72)
     setTaskTitleMap((previous) => ({ ...previous, [botId]: taskTitle }))
-    setTaskStateMap((previous) => ({ ...previous, [botId]: 'thinking' }))
-    setPendingMap((previous) => ({ ...previous, [botId]: { label: taskTitle, showLabel: true, state: 'thinking' } }))
+    setTaskStateMap((previous) => ({ ...previous, [botId]: null }))
+    setPendingMap((previous) => ({ ...previous, [botId]: { label: taskTitle, showLabel: true, state: 'working' } }))
     try {
       const response = await fetch(`/api/bots/${encodeURIComponent(botId)}/prompt`, {
         method: 'POST',
@@ -823,11 +816,11 @@ export function BotWorkspace({
     }
   }, [activeBot, activeDetail?.runtimeReady, activeReply, activeWarming, applyUpdate, draft, loadBot, sending])
 
-  const openPalette = useCallback(() => {
+  const openPalette = useCallback((view: 'search' | 'create' = 'search') => {
     setComputerOpen(false)
     setDetailsOpen(false)
     setPaletteOpen(true)
-    setPaletteView('search')
+    setPaletteView(view)
     setCreateInitialName('')
     setPaletteQuery('')
   }, [])
@@ -994,9 +987,7 @@ export function BotWorkspace({
           mobileOpen={mobileOpen}
           nickname={nickname}
           onCloseMobile={() => setMobileOpen(false)}
-          onNewAgent={() => {
-            openPalette()
-          }}
+          onNewAgent={() => openPalette('create')}
           onSelect={selectBot}
           onThemeChange={handleThemeChange}
           onToggle={() => {
@@ -1004,7 +995,6 @@ export function BotWorkspace({
             else setMobileOpen((value) => !value)
           }}
           organizations={organizations}
-          personalWorkspace={personalWorkspace}
           rows={rows}
           themeMode={themeMode}
           workspaceSlug={workspaceSlug}
@@ -1032,10 +1022,17 @@ export function BotWorkspace({
                   />
                   <span className="min-w-0 truncate">{activeBot.name}</span>
                 </button>
-                {loadingMap[activeId] && !activeDetail ? (
-                  <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--app-muted)]">
-                    Loading {activeBot.name}…
-                  </div>
+                {!activeDetail ? (
+                  detailFailures[activeId] && !loadingMap[activeId] ? (
+                    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center text-[13px] text-[var(--app-muted)]" role="alert">
+                      <span>Conversation history is temporarily unavailable.</span>
+                      <button className="zbd-app-empty-suggestion" onClick={() => { void loadBot(activeId, true) }} type="button">Retry</button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center text-[13px] text-[var(--app-muted)]" role="status">
+                      Loading {activeBot.name}…
+                    </div>
+                  )
                 ) : (
                   <>
                     {activeBot.runtimeStatus === 'failed' || activeBot.runtimeLastError ? (
@@ -1077,6 +1074,7 @@ export function BotWorkspace({
                       onTakeOver={openComputer}
                       pending={null}
                       renderMessage={renderBotMarkdown}
+                      renderMessageActions={(actions) => <BotMessageActions actions={actions} />}
                       renderMessageMenu={(bubble, actions) => {
                         const message = transcriptById.get(actions.entry.id)
                         const target = message?.replyTo ? transcriptById.get(message.replyTo) : undefined
@@ -1095,25 +1093,22 @@ export function BotWorkspace({
                         )
                       }}
                       replyTargetId={activeReply?.id}
+                      unreadAfter={unreadBoundary.id === activeId ? unreadBoundary.after : undefined}
                       status={activePending ? (
                         <>
-                          <span className="relative flex size-7 shrink-0 items-center justify-center">
+                          <div aria-hidden="true" className="bot-task-avatar">
                             <AgentAvatar
-                              className="shrink-0"
                               color={activeBot.avatarColor}
+                              interactive={false}
+                              reducedMotion={reducedMotion === true}
                               renderer="complete"
                               shape={activeBot.avatarShape}
-                              size={28}
+                              size={36}
                               state={activeTaskState}
                               theme={activeTheme}
                             />
-                            <span
-                              aria-hidden="true"
-                              className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-[var(--app-background)]"
-                              style={{ background: resolveColor(activeBot.avatarColor, activeTheme) }}
-                            />
-                          </span>
-                          <span className="min-w-0 truncate text-[13px] font-medium">{activeTaskTitle || 'Working'}</span>
+                          </div>
+                          <span className="bot-task-label" role="status">{activeTaskTitle || 'Working'}</span>
                         </>
                       ) : null}
                       screen={END_SCREEN}

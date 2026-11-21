@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createTimelineTimeFormatter, foldTimeline } from '../../packages/zorker-bot-demo/dist/app/timeline-rows.js'
 
 import {
   OPTIMISTIC_USER_ENTRY_PREFIX,
@@ -52,6 +53,48 @@ test('reply targets and media labels survive transcript recovery', () => {
     assert.deepEqual(normalizeWorkHostEntry(toWorkHostEntry(entry)), entry)
     assert.deepEqual(fromDurableGroupEntry(toDurableGroupEntry(entry).payload), entry)
   }
+})
+
+test('timeline batches attachments by sender and collapses adjacent tool calls without losing anchors', () => {
+  const attachment = (id, timestampMs, role = 'user-message') => ({
+    ...user(id, timestampMs), kind: role, attachment: { name: `${id}.pdf`, kind: 'file', batchId: 'batch' },
+  })
+  const tool = (id, timestampMs) => ({
+    kind: 'activity', id, timestampMs, activity: { tool: 'tool', label: id, status: 'done' },
+  })
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', dateStyle: 'short' })
+  const rows = foldTimeline([
+    attachment('one', 1), attachment('two', 2), attachment('agent-file', 3, 'agent-message'),
+    tool('read', 4), tool('edit', 5), user('question', 6), tool('isolated', 20 * 60_000),
+  ], day, 3)
+  assert.deepEqual(rows.map((row) => [row.kind, row.entries.map(({ id }) => id), row.unread, row.timestamp]), [
+    ['attachments', ['one', 'two'], false, 1],
+    ['attachments', ['agent-file'], false, undefined],
+    ['tools', ['read', 'edit'], true, undefined],
+    ['entry', ['question'], false, undefined],
+    ['tools', ['isolated'], false, 20 * 60_000],
+  ])
+})
+
+test('timeline labels each date boundary once in the local calendar', () => {
+  const day = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'America/New_York' })
+  const at = (value) => Date.parse(value)
+  const format = createTimelineTimeFormatter('en-US', day, at('2026-11-02T05:30:00Z'))
+  const rows = foldTimeline([
+    user('old', at('2025-10-31T13:00:00Z')),
+    user('first-yesterday', at('2026-11-01T04:30:00Z')),
+    user('later-yesterday', at('2026-11-01T08:25:00Z')),
+    user('first-today', at('2026-11-02T05:12:00Z')),
+    user('later-today', at('2026-11-02T05:35:00Z')),
+  ], day)
+  assert.deepEqual(rows.map(({ dayStart }) => dayStart), ['initial', 'boundary', undefined, 'boundary', undefined])
+  const labels = rows.map(({ timestamp, dayStart }) => format(timestamp, dayStart))
+  assert.match(labels[0], /Oct 31, 2025/)
+  assert.match(labels[1], /^yesterday · 12:30/)
+  assert.match(labels[2], /^3:25\sAM$/)
+  assert.match(labels[3], /^today · 12:12/)
+  assert.match(labels[4], /^12:35\sAM$/)
+  assert.match(format(rows[3].timestamp, 'initial'), /^12:12\sAM$/)
 })
 
 test('a durable echo with different content is appended', () => {

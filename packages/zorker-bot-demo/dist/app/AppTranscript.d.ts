@@ -13,7 +13,9 @@ export type AppTranscriptProps = {
     displayName: string;
     locale?: string;
     replyTargetId?: string;
+    unreadAfter?: number;
     renderMessage?: (content: string) => ReactNode;
+    renderMessageActions?: MessageBubbleProps['renderActions'];
     renderMessageMenu?: MessageBubbleProps['renderMenu'];
     transcriptRef: Ref<HTMLDivElement>;
     onScroll?: UIEventHandler<HTMLDivElement>;
@@ -28,5 +30,5 @@ export type AppTranscriptProps = {
         kind: 'agent-message' | 'user-message';
     }>) => (() => void) | undefined;
 };
-export declare function AppTranscript({ entries, pending, status, screen, cardStatus, assetBase, session, displayName, locale, replyTargetId, renderMessage, renderMessageMenu, transcriptRef, onScroll, onOpenComputer, onTakeOver, onFinishComputer, onSuggestion, onReact, getReplyAction, }: AppTranscriptProps): import("react").JSX.Element;
+export declare function AppTranscript({ entries, pending, status, screen, cardStatus, assetBase, session, displayName, locale, replyTargetId, unreadAfter, renderMessage, renderMessageActions, renderMessageMenu, transcriptRef, onScroll, onOpenComputer, onTakeOver, onFinishComputer, onSuggestion, onReact, getReplyAction, }: AppTranscriptProps): import("react").JSX.Element;
 //# sourceMappingURL=AppTranscript.d.ts.map

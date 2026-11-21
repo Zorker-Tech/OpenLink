@@ -7,17 +7,28 @@ function recordOf(value: unknown): Record<string, unknown> | null {
     : null
 }
 
-/** Map the host's live task label to the avatar state vocabulary. */
-function statusState(label: string): string {
-  const value = label.toLowerCase()
-  if (/think|思考|想/.test(value)) return 'thinking'
-  if (/search|find|grep|搜索|查找|检索/.test(value)) return 'searching'
-  if (/read|cat|file|读取|查看/.test(value)) return 'reading'
-  if (/run|command|bash|shell|exec|运行|执行|命令/.test(value)) return 'running'
-  if (/write|edit|code|写|编辑|代码/.test(value)) return 'coding'
-  if (/browser|chrome|navigate|web|打开|浏览|网页/.test(value)) return 'controlling'
-  if (/computer|desktop|屏幕|桌面/.test(value)) return 'computing'
-  return 'working'
+const toolAvatarStates = new Map(Object.entries({
+  searching: ['search', 'find', 'grep', 'websearch', 'websearchtoolcall', 'placessearch', 'weatherforecast', 'restaurantsearch', 'hotelsearch', 'hoteldetails', 'carrentalsearch', 'carrentaldetails', 'flightsearch', 'flightdetails', 'arrangeflights'],
+  reading: ['read', 'boxread', 'externalread', 'readtoolcall', 'readfile', 'cat', 'webfetch', 'webfetchtoolcall', 'skill'],
+  writing: ['write', 'writefile', 'edit', 'editfile', 'applypatch'],
+  coding: ['cloudagent', 'code'],
+  running: ['bash', 'exec', 'run', 'runcommand', 'shell', 'boxshell', 'shelltoolcall'],
+  computing: ['computer', 'computeruse', 'computerusetoolcall', 'desktop', 'screenshot', 'requestboxhelp'],
+  controlling: ['externalshell', 'externalwrite', 'copytobox', 'copyfrombox', 'copybotfile'],
+  progress: ['generateimage', 'generatevideo', 'generateimagetoolcall'],
+  orbit: ['callmcptool', 'getmcptools', 'searchplugins', 'installplugin'],
+  sending: ['sendmessage', 'sendtoagent', 'sendimessage', 'reacttomessage', 'updateagent', 'createagent'],
+  waiting: ['await', 'awaitshell', 'externalawaitshell', 'awaittoolcall', 'requestuserform'],
+}).flatMap(([state, tools]) => tools.map((tool) => [tool, state] as const)))
+
+function toolAvatarState(tool: unknown, detail?: unknown, target?: unknown): string {
+  if (typeof tool !== 'string') return 'working'
+  const name = tool.trim().replace(/[-_]/g, '').toLowerCase()
+  if (name.startsWith('browser')) return 'reading'
+  if (name.startsWith('mcp')) return 'orbit'
+  if (name === 'task' && target === 'computerUse') return 'computing'
+  if (/^(shell|external(shell|write)|boxshell|shelltoolcall)$/.test(name) && typeof detail === 'string' && detail.trim()) return 'writing'
+  return toolAvatarStates.get(name) ?? 'working'
 }
 
 function activityFromTool(item: Record<string, unknown>): BotStreamUpdate | null {
@@ -57,11 +68,25 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
   const payload = recordOf(record.payload)
   if (payload === null) return []
 
+  if (channel === 'agent-upserted') {
+    const agent = recordOf(payload.agent)
+    if (typeof agent?.isRunning !== 'boolean') return []
+    if (!agent.isRunning) return [{ type: 'avatar-state', state: null }]
+    if (agent.isComposingMessage === true) return [{ type: 'avatar-state', state: 'streaming' }]
+    const activity = recordOf(agent.currentActivity)
+    return [{
+      type: 'avatar-state',
+      state: agent.isRetrying === true ? 'waiting'
+        : activity?.kind === 'thinking' ? 'thinking'
+        : activity?.kind === 'tool' ? toolAvatarState(activity.tool, activity.detail, activity.target) : null,
+    }]
+  }
+
   if (channel === 'transcript') {
     const type = typeof payload.type === 'string' ? payload.type : ''
     if (type === 'group-turn') {
       const phase = typeof payload.phase === 'string' ? payload.phase : ''
-      if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } }]
+      if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'working' } }]
       if (phase === 'ended') {
         const updates: BotStreamUpdate[] = [{ type: 'pending', pending: null }]
         if (payload.ok === false) updates.push({ type: 'error', message: 'BOT_GROUP_TURN_FAILED' })
@@ -103,7 +128,7 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
         : toolName
           ? toolName.slice(0, 200)
           : 'Working'
-      return [{ type: 'pending', pending: { label, showLabel: true, state: statusState(toolName || label) } }, update]
+      return [{ type: 'pending', pending: { label, showLabel: true, state: toolAvatarState(toolName) } }, update]
     }
     if (item.kind === 'thinking') return [{ type: 'pending', pending: { label: 'Thinking', showLabel: true, state: 'thinking' } }]
     return []
@@ -111,10 +136,10 @@ export function botUpdatesFromWorkHostFrame(frame: unknown): BotStreamUpdate[] {
 
   if (channel === 'bot-turn') {
     const phase = typeof payload.phase === 'string' ? payload.phase : ''
-    if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } }]
+    if (phase === 'started') return [{ type: 'pending', pending: { label: 'Working', showLabel: true, state: 'working' } }]
     if (phase === 'status' && typeof payload.label === 'string' && payload.label.trim()) {
       const label = payload.label.trim().slice(0, 200)
-      return [{ type: 'pending', pending: { label, showLabel: true, state: statusState(label) } }]
+      return [{ type: 'pending', pending: { label, showLabel: true, state: 'working' } }]
     }
     if (phase === 'title' && typeof payload.title === 'string' && payload.title.trim()) {
       // The worker's LLM title is a task summary, not a tool label: it replaces

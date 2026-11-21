@@ -80,7 +80,7 @@ test('outline tool calls become live activity rows with a stable id', () => {
 
 test('turn and group lifecycles drive the pending state and terminate the stream', () => {
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'bot-turn', payload: { agentId: 'agent-1', phase: 'started' } }), [
-    { type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } },
+    { type: 'pending', pending: { label: 'Working', showLabel: true, state: 'working' } },
   ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'bot-turn', payload: { agentId: 'agent-1', phase: 'ended', ok: true } }), [
     { type: 'pending', pending: null },
@@ -92,7 +92,7 @@ test('turn and group lifecycles drive the pending state and terminate the stream
     { type: 'done' },
   ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'transcript', payload: { agentId: 'group-1', type: 'group-turn', phase: 'started' } }), [
-    { type: 'pending', pending: { label: 'Working', showLabel: true, state: 'thinking' } },
+    { type: 'pending', pending: { label: 'Working', showLabel: true, state: 'working' } },
   ])
   assert.deepEqual(botUpdatesFromWorkHostFrame({ channel: 'transcript', payload: { agentId: 'group-1', type: 'group-turn', phase: 'ended', ok: true } }), [
     { type: 'pending', pending: null },
@@ -124,6 +124,28 @@ test('a host-generated title replaces the task title without changing the avatar
     channel: 'bot-turn',
     payload: { agentId: 'agent-1', phase: 'title', title: '   ' },
   }), [])
+})
+
+test('the avatar follows the live activity and composing status independently of text labels', () => {
+  const avatarState = (agent) => botUpdatesFromWorkHostFrame({ channel: 'agent-upserted', payload: { agent } })
+  const running = { isRunning: true }
+  for (const [facts, state] of [
+    [{}, null],
+    [{ currentActivity: { kind: 'thinking' } }, 'thinking'],
+    [{ currentActivity: { kind: 'tool', tool: 'browser_navigate' } }, 'reading'],
+    [{ currentActivity: { kind: 'tool', tool: 'WebSearch' } }, 'searching'],
+    [{ currentActivity: { kind: 'tool', tool: 'Shell', detail: 'index.ts' } }, 'writing'],
+    [{ currentActivity: { kind: 'tool', tool: 'bash' } }, 'running'],
+    [{ currentActivity: { kind: 'tool', tool: 'UpdateAgent' } }, 'sending'],
+    [{ currentActivity: { kind: 'tool', tool: 'LoadProfile' } }, 'working'],
+    [{ currentActivity: { kind: 'thinking' }, isComposingMessage: true }, 'streaming'],
+    [{ isRunning: false }, null],
+  ]) {
+    assert.deepEqual(avatarState({ ...running, ...facts }), [{ type: 'avatar-state', state }])
+  }
+  assert.deepEqual(botUpdatesFromWorkHostFrame({
+    channel: 'bot-turn', payload: { phase: 'status', label: '搜索旧记录' },
+  }), [{ type: 'pending', pending: { label: '搜索旧记录', showLabel: true, state: 'working' } }])
 })
 
 test('legacy migration bookkeeping is not a timeline entry', () => {

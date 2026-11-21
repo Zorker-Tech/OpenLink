@@ -2514,6 +2514,68 @@
   max-width: min(620px, 92%);
 }
 
+.zbd-timeline-group {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.zbd-tool-run {
+  width: min(100%, 520px);
+  padding: 0 10px;
+  border: 1px solid var(--zbd-border-default);
+  border-radius: 10px;
+  color: var(--zbd-text-secondary);
+  font-size: 13px;
+}
+
+.zbd-tool-run > summary {
+  padding: 7px 0;
+  cursor: pointer;
+}
+
+.zbd-tool-run .zbd-timeline-group {
+  padding-bottom: 7px;
+}
+
+.zbd-timeline-unread {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--zbd-text-secondary);
+  font-size: 12px;
+}
+
+.zbd-timeline-unread::before,
+.zbd-timeline-unread::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--zbd-border-default);
+}
+
+.zbd-attachment-card {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.zbd-attachment-format {
+  flex: none;
+  padding: 3px 5px;
+  border-radius: 5px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.zbd-attachment-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .zbd-app-empty {
   display: flex;
   flex-direction: column;

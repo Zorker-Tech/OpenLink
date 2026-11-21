@@ -16,6 +16,12 @@ export type MessageMenuActions = {
   openEmojiPicker: () => void
 }
 
+export type MessageToolbarActions = Omit<MessageMenuActions, 'openEmojiPicker'> & {
+  copied: boolean
+  pickerOpen: boolean
+  toggleEmojiPicker: (anchor: HTMLElement) => void
+}
+
 export type MessageBubbleProps = {
   entry: MessageEntry
   assetBase: string
@@ -27,6 +33,7 @@ export type MessageBubbleProps = {
   /** Toggle a reaction on this message. Omit to keep the transcript read-only. */
   onReact?: (entry: MessageEntry, emoji: string) => void
   onReply?: () => void
+  renderActions?: (actions: MessageToolbarActions) => ReactNode
   renderMenu?: (bubble: ReactElement, actions: MessageMenuActions) => ReactNode
 }
 
@@ -118,6 +125,7 @@ export function MessageBubble({
   groupPosition = 'single',
   onReact,
   onReply,
+  renderActions,
   renderMenu,
 }: MessageBubbleProps) {
   const isUser = entry.kind === 'user-message'
@@ -132,10 +140,13 @@ export function MessageBubble({
     })
     setReactionState({ current: groups, rendered: [...rendered, ...nextByEmoji.values()] })
   }
-  const markdown = !isUser && renderContent !== undefined
+  const attachment = entry.attachment
+  const markdown = !attachment && !isUser && renderContent !== undefined
   const [pickerOpen, setPickerOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const bubbleWrapRef = useRef<HTMLDivElement>(null)
   const reactButtonRef = useRef<HTMLButtonElement>(null)
+  const pickerAnchorRef = useRef<HTMLElement | null>(null)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => {
@@ -157,10 +168,24 @@ export function MessageBubble({
       className={`${isUser ? 'zbd-bubble zbd-bubble-user' : 'zbd-bubble zbd-bubble-agent'}${markdown ? ' zbd-bubble-markdown' : ''}`}
       data-group-position={groupPosition}
     >
-      {isUser ? entry.content : renderContent ? renderContent(entry.content) : <RichText assetBase={assetBase} content={entry.content} />}
+      {attachment ? (
+        <div className="zbd-attachment-card" data-kind={attachment.kind}>
+          <span aria-hidden="true" className="zbd-attachment-format">
+            {attachment.name.match(/\.([a-z0-9]{1,5})$/i)?.[1]?.toUpperCase() ?? (attachment.kind === 'media' ? 'MEDIA' : 'FILE')}
+          </span>
+          <span className="zbd-attachment-name" title={attachment.name}>{attachment.name}</span>
+        </div>
+      ) : isUser ? entry.content : renderContent ? renderContent(entry.content) : <RichText assetBase={assetBase} content={entry.content} />}
     </div>
   )
   const react = onReact ? (emoji: string) => onReact(entry, emoji) : undefined
+  const menuActions = {
+    entry, copy, react, reply: onReply,
+    openEmojiPicker: () => {
+      pickerAnchorRef.current = null
+      setPickerOpen(true)
+    },
+  }
 
   return (
     <>
@@ -170,8 +195,8 @@ export function MessageBubble({
         </div>
       ) : null}
       <div className={isUser ? 'zbd-message-row zbd-message-row-user' : 'zbd-message-row'}>
-        <div className={isUser ? 'zbd-bubble-wrap zbd-bubble-wrap-user' : 'zbd-bubble-wrap'}>
-          {onReact || onReply || entry.content ? (
+        <div className={isUser ? 'zbd-bubble-wrap zbd-bubble-wrap-user' : 'zbd-bubble-wrap'} ref={bubbleWrapRef}>
+          {!renderActions && (onReact || onReply || entry.content) ? (
             <div className="zbd-message-actions" data-side={isUser ? 'user' : 'agent'}>
               {onReact ? (
                 <button
@@ -203,7 +228,7 @@ export function MessageBubble({
               </button>
             </div>
           ) : null}
-          {renderMenu ? renderMenu(bubble, { entry, copy, react, reply: onReply, openEmojiPicker: () => setPickerOpen(true) }) : bubble}
+          {renderMenu ? renderMenu(bubble, menuActions) : bubble}
           {reactionState.rendered.length > 0 ? (
             <span className={isUser ? 'zbd-reactions zbd-reactions-user' : 'zbd-reactions zbd-reactions-agent'}>
               {reactionState.rendered.map((group) => {
@@ -235,9 +260,18 @@ export function MessageBubble({
               })}
             </span>
           ) : null}
+          {renderActions ? renderActions({
+            ...menuActions,
+            copied,
+            pickerOpen,
+            toggleEmojiPicker: (anchor) => {
+              pickerAnchorRef.current = anchor
+              setPickerOpen((open) => !open)
+            },
+          }) : null}
           {pickerOpen && onReact ? (
             <EmojiPicker
-              anchor={reactButtonRef.current}
+              anchor={pickerAnchorRef.current ?? reactButtonRef.current ?? bubbleWrapRef.current}
               onClose={() => setPickerOpen(false)}
               onPick={(emoji) => {
                 onReact(entry, emoji)

@@ -17,7 +17,6 @@ import {
   Globe,
   MessageSquare,
   Monitor,
-  Pencil,
   Terminal,
   Trash2,
   Users,
@@ -337,18 +336,16 @@ export function BotDetailsPane({
       />
       <div className="zbd-side-pane-inner">
         <div className="bot-profile-toolbar">
-          <button aria-label="Edit Bot profile" className="zbd-window-action" onClick={onEditProfile} title="Edit profile" type="button">
-            <Pencil className="size-3.5" />
-          </button>
           <button aria-label="Close details" className="zbd-window-action" onClick={onClose} type="button">
             <X className="size-4" />
           </button>
         </div>
         <div className="bot-profile-scroll">
           <header className="bot-profile-identity">
-            <div className="relative">
+            <button aria-label="Edit Bot profile" className="bot-profile-avatar" onClick={onEditProfile} title="Edit profile" type="button">
               <AgentAvatar
                 color={bot.avatarColor}
+                interactive={false}
                 renderer="complete"
                 shape={bot.avatarShape}
                 size={64}
@@ -360,7 +357,7 @@ export function BotDetailsPane({
                 className={`absolute bottom-0.5 right-0.5 size-3 rounded-full ring-[3px] ring-[var(--app-background)] ${status.dot}`}
                 title={status.label}
               />
-            </div>
+            </button>
             <h1>{bot.name}</h1>
             <p>{bot.description || status.description}</p>
           </header>
@@ -475,19 +472,6 @@ export function BotDetailsPane({
                       </span>
                     </div>
                   )}
-                </Section>
-                <Section id="bot-details-voice" title="Voice chat">
-                  <div className="divide-y divide-[var(--app-border)] rounded-lg border border-[var(--app-control-border)] bg-[var(--app-surface)]">
-                    {[
-                      ['Voice', 'Liora · 1×'],
-                      ['Language', 'Auto-detect'],
-                    ].map(([label, value]) => (
-                      <div className="flex h-7 items-center justify-between gap-4 px-3" key={label}>
-                        <span className="text-[13px] text-[var(--app-foreground)]">{label}</span>
-                        <span className="rounded border border-[var(--app-control-border)] px-1.5 py-0.5 text-[12px] leading-4 text-[var(--app-foreground)]">{value}</span>
-                      </div>
-                    ))}
-                  </div>
                 </Section>
                 <details className="bot-profile-disclosure">
                   <summary>About and capabilities</summary>

@@ -12,27 +12,21 @@ import { ConfirmationCard } from '../components/ConfirmationCard'
 import { MessageBubble, type MessageBubbleProps } from '../components/MessageBubble'
 import { PendingRow } from '../components/PendingRow'
 import { SystemEntry } from '../components/SystemEntry'
+import { createTimelineTimeFormatter, foldTimeline, startsTimeGroup } from './timeline-rows'
 import {
   formatTranscriptTime,
   sessionToAgent,
   type AppSession,
 } from './data'
 
-const TIMESTAMP_GAP_MS = 15 * 60_000
-
 const subscribeToTimeZone = () => () => {}
 const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 const serverTimeZone = () => 'UTC'
 
-function startsTimeGroup(previous: number | undefined, current: number, day: Intl.DateTimeFormat) {
-  return previous === undefined || current - previous >= TIMESTAMP_GAP_MS ||
-    day.format(previous) !== day.format(current)
-}
-
 function sameAuthor(left: TranscriptEntry | undefined, right: TranscriptEntry | undefined) {
-  if (left?.kind === 'user-message' && right?.kind === 'user-message') return true
+  if (left?.kind === 'user-message' && right?.kind === 'user-message') return !left.attachment && !right.attachment
   if (left?.kind !== 'agent-message' || right?.kind !== 'agent-message') return false
-  return (left.author?.id ?? '') === (right.author?.id ?? '')
+  return !left.attachment && !right.attachment && (left.author?.id ?? '') === (right.author?.id ?? '')
 }
 
 const EMPTY_SUGGESTIONS = [
@@ -52,7 +46,9 @@ export type AppTranscriptProps = {
   displayName: string
   locale?: string
   replyTargetId?: string
+  unreadAfter?: number
   renderMessage?: (content: string) => ReactNode
+  renderMessageActions?: MessageBubbleProps['renderActions']
   renderMessageMenu?: MessageBubbleProps['renderMenu']
   transcriptRef: Ref<HTMLDivElement>
   onScroll?: UIEventHandler<HTMLDivElement>
@@ -75,7 +71,9 @@ export function AppTranscript({
   displayName,
   locale,
   replyTargetId,
+  unreadAfter,
   renderMessage,
+  renderMessageActions,
   renderMessageMenu,
   transcriptRef,
   onScroll,
@@ -88,114 +86,92 @@ export function AppTranscript({
 }: AppTranscriptProps) {
   const agent = sessionToAgent(session, displayName)
   const timeZone = useSyncExternalStore(subscribeToTimeZone, browserTimeZone, serverTimeZone)
-  const day = useMemo(() => new Intl.DateTimeFormat('en-CA', { dateStyle: 'short', timeZone }), [timeZone])
-  const dateTime = useMemo(() => locale && new Intl.DateTimeFormat(locale, {
-    month: 'short',
-    day: 'numeric',
-    weekday: 'long',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone,
-  }), [locale, timeZone])
-  let previousTimestamp: number | undefined
+  const day = useMemo(() => new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }), [timeZone])
+  const dateTime = locale && createTimelineTimeFormatter(locale, day, Date.now())
+  const rows = useMemo(() => foldTimeline(entries, day, unreadAfter), [entries, day, unreadAfter])
+
+  const renderEntry = (entry: TranscriptEntry, groupPosition: MessageBubbleProps['groupPosition'], showAuthor: boolean) => {
+    switch (entry.kind) {
+      case 'system':
+        return <SystemEntry assetBase={assetBase} entry={entry} />
+      case 'computer':
+        return <ComputerCard assetBase={assetBase} entry={entry} onFinish={onFinishComputer} onOpen={onOpenComputer} onTakeOver={onTakeOver} screen={screen} status={cardStatus} />
+      case 'activity':
+        return <ActivityCard entry={entry} />
+      case 'confirmation':
+        return <ConfirmationCard entry={entry} />
+      case 'agent-message':
+      case 'user-message':
+        return (
+          <>
+            {showAuthor && session.isGroup && entry.kind === 'agent-message' && entry.author?.name ? (
+              <div className="zbd-app-group-author">{entry.author.name}</div>
+            ) : null}
+            <MessageBubble
+              assetBase={assetBase}
+              entry={entry}
+              groupPosition={groupPosition}
+              onReact={onReact}
+              onReply={getReplyAction?.(entry)}
+              renderActions={renderMessageActions}
+              renderContent={renderMessage}
+              renderMenu={renderMessageMenu}
+            />
+          </>
+        )
+    }
+  }
 
   return (
     <div className="zbd-transcript zbd-app-transcript" onScroll={onScroll} ref={transcriptRef}>
       <div className="zbd-transcript-inner zbd-app-transcript-inner">
-        {entries.map((entry, index) => {
-          const timestamp = entry.timestampMs
-          const showTimestamp = timestamp !== undefined && startsTimeGroup(previousTimestamp, timestamp, day)
-          if (timestamp !== undefined) previousTimestamp = timestamp
-          const time = showTimestamp ? (
+        {rows.map(({ dayStart, entries: grouped, index, kind, timestamp, unread }) => {
+          const entry = grouped[0]!
+          const time = timestamp !== undefined ? (
             <time className="zbd-time-separator" dateTime={new Date(timestamp).toISOString()} suppressHydrationWarning>
-              {dateTime ? dateTime.format(timestamp) : formatTranscriptTime(timestamp)}
+              {dateTime ? dateTime(timestamp, dayStart) : formatTranscriptTime(timestamp)}
             </time>
           ) : null
 
-          if (entry.kind === 'system') {
-            return (
-              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
-                {time}
-                <SystemEntry assetBase={assetBase} entry={entry} />
-              </div>
-            )
-          }
-
-          if (entry.kind === 'computer') {
-            return (
-              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
-                {time}
-                <ComputerCard
-                  assetBase={assetBase}
-                  entry={entry}
-                  onFinish={onFinishComputer}
-                  onOpen={onOpenComputer}
-                  onTakeOver={onTakeOver}
-                  screen={screen}
-                  status={cardStatus}
-                />
-              </div>
-            )
-          }
-
-          if (entry.kind === 'activity') {
-            return (
-              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
-                {time}
-                <ActivityCard entry={entry} />
-              </div>
-            )
-          }
-
-          if (entry.kind === 'confirmation') {
-            return (
-              <div className="zbd-entry" data-has-timestamp={showTimestamp ? '' : undefined} key={entry.id}>
-                {time}
-                <ConfirmationCard entry={entry} />
-              </div>
-            )
-          }
-
-          const authorLabel =
-            entry.kind === 'agent-message' && session.isGroup
-              ? entry.author?.name
-              : undefined
-
           const previous = entries[index - 1]
           const next = entries[index + 1]
-          const joinsPrevious = !showTimestamp && sameAuthor(previous, entry)
-          const joinsNext = next?.timestampMs !== undefined &&
+          const joinsPrevious = timestamp === undefined && !unread && sameAuthor(previous, entry)
+          const joinsNext = entry.timestampMs !== undefined && next?.timestampMs !== undefined &&
+            !(unreadAfter !== undefined && entry.timestampMs <= unreadAfter && next.timestampMs > unreadAfter) &&
             !startsTimeGroup(entry.timestampMs, next.timestampMs, day) && sameAuthor(entry, next)
           const groupPosition = joinsPrevious
             ? joinsNext ? 'middle' : 'end'
             : joinsNext ? 'start' : 'single'
 
+          const divider = unread ? <div className="zbd-timeline-unread" role="separator" aria-label="Unread messages">Unread messages</div> : null
+          const renderGroupedEntries = () => grouped.map((member, offset) => (
+            <div data-entry-id={member.id} data-reply-target={member.id === replyTargetId ? '' : undefined} key={member.id}>
+              {renderEntry(member, 'single', offset === 0)}
+            </div>
+          ))
+          const visible = kind === 'tools' ? (
+            <details className="zbd-tool-run">
+              <summary>{grouped.length === 1 ? 'Tool activity' : `${grouped.length} tool steps`}</summary>
+              <div className="zbd-timeline-group">{renderGroupedEntries()}</div>
+            </details>
+          ) : grouped.length > 1 ? (
+            <div className="zbd-timeline-group" role="group" aria-label={kind === 'attachments' ? 'Attachments' : 'Routine updates'}>
+              {renderGroupedEntries()}
+            </div>
+          ) : renderEntry(entry, groupPosition, !joinsPrevious)
+
           return (
             <div
-              className={
-                authorLabel
-                  ? 'zbd-entry zbd-app-group-entry'
-                  : 'zbd-entry'
-              }
-              data-entry-id={entry.id}
-              data-reply-target={entry.id === replyTargetId ? '' : undefined}
-              data-has-timestamp={showTimestamp ? '' : undefined}
+              className={session.isGroup && entry.kind === 'agent-message' && entry.author?.name ? 'zbd-entry zbd-app-group-entry' : 'zbd-entry'}
+              data-entry-id={grouped.length === 1 && kind !== 'tools' ? entry.id : undefined}
+              data-reply-target={grouped.length === 1 && entry.id === replyTargetId ? '' : undefined}
+              data-has-timestamp={timestamp !== undefined ? '' : undefined}
               data-same-group={joinsPrevious ? '' : undefined}
               key={entry.id}
             >
               {time}
-              {authorLabel ? (
-                <div className="zbd-app-group-author">{authorLabel}</div>
-              ) : null}
-              <MessageBubble
-                assetBase={assetBase}
-                entry={entry}
-                groupPosition={groupPosition}
-                onReact={onReact}
-                onReply={getReplyAction?.(entry)}
-                renderContent={renderMessage}
-                renderMenu={renderMessageMenu}
-              />
+              {divider}
+              {visible}
             </div>
           )
         })}

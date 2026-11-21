@@ -10,6 +10,11 @@ export type MessageMenuActions = {
     reply?: () => void;
     openEmojiPicker: () => void;
 };
+export type MessageToolbarActions = Omit<MessageMenuActions, 'openEmojiPicker'> & {
+    copied: boolean;
+    pickerOpen: boolean;
+    toggleEmojiPicker: (anchor: HTMLElement) => void;
+};
 export type MessageBubbleProps = {
     entry: MessageEntry;
     assetBase: string;
@@ -21,8 +26,9 @@ export type MessageBubbleProps = {
     /** Toggle a reaction on this message. Omit to keep the transcript read-only. */
     onReact?: (entry: MessageEntry, emoji: string) => void;
     onReply?: () => void;
+    renderActions?: (actions: MessageToolbarActions) => ReactNode;
     renderMenu?: (bubble: ReactElement, actions: MessageMenuActions) => ReactNode;
 };
-export declare function MessageBubble({ entry, assetBase, showTimestamp, timestampLabel, renderContent, groupPosition, onReact, onReply, renderMenu, }: MessageBubbleProps): import("react").JSX.Element;
+export declare function MessageBubble({ entry, assetBase, showTimestamp, timestampLabel, renderContent, groupPosition, onReact, onReply, renderActions, renderMenu, }: MessageBubbleProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=MessageBubble.d.ts.map

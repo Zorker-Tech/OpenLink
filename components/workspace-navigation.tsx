@@ -6,14 +6,9 @@ import { useT } from '@/lib/i18n/client'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 const iconPath = '/openlink/navigation/'
-const SIDEBAR_WIDTH_STORAGE_KEY = 'openlink-chat-sidebar-width'
 const SIDEBAR_MIN_WIDTH = 240
-const SIDEBAR_MAX_WIDTH = 420
-const SIDEBAR_DEFAULT_WIDTH = 288
-
-function clampSidebarWidth(width: number) {
-  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)))
-}
+const DEFAULT_SIDEBAR_SIZING = { defaultWidth: 288, maxWidth: 420, storageKey: 'openlink-chat-sidebar-width' }
+type SidebarSizing = typeof DEFAULT_SIDEBAR_SIZING
 
 /** Shared outer app rail used by workspace and settings page shells. */
 export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount = 0, footer, onCloseMobile, onHistory, onLeave, onPeek, sidebarWidth, workspaceSlug }: {
@@ -60,7 +55,7 @@ export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount
 }
 
 /** The app rail stays mounted while the conversation sidebar is pinned or previewed. */
-export function WorkspaceNavigation({ activePage, botUnreadCount, children, collapsed, footer, mobileOpen, onCloseMobile, onHistory, onToggle, toggleSidebarFromBot, workspaceSlug }: {
+export function WorkspaceNavigation({ activePage, botUnreadCount, children, collapsed, footer, mobileOpen, onCloseMobile, onHistory, onToggle, sidebarSizing = DEFAULT_SIDEBAR_SIZING, toggleSidebarFromBot, workspaceSlug }: {
   activePage?: string
   botUnreadCount?: number
   children: ReactNode
@@ -70,25 +65,27 @@ export function WorkspaceNavigation({ activePage, botUnreadCount, children, coll
   onCloseMobile: () => void
   onHistory: () => void
   onToggle: () => void
+  sidebarSizing?: SidebarSizing
   toggleSidebarFromBot?: boolean
   workspaceSlug: string
 }) {
   const t = useT()
   const [previewOpen, setPreviewOpen] = useState(false)
   const [desktop, setDesktop] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
+  const { defaultWidth, maxWidth, storageKey } = sidebarSizing
+  const [sidebarWidth, setSidebarWidth] = useState(defaultWidth)
   const [isResizing, setIsResizing] = useState(false)
   const panel = useRef<HTMLElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH)
-  const dragStart = useRef({ pointerX: 0, width: SIDEBAR_DEFAULT_WIDTH })
+  const sidebarWidthRef = useRef(defaultWidth)
+  const dragStart = useRef({ pointerX: 0, width: defaultWidth })
   const visible = desktop ? !collapsed || previewOpen : mobileOpen
   const updateSidebarWidth = (width: number, persist = false) => {
-    const nextWidth = clampSidebarWidth(width)
+    const nextWidth = Math.min(maxWidth, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)))
     sidebarWidthRef.current = nextWidth
     setSidebarWidth(nextWidth)
-    if (persist) window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth))
+    if (persist) window.localStorage.setItem(storageKey, String(nextWidth))
   }
   const clearLeave = () => { if (leaveTimer.current) clearTimeout(leaveTimer.current) }
   const peek = () => { clearLeave(); if (collapsed) setPreviewOpen(true) }
@@ -108,9 +105,11 @@ export function WorkspaceNavigation({ activePage, botUnreadCount, children, coll
   }, [])
 
   useEffect(() => {
-    const savedWidth = Number.parseInt(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ?? '', 10)
-    if (Number.isFinite(savedWidth)) updateSidebarWidth(savedWidth)
-  }, [])
+    try {
+      const savedWidth = Number.parseInt(window.localStorage.getItem(storageKey) ?? '', 10)
+      updateSidebarWidth(Number.isFinite(savedWidth) ? savedWidth : defaultWidth)
+    } catch { updateSidebarWidth(defaultWidth) }
+  }, [defaultWidth, maxWidth, storageKey])
 
   useEffect(() => {
     if (!isResizing) return
@@ -120,7 +119,7 @@ export function WorkspaceNavigation({ activePage, botUnreadCount, children, coll
     document.body.style.userSelect = 'none'
     const handlePointerMove = (event: PointerEvent) => updateSidebarWidth(dragStart.current.width + event.clientX - dragStart.current.pointerX)
     const handlePointerUp = () => {
-      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidthRef.current))
+      window.localStorage.setItem(storageKey, String(sidebarWidthRef.current))
       setIsResizing(false)
     }
     window.addEventListener('pointermove', handlePointerMove)
@@ -146,7 +145,7 @@ export function WorkspaceNavigation({ activePage, botUnreadCount, children, coll
     if (event.key === 'ArrowLeft') nextWidth = sidebarWidthRef.current - 4
     if (event.key === 'ArrowRight') nextWidth = sidebarWidthRef.current + 4
     if (event.key === 'Home') nextWidth = SIDEBAR_MIN_WIDTH
-    if (event.key === 'End') nextWidth = SIDEBAR_MAX_WIDTH
+    if (event.key === 'End') nextWidth = maxWidth
     if (nextWidth === null) return
     event.preventDefault()
     updateSidebarWidth(nextWidth, true)
@@ -198,7 +197,7 @@ export function WorkspaceNavigation({ activePage, botUnreadCount, children, coll
         }} onMouseEnter={clearLeave} onMouseLeave={leave} ref={panel}>
           {children}
         </aside>
-        {!collapsed && desktop && <div aria-label={t('调整侧边栏宽度')} aria-orientation="vertical" aria-valuemax={SIDEBAR_MAX_WIDTH} aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuenow={sidebarWidth} aria-valuetext={t('{width} 像素', { width: sidebarWidth })} className="workspace-sidebar-resizer" data-resizing={isResizing} onDoubleClick={() => updateSidebarWidth(SIDEBAR_DEFAULT_WIDTH, true)} onKeyDown={resizeFromKeyboard} onPointerDown={resizeFromPointer} role="separator" tabIndex={0} title={t('拖动调整侧边栏宽度')}><span /></div>}
+        {!collapsed && desktop && <div aria-label={t('调整侧边栏宽度')} aria-orientation="vertical" aria-valuemax={maxWidth} aria-valuemin={SIDEBAR_MIN_WIDTH} aria-valuenow={sidebarWidth} aria-valuetext={t('{width} 像素', { width: sidebarWidth })} className="workspace-sidebar-resizer" data-resizing={isResizing} onDoubleClick={() => updateSidebarWidth(defaultWidth, true)} onKeyDown={resizeFromKeyboard} onPointerDown={resizeFromPointer} role="separator" tabIndex={0} title={t('拖动调整侧边栏宽度')}><span /></div>}
       </div>
     </>
   )

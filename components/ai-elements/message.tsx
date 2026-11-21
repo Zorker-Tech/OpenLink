@@ -321,21 +321,24 @@ export const MessageBranchPage = ({
   );
 };
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>;
+export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
+  flattenTables?: boolean;
+};
 
 const streamdownPlugins = { cjk, code, math, mermaid };
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => {
+  ({ className, flattenTables = true, ...props }: MessageResponseProps) => {
     const responseId = useId().replace(/:/g, "");
 
     // Streamdown intentionally renders a document-style card around tables.
     // Chat messages already provide the grouping, so flatten that wrapper
     // without adding another DOM container around the response itself.
     useLayoutEffect(() => {
+      if (!flattenTables) return;
       const root = document.querySelector<HTMLElement>(`[data-openlink-message-response="${responseId}"]`);
       if (!root) return;
-      const flattenTables = () => {
+      const flattenTableWrappers = () => {
         for (const wrapper of root.querySelectorAll<HTMLElement>('[data-streamdown="table-wrapper"]')) {
           Object.assign(wrapper.style, {
             margin: "0",
@@ -351,11 +354,11 @@ export const MessageResponse = memo(
           }
         }
       };
-      flattenTables();
-      const observer = new MutationObserver(flattenTables);
+      flattenTableWrappers();
+      const observer = new MutationObserver(flattenTableWrappers);
       observer.observe(root, { childList: true, subtree: true });
       return () => observer.disconnect();
-    }, [responseId, props.children]);
+    }, [flattenTables, responseId, props.children]);
 
     return (
       <Streamdown
@@ -376,7 +379,8 @@ export const MessageResponse = memo(
   },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
-    nextProps.isAnimating === prevProps.isAnimating
+    nextProps.isAnimating === prevProps.isAnimating &&
+    nextProps.flattenTables === prevProps.flattenTables
 );
 
 MessageResponse.displayName = "MessageResponse";

@@ -75,7 +75,6 @@ export default async function WorkspaceBotsPage({
       models={models}
       nickname={nickname}
       organizations={organizations}
-      personalWorkspace={{ name: personalWorkspace.name, slug: personalWorkspace.slug }}
       workspaceSlug={workspace.slug}
       workHostReady={workHostReady}
     />

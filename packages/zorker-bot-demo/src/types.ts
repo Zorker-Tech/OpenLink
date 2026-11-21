@@ -43,6 +43,12 @@ export type ComputerEntry = {
 /** One reaction on a message: the emoji and who left it. */
 export type MessageReaction = { emoji: string; by: string }
 
+export type TranscriptAttachment = {
+  name: string
+  kind: 'media' | 'file'
+  batchId?: string
+}
+
 export type AgentMessageEntry = {
   kind: 'agent-message'
   id: string
@@ -50,6 +56,7 @@ export type AgentMessageEntry = {
   timestampMs: number
   author?: { id: string; name: string }
   reactions?: MessageReaction[]
+  attachment?: TranscriptAttachment
 }
 
 export type UserMessageEntry = {
@@ -58,6 +65,7 @@ export type UserMessageEntry = {
   content: string
   timestampMs: number
   reactions?: MessageReaction[]
+  attachment?: TranscriptAttachment
 }
 
 export type SystemEntryData = {
