@@ -107,7 +107,7 @@ cat /sys/block/vda/queue/discard_max_bytes   # non-zero
 fstrim -v /
 systemctl show -p ActiveState,FreezerState openlink-desktop.service
 systemctl freeze openlink-desktop.service
-systemctl unfreeze openlink-desktop.service
+systemctl thaw openlink-desktop.service
 ```
 
 On the host:

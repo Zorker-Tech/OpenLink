@@ -1216,10 +1216,10 @@ export class ProjectRuntimeManager {
     if (!runInMachine) return { suspended: false, state: 'unsupported' }
     try {
       await runInMachine(this.vmManager.machineName(projectId), 'sudo', [
-        '-n', 'systemctl', 'unfreeze', 'openlink-desktop.service',
+        '-n', 'systemctl', 'thaw', 'openlink-desktop.service',
       ])
-    } catch {
-      return { suspended: false, state: 'unsupported' }
+    } catch (error) {
+      throw new AgentHostError('PROJECT_BACKEND_UNAVAILABLE', `Could not thaw the Project desktop: ${error instanceof Error ? error.message : String(error)}`, { retryable: true })
     }
     return this.desktopStatus(projectId)
   }

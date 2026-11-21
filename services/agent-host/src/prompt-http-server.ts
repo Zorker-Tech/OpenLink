@@ -897,10 +897,9 @@ export async function startPromptHttpServer(
     const previous = projectDesktopLocks.get(projectId) ?? Promise.resolve()
     const next = previous.catch(() => undefined).then(operation)
     projectDesktopLocks.set(projectId, next)
-    void next.finally(() => {
+    return next.finally(() => {
       if (projectDesktopLocks.get(projectId) === next) projectDesktopLocks.delete(projectId)
     })
-    return next
   }
 
   function findSessionEntry(sessionId: string): SessionEntry | undefined {

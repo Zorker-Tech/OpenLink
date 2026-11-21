@@ -1,5 +1,6 @@
 'use client'
 
+import type RFB from '@novnc/novnc'
 import { AgentAvatar } from '@zorker/avatar'
 import { ThinkingOrb } from '@/components/thinking/src'
 import { browserReachableGatewayUrl } from '@/lib/browser-runtime/client'
@@ -16,6 +17,29 @@ interface DesktopSessionResponse {
 type DesktopStatus = 'connecting' | 'ready' | 'failed'
 
 const DESKTOP_CONNECT_TIMEOUT_MS = 5 * 60_000
+const DESKTOP_HANDSHAKE_TIMEOUT_MS = 6_000
+const DESKTOP_SOCKET_RETRY_MS = 750
+
+let rfbModule: Promise<typeof RFB> | undefined
+
+function loadDesktopClient() {
+  if (rfbModule) return rfbModule
+  // noVNC captures the console logger on import. Suppress its generic LAN
+  // warning while leaving actual connection errors available to the viewer.
+  const originalConsoleError = console.error
+  const filter = (...args: unknown[]) => {
+    if (typeof args[0] === 'string' && args[0].includes('noVNC requires a secure context')) return
+    originalConsoleError(...args)
+  }
+  console.error = filter
+  rfbModule = import('@novnc/novnc').then(({ default: RFB }) => RFB).catch((error) => {
+    rfbModule = undefined
+    throw error
+  }).finally(() => {
+    if (console.error === filter) console.error = originalConsoleError
+  })
+  return rfbModule
+}
 
 function desktopWebSocketUrl(desktopPageUrl: string): string {
   const page = new URL(desktopPageUrl)
@@ -33,9 +57,11 @@ function desktopWebSocketUrl(desktopPageUrl: string): string {
 
 function DesktopCanvas({
   desktopUrl,
+  onRefreshAddress,
   onStatusChange,
 }: {
   desktopUrl: string
+  onRefreshAddress: () => void
   onStatusChange: (status: DesktopStatus, message?: string) => void
 }) {
   const t = useT()
@@ -46,67 +72,48 @@ function DesktopCanvas({
     if (!target) return
 
     let disposed = false
-    let rfb: import('@novnc/novnc').default | undefined
+    let rfb: RFB | undefined
+    let handshakeTimer: number | undefined
     let reconnectTimer: number | undefined
-    let reconnectAttempts = 0
-    const stoppedConnections = new WeakSet<import('@novnc/novnc').default>()
+    let retried = false
 
-    const stopConnection = (connection: import('@novnc/novnc').default) => {
-      if (stoppedConnections.has(connection)) return
-      stoppedConnections.add(connection)
-      connection.disconnect()
+    const clearHandshakeTimer = () => {
+      window.clearTimeout(handshakeTimer)
+      handshakeTimer = undefined
     }
 
     const fail = (message?: string) => {
+      clearHandshakeTimer()
+      const connection = rfb
+      rfb = undefined
+      connection?.disconnect()
       if (!disposed) onStatusChange('failed', message || t('桌面环境未就绪'))
     }
 
-    const handleDisconnect = (connection: import('@novnc/novnc').default, event: Event) => {
-      stoppedConnections.add(connection)
-      if (rfb !== connection) return
-      const detail = (event as CustomEvent<{ clean?: boolean }>).detail
-      if (disposed || detail?.clean) return
-      if (reconnectAttempts >= 60) {
-        fail()
+    const reconnect = (connection: RFB, disconnect: boolean) => {
+      if (disposed || rfb !== connection) return
+      rfb = undefined
+      clearHandshakeTimer()
+      if (disconnect) connection.disconnect()
+      if (retried) {
+        onRefreshAddress()
         return
       }
-      reconnectAttempts += 1
+      retried = true
       onStatusChange('connecting')
-      reconnectTimer = window.setTimeout(() => void connect(), 1_000)
-    }
-    const handleSecurityFailure = (connection: import('@novnc/novnc').default, event: Event) => {
-      if (rfb !== connection) return
-      const detail = (event as CustomEvent<{ reason?: string }>).detail
-      fail(detail?.reason)
+      reconnectTimer = window.setTimeout(() => void connect(), DESKTOP_SOCKET_RETRY_MS)
     }
 
     async function connect() {
       try {
-        // noVNC binds its logger to console.error when the module first loads.
-        // Install the narrow secure-context filter before that import, not just
-        // around the constructor, or LAN HTTP always prints the generic
-        // "Expect crashes" error even though this WebSocket is capability
-        // authenticated and real failures are surfaced by the events below.
-        const originalConsoleError = console.error
-        console.error = (...args: unknown[]) => {
-          if (typeof args[0] === 'string' && args[0].includes('noVNC requires a secure context')) return
-          originalConsoleError(...args)
-        }
-        let RFB: typeof import('@novnc/novnc').default
-        try {
-          ({ default: RFB } = await import('@novnc/novnc'))
-        } finally {
-          console.error = originalConsoleError
-        }
+        const RFB = await loadDesktopClient()
         if (disposed || !target) return
 
-        const previous = rfb
-        rfb = undefined
-        if (previous) stopConnection(previous)
         target.replaceChildren()
 
         const connection = new RFB(target, desktopWebSocketUrl(desktopUrl), { shared: true })
         rfb = connection
+        handshakeTimer = window.setTimeout(() => reconnect(connection, true), DESKTOP_HANDSHAKE_TIMEOUT_MS)
         connection.background = '#000000'
         connection.scaleViewport = true
         // GNOME Remote Desktop treats SetDesktopSize as a session change and
@@ -116,13 +123,14 @@ function DesktopCanvas({
         connection.focusOnClick = true
         connection.addEventListener('connect', () => {
           if (rfb !== connection) return
-          if (!disposed) {
-            reconnectAttempts = 0
-            onStatusChange('ready')
-          }
+          clearHandshakeTimer()
+          retried = false
+          if (!disposed) onStatusChange('ready')
         })
-        connection.addEventListener('disconnect', (event) => handleDisconnect(connection, event))
-        connection.addEventListener('securityfailure', (event) => handleSecurityFailure(connection, event))
+        connection.addEventListener('disconnect', () => reconnect(connection, false))
+        connection.addEventListener('securityfailure', (event) => {
+          if (rfb === connection) fail((event as CustomEvent<{ reason?: string }>).detail?.reason)
+        })
         connection.addEventListener('credentialsrequired', () => {
           if (rfb === connection) fail(t('桌面环境未就绪'))
         })
@@ -134,10 +142,11 @@ function DesktopCanvas({
     void connect()
     return () => {
       disposed = true
-      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer)
-      if (rfb) stopConnection(rfb)
+      clearHandshakeTimer()
+      window.clearTimeout(reconnectTimer)
+      rfb?.disconnect()
     }
-  }, [desktopUrl, onStatusChange, t])
+  }, [desktopUrl, onRefreshAddress, onStatusChange, t])
 
   return (
     <div
@@ -170,20 +179,29 @@ export function DesktopWorkbench({ chatSessionId, botId, loadingAvatar, loadingL
   const [status, setStatus] = useState<DesktopStatus>('connecting')
   const [connectionVersion, setConnectionVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const request = useRef<AbortController | null>(null)
+  const refreshedAddress = useRef(false)
 
   const handleDesktopStatus = useCallback((nextStatus: DesktopStatus, message?: string) => {
+    if (nextStatus === 'ready') refreshedAddress.current = false
     setStatus(nextStatus)
     setError(message || null)
   }, [])
 
-  const connect = useCallback(async (signal?: AbortSignal) => {
+  const connect = useCallback(async () => {
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
+    const deadline = Date.now() + DESKTOP_CONNECT_TIMEOUT_MS
+    const timeout = AbortSignal.timeout(DESKTOP_CONNECT_TIMEOUT_MS)
+    const signal = AbortSignal.any([controller.signal, timeout])
     setStatus('connecting')
     setDesktopUrl(null)
     setError(null)
-    const deadline = Date.now() + DESKTOP_CONNECT_TIMEOUT_MS
+    // Fetch the desktop address while loading the noVNC bundle.
+    void loadDesktopClient().catch(() => undefined)
     let retryableMessage: string | null = null
-    while (Date.now() < deadline) {
-      if (signal?.aborted) return
+    while (!signal.aborted && Date.now() < deadline) {
       try {
         if (!botId && !chatSessionId) throw new Error(t('桌面环境未就绪'))
         const response = await fetch(
@@ -197,6 +215,7 @@ export function DesktopWorkbench({ chatSessionId, botId, loadingAvatar, loadingL
           },
         )
         const payload = await response.json().catch(() => null) as DesktopSessionResponse | null
+        if (signal.aborted) break
         if (response.ok && typeof payload?.desktopUrl === 'string') {
           setDesktopUrl(browserReachableGatewayUrl(payload.desktopUrl))
           setConnectionVersion((version) => version + 1)
@@ -207,8 +226,7 @@ export function DesktopWorkbench({ chatSessionId, botId, loadingAvatar, loadingL
         }
         retryableMessage = payload?.error?.message || t('桌面环境未就绪')
       } catch (requestError) {
-        if (signal?.aborted) return
-        if (requestError instanceof Error && requestError.name === 'AbortError') return
+        if (signal.aborted) break
         if (requestError instanceof Error && requestError.message !== t('桌面环境未就绪')) {
           setError(requestError.message)
           setStatus('failed')
@@ -217,16 +235,25 @@ export function DesktopWorkbench({ chatSessionId, botId, loadingAvatar, loadingL
       }
       await new Promise((resolve) => window.setTimeout(resolve, Math.min(1_000, Math.max(0, deadline - Date.now()))))
     }
-    if (!signal?.aborted) {
+    if (!controller.signal.aborted) {
       setError(retryableMessage || t('桌面环境未就绪'))
       setStatus('failed')
     }
   }, [botId, chatSessionId, t])
 
+  const refreshAddress = useCallback(() => {
+    if (refreshedAddress.current) {
+      handleDesktopStatus('failed', t('桌面环境未就绪'))
+      return
+    }
+    refreshedAddress.current = true
+    void connect()
+  }, [connect, handleDesktopStatus, t])
+
   useEffect(() => {
-    const controller = new AbortController()
-    void connect(controller.signal)
-    return () => controller.abort()
+    refreshedAddress.current = false
+    void connect()
+    return () => request.current?.abort()
   }, [connect])
 
   return (
@@ -236,6 +263,7 @@ export function DesktopWorkbench({ chatSessionId, botId, loadingAvatar, loadingL
           <DesktopCanvas
             desktopUrl={desktopUrl}
             key={connectionVersion}
+            onRefreshAddress={refreshAddress}
             onStatusChange={handleDesktopStatus}
           />
         )}
@@ -268,7 +296,10 @@ export function DesktopWorkbench({ chatSessionId, botId, loadingAvatar, loadingL
               <p className="text-sm font-medium">{t('桌面环境未就绪')}</p>
               {error && <p className="mt-1 max-w-md text-xs leading-5 text-[var(--app-muted)]">{error}</p>}
             </div>
-            <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-xs hover:bg-[var(--app-active)]" onClick={() => void connect()} type="button">
+            <button className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--app-control-border)] px-3 text-xs hover:bg-[var(--app-active)]" onClick={() => {
+              refreshedAddress.current = false
+              void connect()
+            }} type="button">
               <RotateCw className="size-3.5" />{t('重试')}
             </button>
           </div>

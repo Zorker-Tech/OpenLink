@@ -1056,6 +1056,7 @@ test('falls back to another port window when the host reserves the preferred one
 test('freezes and resumes the Project desktop without stopping the VM', async () => {
   const stateRoot = await mkdtemp(join('/tmp', 'openlink-project-desktop-'))
   let frozen = false
+  let thawFails = false
   let stopped = false
   const calls: Array<{ command: string; args: string[] }> = []
   const machineDriver: ProjectVmMachineDriver = {
@@ -1071,7 +1072,8 @@ test('freezes and resumes the Project desktop without stopping the VM', async ()
         frozen = true
         return { stdout: '', stderr: '' }
       }
-      if (command === 'sudo' && line.includes('systemctl unfreeze')) {
+      if (command === 'sudo' && line.includes('systemctl thaw')) {
+        if (thawFails) throw new Error('systemctl thaw failed')
         frozen = false
         return { stdout: '', stderr: '' }
       }
@@ -1095,8 +1097,12 @@ test('freezes and resumes the Project desktop without stopping the VM', async ()
     assert.ok(calls.some((call) => call.args.includes('freeze')))
     assert.equal(stopped, false, 'freezing the desktop must keep the VM and its services running')
     assert.deepEqual(await runtime.resumeDesktop(projectId), { suspended: false, state: 'running' })
-    assert.ok(calls.some((call) => call.args.includes('unfreeze')))
+    assert.ok(calls.some((call) => call.command === 'sudo' && call.args.join(' ') === '-n systemctl thaw openlink-desktop.service'))
     assert.equal(stopped, false)
+    await runtime.suspendDesktop(projectId)
+    thawFails = true
+    await assert.rejects(runtime.resumeDesktop(projectId), /Could not thaw the Project desktop/)
+    assert.deepEqual(await runtime.desktopStatus(projectId), { suspended: true, state: 'suspended' })
   } finally {
     await runtime.close({ stopRuntimes: false })
     await rm(stateRoot, { recursive: true, force: true })
