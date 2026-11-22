@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useId, useRef, useState, } from 'react';
 import { ClockIcon, MicIcon, PlusIcon, SendArrowIcon, } from '../components/icons';
-export function AppComposer({ displayName, disabled, showRoutine = true, status, reply, replyPlaceholder = 'Reply…', groupMembers, value, onChange, onSend, onCreateRoutine, }) {
+export function AppComposer({ displayName, disabled, showRoutine = true, showVoice = true, status, reply, replyPlaceholder = 'Reply…', groupMembers, value, onChange, onSend, onCreateRoutine, }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [caret, setCaret] = useState(0);
     const [mentionIndex, setMentionIndex] = useState(0);
@@ -109,5 +109,5 @@ export function AppComposer({ displayName, disabled, showRoutine = true, status,
                                     setMentionIndex(0);
                                     setDismissedMention(null);
                                     onChange(event.currentTarget.value);
-                                }, onKeyDown: onKeyDown, onSelect: (event) => setCaret(event.currentTarget.selectionStart), placeholder: placeholder, ref: fieldRef, rows: 1, value: value })] }), _jsxs("div", { className: "zbd-app-composer-actions", children: [_jsx("button", { "aria-label": "Voice message", className: "zbd-composer-mic zbd-app-composer-mic", disabled: disabled, type: "button", children: _jsx(MicIcon, { size: 15 }) }), _jsx("button", { "aria-label": "Send message", className: "zbd-composer-send zbd-app-composer-send", "data-ready": hasText ? '' : undefined, "data-working": disabled ? '' : undefined, disabled: disabled || !hasText, onClick: submit, type: "button", children: _jsx(SendArrowIcon, { size: 16 }) })] })] })] }));
+                                }, onKeyDown: onKeyDown, onSelect: (event) => setCaret(event.currentTarget.selectionStart), placeholder: placeholder, ref: fieldRef, rows: 1, value: value })] }), _jsxs("div", { className: "zbd-app-composer-actions", children: [showVoice ? _jsx("button", { "aria-label": "Voice message", className: "zbd-composer-mic zbd-app-composer-mic", disabled: disabled, type: "button", children: _jsx(MicIcon, { size: 15 }) }) : null, _jsx("button", { "aria-label": "Send message", className: "zbd-composer-send zbd-app-composer-send", "data-ready": hasText ? '' : undefined, "data-working": disabled ? '' : undefined, disabled: disabled || !hasText, onClick: submit, type: "button", children: _jsx(SendArrowIcon, { size: 16 }) })] })] })] }));
 }

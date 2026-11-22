@@ -6,6 +6,7 @@ export * from './AppScreenLightbox';
 export * from './AppSidebar';
 export * from './AppTranscript';
 export * from './DesktopPreview';
+export * from './OpenLinkAppShell';
 export * from './ZorkerBotApp';
 export * from './data';
 //# sourceMappingURL=index.d.ts.map

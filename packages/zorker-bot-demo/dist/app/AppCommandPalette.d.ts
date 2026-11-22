@@ -10,7 +10,8 @@ export type AppCommandPaletteProps = {
     onQueryChange: (value: string) => void;
     onClose: () => void;
     onSelect: (sessionId: string) => void;
-    onCreate: (query: string) => void;
+    onCreate?: (query: string) => void;
+    scopeKeyboard?: boolean;
 };
-export declare function AppCommandPalette({ sessions, query, assetBase, onQueryChange, onClose, onSelect, onCreate, }: AppCommandPaletteProps): import("react").JSX.Element;
+export declare function AppCommandPalette({ sessions, query, assetBase, onQueryChange, onClose, onSelect, onCreate, scopeKeyboard, }: AppCommandPaletteProps): import("react").JSX.Element;
 //# sourceMappingURL=AppCommandPalette.d.ts.map

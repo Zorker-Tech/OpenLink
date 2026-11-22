@@ -17,6 +17,7 @@ export type AppComposerProps = {
   displayName: string
   disabled: boolean
   showRoutine?: boolean
+  showVoice?: boolean
   status?: ReactNode
   reply?: { excerpt: string; onJump: () => void; onCancel: () => void }
   replyPlaceholder?: string
@@ -31,6 +32,7 @@ export function AppComposer({
   displayName,
   disabled,
   showRoutine = true,
+  showVoice = true,
   status,
   reply,
   replyPlaceholder = 'Reply…',
@@ -227,14 +229,14 @@ export function AppComposer({
           />
         </div>
         <div className="zbd-app-composer-actions">
-          <button
+          {showVoice ? <button
             aria-label="Voice message"
             className="zbd-composer-mic zbd-app-composer-mic"
             disabled={disabled}
             type="button"
           >
             <MicIcon size={15} />
-          </button>
+          </button> : null}
           <button
             aria-label="Send message"
             className="zbd-composer-send zbd-app-composer-send"

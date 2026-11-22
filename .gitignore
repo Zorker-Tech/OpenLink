@@ -14,6 +14,7 @@
 /build
 /storybook-static
 /coverage
+/packages/zorker-bot-demo/dist-sdk/
 
 # debug
 npm-debug.log*

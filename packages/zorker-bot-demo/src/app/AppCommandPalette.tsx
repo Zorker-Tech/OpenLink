@@ -24,7 +24,8 @@ export type AppCommandPaletteProps = {
   onQueryChange: (value: string) => void
   onClose: () => void
   onSelect: (sessionId: string) => void
-  onCreate: (query: string) => void
+  onCreate?: (query: string) => void
+  scopeKeyboard?: boolean
 }
 
 export function AppCommandPalette({
@@ -35,8 +36,10 @@ export function AppCommandPalette({
   onClose,
   onSelect,
   onCreate,
+  scopeKeyboard = false,
 }: AppCommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const layerRef = useRef<HTMLDivElement>(null)
   const [activeIndex, setActiveIndex] = useState(0)
 
   const filtered = sessions.filter(({ session, name }) =>
@@ -49,8 +52,9 @@ export function AppCommandPalette({
     session,
     name,
   }))
-  const items =
-    query.trim().length > 0
+  const items = !onCreate
+    ? sessionItems
+    : query.trim().length > 0
       ? [...sessionItems, createItem]
       : [createItem, ...sessionItems]
 
@@ -64,15 +68,16 @@ export function AppCommandPalette({
 
   useEffect(() => {
     const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (scopeKeyboard && !layerRef.current?.contains(event.target as Node)) return
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onEscape)
     return () => document.removeEventListener('keydown', onEscape)
-  }, [onClose])
+  }, [onClose, scopeKeyboard])
 
   const activate = (item: PaletteItem) => {
     if (item.kind === 'create') {
-      onCreate(query.trim())
+      onCreate?.(query.trim())
     } else {
       onSelect(item.session.id)
     }
@@ -81,7 +86,7 @@ export function AppCommandPalette({
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setActiveIndex((index) => Math.min(items.length - 1, index + 1))
+      setActiveIndex((index) => Math.min(Math.max(0, items.length - 1), index + 1))
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault()
@@ -98,9 +103,10 @@ export function AppCommandPalette({
     query.trim().length > 0
       ? `Create “${query.trim()}”`
       : 'Create new Bot'
+  const searchLabel = onCreate ? 'Search or create Bots' : 'Find a Bot'
 
   return (
-    <div className="zbd-app-palette-layer">
+    <div className="zbd-app-palette-layer" ref={layerRef}>
       <button
         aria-label="Close agent search"
         className="zbd-app-palette-scrim"
@@ -108,18 +114,18 @@ export function AppCommandPalette({
         type="button"
       />
       <div
-        aria-label="Search or create Bots"
+        aria-label={searchLabel}
         aria-modal="false"
         className="zbd-app-palette"
         role="dialog"
       >
         <div className="zbd-app-palette-search">
-          <span className="zbd-app-palette-to">To:</span>
+          {onCreate ? <span className="zbd-app-palette-to">To:</span> : null}
           <input
-            aria-label="Search or create Bots"
+            aria-label={searchLabel}
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Search or create Bots"
+            placeholder={searchLabel}
             ref={inputRef}
             type="text"
             value={query}
@@ -168,6 +174,7 @@ export function AppCommandPalette({
             )
           })}
         </div>
+        {!items.length ? <p className="zbd-app-palette-empty" role="status">No matching Bots</p> : null}
       </div>
     </div>
   )

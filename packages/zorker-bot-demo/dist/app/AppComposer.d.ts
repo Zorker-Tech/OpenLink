@@ -3,6 +3,7 @@ export type AppComposerProps = {
     displayName: string;
     disabled: boolean;
     showRoutine?: boolean;
+    showVoice?: boolean;
     status?: ReactNode;
     reply?: {
         excerpt: string;
@@ -19,5 +20,5 @@ export type AppComposerProps = {
     onSend: () => void;
     onCreateRoutine?: () => void;
 };
-export declare function AppComposer({ displayName, disabled, showRoutine, status, reply, replyPlaceholder, groupMembers, value, onChange, onSend, onCreateRoutine, }: AppComposerProps): import("react").JSX.Element;
+export declare function AppComposer({ displayName, disabled, showRoutine, showVoice, status, reply, replyPlaceholder, groupMembers, value, onChange, onSend, onCreateRoutine, }: AppComposerProps): import("react").JSX.Element;
 //# sourceMappingURL=AppComposer.d.ts.map

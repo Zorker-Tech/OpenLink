@@ -30,7 +30,8 @@
     }
   },
   "scripts": {
-    "build": "npm --prefix ../avatar run build && tsc -p tsconfig.json && node scripts/copy-static.mjs"
+    "build": "npm --prefix ../avatar run build && tsc -p tsconfig.json && node scripts/copy-static.mjs",
+    "build:sdk": "node scripts/build-sdk.mjs"
   },
   "dependencies": {
     "@zorker/avatar": "workspace:*"

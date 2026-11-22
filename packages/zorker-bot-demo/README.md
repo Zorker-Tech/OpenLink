@@ -1,5 +1,8 @@
 # @zorker/bot-demo
 
+For the OpenLink Bot demo embedded in the existing Next.js homepage and the
+installable package for other websites, see [OpenLink Demo SDK](./SDK.md).
+
 A component-level reconstruction of the Zorker Bot hero demo. The package is split into
 small, composable modules so the full demo can be embedded as-is or individual
 pieces can be reused in another React application.
