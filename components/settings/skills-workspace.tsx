@@ -77,7 +77,7 @@ export function SkillsWorkspace({ currentSkill, skills }: SkillsWorkspaceProps) 
       }
       setCreateOpen(false)
       setCreateName('')
-      router.push(result.path)
+      router.replace(result.path)
     })
   }
 
@@ -193,12 +193,12 @@ function SkillsNavigation({ currentSkillId, importing, onCreate, onImport, skill
           const active = skill.id === currentSkillId
           return (
             <div className="px-2 py-px" key={skill.id}>
-              <Link className="flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" href={`/settings/skills/${skill.id}`}>
+              <Link replace scroll={false} className="flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-foreground)]" href={`/settings/skills/${skill.id}`}>
                 {active ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                 <span className="min-w-0 flex-1 truncate">{skill.name}</span>
               </Link>
               {active && (
-                <Link aria-current="page" className="ml-2 flex h-8 items-center gap-2 rounded-md bg-[var(--app-selected)] pl-4 pr-2 text-sm text-[var(--app-foreground)]" href={`/settings/skills/${skill.id}`}>
+                <Link replace scroll={false} aria-current="page" className="ml-2 flex h-8 items-center gap-2 rounded-md bg-[var(--app-selected)] pl-4 pr-2 text-sm text-[var(--app-foreground)]" href={`/settings/skills/${skill.id}`}>
                   <FileText className="size-4" strokeWidth={1.7} />
                   <span>SKILL.md</span>
                 </Link>
@@ -261,7 +261,7 @@ function SkillEditor({ skill }: { skill: UserSkill }) {
         setError(messageFor(new Error(result.error), t('删除失败。'), t))
         return
       }
-      router.push(result.path)
+      router.replace(result.path)
     })
   }
 

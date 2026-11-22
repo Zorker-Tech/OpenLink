@@ -25,7 +25,7 @@ export function ProviderCard({ configuration, provider }: ProviderCardProps) {
   const toggle = () => {
     const next = !enabled
     if (next && !configuration?.defaultModelId) {
-      router.push(`/settings/ai-providers/${provider.id}`)
+      router.replace(`/settings/ai-providers/${provider.id}`)
       return
     }
 
@@ -33,7 +33,7 @@ export function ProviderCard({ configuration, provider }: ProviderCardProps) {
       setOptimisticEnabled(next)
       const result = await toggleAiProviderEnabledAction(provider.id, next)
       if (!result.ok && result.error === 'PROVIDER_CONFIGURATION_REQUIRED') {
-        router.push(`/settings/ai-providers/${provider.id}`)
+        router.replace(`/settings/ai-providers/${provider.id}`)
         return
       }
       router.refresh()
@@ -41,9 +41,11 @@ export function ProviderCard({ configuration, provider }: ProviderCardProps) {
   }
 
   return (
-    <article className="group relative h-[173px] w-[320px] overflow-hidden rounded-xl bg-[var(--app-surface)] shadow-[inset_0_0_0_1px_var(--app-border)] transition-[box-shadow,background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--app-surface)_94%,var(--app-foreground)_6%)] hover:shadow-[inset_0_0_0_1px_var(--app-control-border)]">
+    <article className="group relative h-[173px] min-w-0 overflow-hidden rounded-xl bg-[var(--app-surface)] shadow-[inset_0_0_0_1px_var(--app-border)] transition-[box-shadow,background-color] duration-200 hover:bg-[color-mix(in_srgb,var(--app-surface)_94%,var(--app-foreground)_6%)] hover:shadow-[inset_0_0_0_1px_var(--app-control-border)]">
       <div className="flex size-full flex-col gap-3 p-4">
         <Link
+          replace
+          scroll={false}
           aria-describedby={descriptionId}
           className="flex min-h-0 flex-1 flex-col gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-focus-ring)]"
           href={`/settings/ai-providers/${provider.id}`}

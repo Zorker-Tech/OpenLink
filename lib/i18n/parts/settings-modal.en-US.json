@@ -1,0 +1,17 @@
+{
+  "设置": "Settings",
+  "设置分区": "Settings sections",
+  "关闭设置": "Close settings",
+  "外观": "Appearance",
+  "退出登录失败": "Could not sign out",
+  "请填写 API 代理地址。": "Enter an API proxy URL.",
+  "模型 ID 无效，请检查模型列表后重试。": "The model ID is invalid. Check the model list and try again.",
+  "服务商不存在或已下线。": "The provider is unavailable or has been removed.",
+  "配置数据无效，请刷新页面后重试。": "The configuration is invalid. Refresh the page and try again.",
+  "API Key 无效或没有权限。": "The API key is invalid or lacks permission.",
+  "模型不存在或未启用。": "The model does not exist or is disabled.",
+  "上下文超出模型限制。": "The context exceeds the model limit.",
+  "服务商暂时不可用，请稍后重试。": "The provider is temporarily unavailable. Try again shortly.",
+  "模型服务响应超时，请稍后重试。": "The model service timed out. Try again shortly.",
+  "无法连接到模型服务，请检查端点与网络。": "Could not connect to the model service. Check the endpoint and your network."
+}

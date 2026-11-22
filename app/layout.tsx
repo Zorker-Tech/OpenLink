@@ -31,8 +31,10 @@ export const dynamic = 'force-dynamic'
 
 export default async function RootLayout({
   children,
+  settings,
 }: Readonly<{
   children: React.ReactNode
+  settings: React.ReactNode
 }>) {
   const staticUi = process.env.OPENLINK_STATIC_UI === '1'
   const local = isLocalRuntime()
@@ -56,7 +58,7 @@ export default async function RootLayout({
         <meta content={supabaseUrl || ''} name="openlink-supabase-url" />
         <meta content={publishableKey || ''} name="openlink-supabase-publishable-key" />
         <OpenLinkMotionProvider>
-          <I18nProvider locale={locale} messages={messages}>{children}</I18nProvider>
+          <I18nProvider locale={locale} messages={messages}>{children}{settings}</I18nProvider>
         </OpenLinkMotionProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

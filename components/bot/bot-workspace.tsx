@@ -26,7 +26,7 @@ import { BotOnboarding } from '@/components/bot/bot-onboarding'
 import { BotProfileDialog } from '@/components/bot/bot-profile-dialog'
 import { BotRoutineDialog } from '@/components/bot/bot-routine-dialog'
 import { BotSidebar, type BotSidebarRow } from '@/components/bot/bot-sidebar'
-import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
+import { OpenLinkThemeProvider, useDisplayModeSync } from '@/components/ui/theme-scope'
 import { PageTransition } from '@/components/ui/page-transition'
 import type { ActiveWorkspaceSummary } from '@/components/workspace-switcher'
 import type { ConfiguredModelOption } from '@/lib/ai-provider-types'
@@ -42,7 +42,6 @@ import {
 } from '@/lib/bot-transcript'
 import { useLocale } from '@/lib/i18n/client'
 import { botDetailFromTimeline, decodeBotTimelineCache, encodeBotTimelineCache, mergeBotTimelineSnapshot } from '@/lib/bot-transcript-cache'
-import type { OrganizationSummary } from '@/lib/organizations'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
 import { ArrowDown, Reply } from 'lucide-react'
 import { useReducedMotion } from 'motion/react'
@@ -111,7 +110,6 @@ type BotWorkspaceProps = {
   initialBots: BotSummary[]
   models: readonly ConfiguredModelOption[]
   nickname: string
-  organizations: OrganizationSummary[]
   transcriptCacheKey?: string
   workspaceSlug: string
   workHostReady: boolean
@@ -245,7 +243,6 @@ export function BotWorkspace({
   initialBots,
   models,
   nickname,
-  organizations,
   transcriptCacheKey,
   workspaceSlug,
   workHostReady,
@@ -262,6 +259,7 @@ export function BotWorkspace({
   const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
+  useDisplayModeSync(setThemeMode)
   const [systemLight, setSystemLight] = useState(false)
   const [bots, setBots] = useState<BotSummary[]>(initialBots)
   const [activeId, setActiveId] = useState(initialBot?.id ?? initialBotId ?? initialBots[0]?.id ?? '')
@@ -1119,7 +1117,6 @@ export function BotWorkspace({
       <div className="bot-workspace openlink-app-shell workspace-navigation-shell relative flex h-dvh min-h-[560px] overflow-hidden" data-theme={activeTheme}>
         <BotSidebar
           activeId={activeId}
-          activeWorkspace={activeWorkspace}
           avatarUrl={avatarUrl}
           botUnreadCount={botUnreadCount}
           collapsed={collapsed}
@@ -1138,7 +1135,6 @@ export function BotWorkspace({
             if (window.matchMedia('(min-width: 768px)').matches) setCollapsed((value) => !value)
             else setMobileOpen((value) => !value)
           }}
-          organizations={organizations}
           rows={rows}
           themeMode={themeMode}
           workspaceSlug={workspaceSlug}

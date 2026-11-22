@@ -1279,5 +1279,20 @@
   "请按同一个预览版本分批发送批注。": "Envoyez les annotations par lots distincts pour chaque version Preview.",
   "所选 Git 版本不可用，请刷新预览目标后重试。": "La version Git sélectionnée est indisponible. Actualisez la cible Preview et réessayez.",
   "无法绑定所选 Git 版本，请重试。": "Impossible de lier la version Git sélectionnée. Réessayez.",
-  "预览中还有未应用的更改。继续将丢弃这些更改。": "L’aperçu contient des modifications non appliquées. Si vous continuez, elles seront perdues."
+  "预览中还有未应用的更改。继续将丢弃这些更改。": "L’aperçu contient des modifications non appliquées. Si vous continuez, elles seront perdues.",
+  "设置": "Paramètres",
+  "设置分区": "Rubriques des paramètres",
+  "关闭设置": "Fermer les paramètres",
+  "外观": "Apparence",
+  "退出登录失败": "Échec de la déconnexion",
+  "请填写 API 代理地址。": "Saisissez une URL de proxy API.",
+  "模型 ID 无效，请检查模型列表后重试。": "L’identifiant du modèle est invalide. Vérifiez la liste des modèles et réessayez.",
+  "服务商不存在或已下线。": "Le fournisseur est indisponible ou a été retiré.",
+  "配置数据无效，请刷新页面后重试。": "La configuration est invalide. Actualisez la page et réessayez.",
+  "API Key 无效或没有权限。": "La clé API est invalide ou ne dispose pas des autorisations nécessaires.",
+  "模型不存在或未启用。": "Le modèle n’existe pas ou est désactivé.",
+  "上下文超出模型限制。": "Le contexte dépasse la limite du modèle.",
+  "服务商暂时不可用，请稍后重试。": "Le fournisseur est temporairement indisponible. Réessayez dans un instant.",
+  "模型服务响应超时，请稍后重试。": "Le service de modèle a expiré. Réessayez dans un instant.",
+  "无法连接到模型服务，请检查端点与网络。": "Impossible de joindre le service de modèle. Vérifiez le point de terminaison et votre connexion."
 }

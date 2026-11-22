@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import {
   AgentAvatar,
   COLORS,
@@ -337,9 +339,9 @@ export function BotCreateDialog({
                     value={{ modelId }}
                   />
                 ) : (
-                  <a className="zbd-app-create-provider-link" href="/settings/ai-providers">
+                  <Link scroll={false} className="zbd-app-create-provider-link" href="/settings/ai-providers">
                     Configure an AI provider <ArrowRight size={14} />
-                  </a>
+                  </Link>
                 )}
               </div>
 

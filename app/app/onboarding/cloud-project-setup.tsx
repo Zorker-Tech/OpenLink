@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import { selectCloudProjectAction, type SelectCloudProjectActionState } from './cloud-project-actions'
 import { AppSelect } from '@/components/ui/app-select'
 import { Button } from '@/components/ui/button'
@@ -88,9 +90,9 @@ export function CloudProjectSetup({
           <p className="text-sm leading-6 text-muted-foreground">
             {t('VTSLX 连接需要重新授权。请先在 Cloud 设置中断开旧连接，再回来重新连接。')}
           </p>
-          <a className="mt-4 inline-flex text-sm font-medium text-foreground underline underline-offset-4" href="/settings">
+          <Link scroll={false} className="mt-4 inline-flex text-sm font-medium text-foreground underline underline-offset-4" href="/settings">
             {t('打开 Cloud 设置')}
-          </a>
+          </Link>
         </div>
       )}
 

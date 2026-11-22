@@ -48,7 +48,7 @@ import { ChatConfirmationDock, type ComposerConfirmationRequest } from '@/compon
 import { ChatTimeline, type ActiveFlowStatus } from '@/components/chat-timeline'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
+import { OpenLinkThemeProvider, useDisplayModeSync } from '@/components/ui/theme-scope'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import { isOpenLinkAgentEvent, type AgentPromptAttachment, type AgentPromptInstructionAttachment, type AgentPromptReferenceAttachment, type AgentPromptTextAttachment, type OpenLinkAgentEvent } from '@/lib/agent-runtime/events'
 import { serializePromptAttachments } from '@/lib/agent-runtime/serialize-prompt-attachments.client'
@@ -1428,6 +1428,7 @@ export function ChatWorkspace({
   const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
+  useDisplayModeSync(setThemeMode)
   const [systemLight, setSystemLight] = useState(false)
   const [chatPanelCollapsed, setChatPanelCollapsed] = useState(false)
   const [panelMotionContentWidth, setPanelMotionContentWidth] = useState<number | null>(null)

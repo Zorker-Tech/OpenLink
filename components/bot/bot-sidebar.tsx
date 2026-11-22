@@ -8,28 +8,23 @@ import { ArrowDown, ChevronRight, Ellipsis, Eye, EyeOff, FolderPlus, ListFilter,
 import { useCallback, useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import type { ThemeMode } from '@/components/account-drawer'
 import { AppSidebarAccountFooter } from '@/components/app-sidebar-controls'
-import { OrganizationDialog } from '@/components/organization-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useOpenLinkTheme } from '@/components/ui/theme-scope'
 import { WorkspaceNavigation } from '@/components/workspace-navigation'
-import type { ActiveWorkspaceSummary } from '@/components/workspace-switcher'
 import type { BotSummary } from '@/lib/bot-types'
 import { useLocale, useT } from '@/lib/i18n/client'
-import type { OrganizationSummary } from '@/lib/organizations'
 
 export type BotSidebarRow = Omit<AppSidebarRow, 'time'> & { members?: BotSummary['members'] }
 
 type BotSidebarProps = {
   activeId: string
-  activeWorkspace: ActiveWorkspaceSummary
   avatarUrl: string | null
   botUnreadCount: number
   collapsed: boolean
   email: string
   mobileOpen: boolean
   nickname: string
-  organizations: OrganizationSummary[]
   rows: BotSidebarRow[]
   themeMode: ThemeMode
   workspaceSlug: string
@@ -96,8 +91,8 @@ function navigateRows(event: KeyboardEvent<HTMLDivElement>) {
 }
 
 export function BotSidebar({
-  activeId, activeWorkspace, avatarUrl, botUnreadCount, collapsed, email, mobileOpen, nickname,
-  organizations, rows, themeMode, workspaceSlug, onCloseMobile, onNewAgent, onPrefetch, onSelect, onThemeChange, onToggle,
+  activeId, avatarUrl, botUnreadCount, collapsed, email, mobileOpen, nickname,
+  rows, themeMode, workspaceSlug, onCloseMobile, onNewAgent, onPrefetch, onSelect, onThemeChange, onToggle,
 }: BotSidebarProps) {
   const t = useT()
   const locale = useLocale()
@@ -105,7 +100,6 @@ export function BotSidebar({
   const storageKey = 'openlink-bot-sidebar:' + JSON.stringify([email, workspaceSlug])
   const [saved, setSaved] = useState<{ key: string; layout: SidebarLayout } | null>(null)
   const layout = saved?.key === storageKey ? saved.layout : EMPTY_LAYOUT
-  const [organizationDialogOpen, setOrganizationDialogOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showHidden, setShowHidden] = useState(false)
@@ -299,14 +293,11 @@ export function BotSidebar({
         collapsed={collapsed}
         footer={(
           <AppSidebarAccountFooter
-            activeWorkspace={activeWorkspace}
             avatarUrl={avatarUrl}
             compact
             email={email}
             nickname={nickname}
-            onOpenOrganization={() => setOrganizationDialogOpen(true)}
             onThemeChange={onThemeChange}
-            organizations={organizations}
             themeMode={themeMode}
           />
         )}
@@ -436,7 +427,6 @@ export function BotSidebar({
         </DialogContent>
       </Dialog>
 
-      <OrganizationDialog onOpenChange={setOrganizationDialogOpen} open={organizationDialogOpen} />
     </>
   )
 }

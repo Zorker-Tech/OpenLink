@@ -17,7 +17,7 @@ const meta = { title: 'Product/Settings', parameters: { layout: 'fullscreen', ne
 export default meta
 type Story = StoryObj<typeof meta>
 export const Preferences: Story = { render: () => <PreferencesForm initial={preferences} /> }
-export const Shell: Story = { render: () => <SettingsShell {...workspace} preferences={preferences}><PreferencesForm initial={preferences} /></SettingsShell> }
+export const Shell: Story = { render: () => <SettingsShell closeHref={`/app/${workspace.activeWorkspace.slug}`} initialTheme={preferences.theme}><PreferencesForm initial={preferences} /></SettingsShell> }
 export const Providers: Story = { render: () => <AiProvidersOverview configurations={[]} /> }
 export const Embeddings: Story = { render: () => <EmbeddingProvidersOverview configurations={[]} /> }
 export const ProviderConfiguration: Story = { render: () => <ProviderConfigurationForm provider={AI_PROVIDERS[0]} configuration={null} models={[]} /> }

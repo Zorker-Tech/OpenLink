@@ -1,7 +1,6 @@
 import { BotWorkspace } from '@/components/bot/bot-workspace'
 import { listConfiguredModels } from '@/lib/ai-provider-configurations.server'
 import { listBots } from '@/lib/bots'
-import { listOrganizations } from '@/lib/organizations'
 import { getAccessibleWorkspace, getAvatarUrl, getOwnedWorkspace } from '@/lib/workspaces'
 import { getWorkHostHealth, isWorkHostConfigured } from '@/lib/work-host-client.server'
 import { createClient } from '@/utils/supabase/server'
@@ -27,10 +26,9 @@ export default async function WorkspaceBotsPage({
     redirect(`/login?next=${encodeURIComponent(`/app/${workspace_name}/bots`)}`)
   }
 
-  const [workspace, personalWorkspace, organizations] = await Promise.all([
+  const [workspace, personalWorkspace] = await Promise.all([
     getAccessibleWorkspace(supabase, workspace_name),
     getOwnedWorkspace(supabase, user.id),
-    listOrganizations(supabase, user.id),
   ])
   if (!workspace || !personalWorkspace) redirect('/app')
 
@@ -67,7 +65,6 @@ export default async function WorkspaceBotsPage({
       initialBots={bots}
       models={models}
       nickname={nickname}
-      organizations={organizations}
       workspaceSlug={workspace.slug}
       workHostReady={workHostReady}
     />

@@ -6,7 +6,7 @@ import { PageTransition } from '@/components/ui/page-transition'
 import { useSidebarCollapsed } from '@/lib/use-sidebar-collapsed'
 import { NewProjectDialog } from '@/components/new-project-dialog'
 import type { ThemeMode } from '@/components/account-drawer'
-import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
+import { OpenLinkThemeProvider, useDisplayModeSync } from '@/components/ui/theme-scope'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
 import type { ProjectSummary } from '@/lib/projects'
@@ -127,6 +127,7 @@ export function ProjectsWorkspace({
   const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
+  useDisplayModeSync(setThemeMode)
   const [systemLight, setSystemLight] = useState(false)
   const [search, setSearch] = useState('')
   const [newProjectOpen, setNewProjectOpen] = useState(false)

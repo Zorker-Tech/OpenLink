@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { OpenLinkThemeProvider } from '@/components/ui/theme-scope'
+import { OpenLinkThemeProvider, useDisplayModeSync } from '@/components/ui/theme-scope'
 import { deleteChatSessionAction } from '@/app/chat/actions'
 import { useT } from '@/lib/i18n/client'
 import type { ActiveWorkspaceSummary, PersonalWorkspaceSummary } from '@/components/workspace-switcher'
@@ -291,7 +291,7 @@ export function Sidebar({
   return (
     <>
       <WorkspaceNavigation activePage={activeNavLabel} collapsed={collapsed} mobileOpen={mobileOpen} onCloseMobile={onCloseMobile} onHistory={() => setSearchOpen(true)} onToggle={onToggle} workspaceSlug={activeWorkspace.slug}
-        footer={<AppSidebarAccountFooter compact activeWorkspace={activeWorkspace} avatarUrl={avatarUrl} email={email} nickname={nickname} onOpenOrganization={() => setOrganizationDialogOpen(true)} onThemeChange={onThemeChange} organizations={organizations} themeMode={themeMode} />}>
+        footer={<AppSidebarAccountFooter compact avatarUrl={avatarUrl} email={email} nickname={nickname} onThemeChange={onThemeChange} themeMode={themeMode} />}>
         <div className="flex shrink-0 flex-col gap-2 px-1.5 pt-2 pb-1">
           <AppSidebarWorkspaceHeader activeWorkspace={activeWorkspace} onAddOrganization={() => setOrganizationDialogOpen(true)} onSearch={() => setSearchOpen(true)} onToggle={onToggle} organizations={organizations} personalWorkspace={personalWorkspace} />
           <button className="flex h-[35px] w-full items-center gap-1.5 rounded-lg px-2.5 text-sm tracking-[-0.1504px] text-[var(--app-foreground)] hover:bg-[var(--app-hover)]" onClick={() => { onCloseMobile(); (onNewChat ?? (() => router.push(`/app/${activeWorkspace.slug}`)))() }} type="button">
@@ -406,6 +406,7 @@ export function AppWorkspace({
   const [collapsed, setCollapsed] = useSidebarCollapsed()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
+  useDisplayModeSync(setThemeMode)
   const [systemLight, setSystemLight] = useState(false)
   const [composerVersion, setComposerVersion] = useState(0)
   const [runtimeSnapshots, setRuntimeSnapshots] = useState<Record<string, ProjectRuntimeSnapshot>>(() => (

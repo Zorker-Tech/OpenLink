@@ -1,5 +1,6 @@
 'use client'
 
+import { Popover } from '@base-ui/react/popover'
 import { AccountDrawer, type ThemeMode } from '@/components/account-drawer'
 import {
   WorkspaceSwitcher,
@@ -8,7 +9,7 @@ import {
 } from '@/components/workspace-switcher'
 import type { OrganizationSummary } from '@/lib/organizations'
 import { useT } from '@/lib/i18n/client'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState, type Ref } from 'react'
 
 export function AppSidebarWorkspaceHeader({
   activeWorkspace,
@@ -64,10 +65,10 @@ function getUserAvatarColor(seed: string) {
   return USER_AVATAR_COLORS[(hash >>> 0) % USER_AVATAR_COLORS.length]
 }
 
-function SidebarUserAvatar({ avatarUrl, email, nickname }: { avatarUrl: string | null; email: string; nickname: string }) {
+function SidebarUserAvatar({ avatarUrl, email, nickname, ref }: { avatarUrl: string | null; email: string; nickname: string; ref?: Ref<HTMLSpanElement> }) {
   const initial = nickname.trim().charAt(0).toUpperCase() || 'O'
   return (
-    <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-semibold text-white" style={{ backgroundColor: getUserAvatarColor(email || nickname) }}>
+    <span ref={ref} className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-semibold text-white" style={{ backgroundColor: getUserAvatarColor(email || nickname) }}>
       {avatarUrl ? <img alt="" className="size-full object-cover" src={avatarUrl} /> : initial}
     </span>
   )
@@ -75,53 +76,42 @@ function SidebarUserAvatar({ avatarUrl, email, nickname }: { avatarUrl: string |
 
 export function AppSidebarAccountFooter({
   compact = false,
-  activeWorkspace,
   avatarUrl,
   email,
   nickname,
-  onOpenOrganization,
   onThemeChange,
-  organizations,
   themeMode,
 }: {
   compact?: boolean
-  activeWorkspace: ActiveWorkspaceSummary
   avatarUrl: string | null
   email: string
   nickname: string
-  onOpenOrganization: () => void
   onThemeChange: (mode: ThemeMode) => void
-  organizations: OrganizationSummary[]
   themeMode: ThemeMode
 }) {
   const [accountDrawerOpen, setAccountDrawerOpen] = useState(false)
-  const root = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!accountDrawerOpen) return
-    const onPointer = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setAccountDrawerOpen(false) }
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setAccountDrawerOpen(false) }
-    document.addEventListener('pointerdown', onPointer)
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey) }
-  }, [accountDrawerOpen])
+  const avatarRef = useRef<HTMLSpanElement>(null)
   return (
-    <div className={compact ? 'workspace-rail-account relative shrink-0' : 'relative flex h-12 shrink-0 items-end gap-1 px-2 pb-3'} ref={root}>
-      {accountDrawerOpen && (
-        <AccountDrawer
-          activeWorkspace={activeWorkspace}
-          avatarUrl={avatarUrl}
-          email={email}
-          mode={themeMode}
-          nickname={nickname}
-          onOpenOrganization={() => { setAccountDrawerOpen(false); onOpenOrganization() }}
-          onModeChange={onThemeChange}
-          organizations={organizations}
-        />
-      )}
-      <button aria-label={compact ? email : undefined} aria-expanded={accountDrawerOpen} className={compact ? 'workspace-rail-button' : 'flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-0.5 hover:bg-[var(--app-surface)]'} onClick={() => setAccountDrawerOpen((value) => !value)} title={email} type="button">
-        <SidebarUserAvatar avatarUrl={avatarUrl} email={email} nickname={nickname} />
-        {!compact && <span className="min-w-0 flex-1 truncate text-left text-sm tracking-[-0.1504px] text-[var(--app-foreground)]">{email}</span>}
-      </button>
+    <div className={compact ? 'workspace-rail-account shrink-0' : 'flex h-12 shrink-0 items-end gap-1 px-2 pb-3'}>
+      <Popover.Root onOpenChange={setAccountDrawerOpen} open={accountDrawerOpen}>
+        <Popover.Trigger
+          aria-label={compact ? email : undefined}
+          className={compact ? 'workspace-rail-button' : 'flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-0.5 hover:bg-[var(--app-surface)]'}
+          title={email}
+        >
+          <SidebarUserAvatar ref={avatarRef} avatarUrl={avatarUrl} email={email} nickname={nickname} />
+          {!compact && <span className="min-w-0 flex-1 truncate text-left text-sm tracking-[-0.1504px] text-[var(--app-foreground)]">{email}</span>}
+        </Popover.Trigger>
+        {accountDrawerOpen && (
+          <AccountDrawer
+            anchor={compact ? avatarRef : undefined}
+            mode={themeMode}
+            onClose={() => setAccountDrawerOpen(false)}
+            onModeChange={onThemeChange}
+            sideOffset={compact ? 14 : 4}
+          />
+        )}
+      </Popover.Root>
     </div>
   )
 }

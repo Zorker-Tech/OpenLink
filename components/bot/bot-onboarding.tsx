@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import {
   AgentAvatar,
   COLORS,
@@ -858,13 +860,13 @@ export function BotOnboarding({
                   value={{ modelId }}
                 />
               ) : (
-                <a
+                <Link scroll={false}
                   className="flex h-10 items-center justify-between rounded-xl border border-[var(--app-control-border)] bg-[var(--app-surface)] px-3.5 text-[13px] text-[var(--app-muted)] hover:bg-[var(--app-hover)]"
                   href="/settings/ai-providers"
                 >
                   Configure an AI provider
                   <ArrowRight className="size-4" />
-                </a>
+                </Link>
               )}
             </div>
           </div>

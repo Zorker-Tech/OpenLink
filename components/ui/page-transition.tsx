@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react'
 import { usePathname } from 'next/navigation'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 /**
  * Route transition for a shell's content region only.
@@ -13,13 +13,18 @@ import type { ReactNode } from 'react'
  */
 export function PageTransition({ children, className }: { children: ReactNode; className?: string }) {
   const pathname = usePathname()
+  const lastPage = useRef(pathname)
+  const settingsOpen = pathname === '/settings' || pathname.startsWith('/settings/')
+  useEffect(() => {
+    if (!settingsOpen) lastPage.current = pathname
+  }, [pathname, settingsOpen])
 
   return (
     <motion.div
       animate={{ opacity: 1, y: 0 }}
       className={className}
       initial={{ opacity: 0, y: 6 }}
-      key={pathname}
+      key={settingsOpen ? lastPage.current : pathname}
       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
