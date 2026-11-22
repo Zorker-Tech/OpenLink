@@ -597,6 +597,13 @@
   border-radius: 13px 0 0 13px;
   background: var(--workspace-rail-background);
 }
+.workspace-navigation-rail > .workspace-navigation-rail-items {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
 .workspace-rail-button {
   display: flex;
   width: 36px;

@@ -7,7 +7,7 @@ import { ZorkerLogo } from '@/components/zorker-logo'
 import { useT } from '@/lib/i18n/client'
 import { theme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { createClient } from '@/utils/supabase/client'
 
 interface HomeUser {
@@ -120,17 +120,22 @@ function Footer() {
 export function OpenLinkHome({
   user,
   composerContext,
+  botDemo,
   runtimeMode = 'local',
 }: {
   user: HomeUser | null
   composerContext: ComposerContext | null
+  botDemo?: ReactNode
   runtimeMode?: 'local' | 'cloud'
 }) {
   return (
     <div className={`flex min-h-screen flex-col overflow-x-hidden ${theme('canvas')}`}>
       <Header user={user} />
-      <main className="flex flex-1 items-center justify-center px-6 py-12">
-        <PromptComposer composerContext={composerContext} runtimeMode={runtimeMode} user={user} />
+      <main className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:px-6">
+        <div className="flex w-full flex-1 items-center justify-center">
+          <PromptComposer composerContext={composerContext} runtimeMode={runtimeMode} user={user} />
+        </div>
+        {botDemo}
       </main>
       <Footer />
     </div>

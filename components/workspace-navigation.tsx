@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from 'react'
 import Link from 'next/link'
+import { OpenLinkNavigationRail } from '@zorker/bot-demo/app'
 import { BotRailAvatar } from '@/components/bot/bot-rail-avatar'
 import { useT } from '@/lib/i18n/client'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -30,8 +31,7 @@ export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount
   const botLabel = botUnreadCount > 0 ? `${t('Bot')} · ${botUnreadCount}` : t('Bot')
   const botIcon = <><BotRailAvatar key={workspaceSlug} activeSessionId={activeBotSessionId} workspaceSlug={workspaceSlug} />{botUnreadCount > 0 ? <span aria-hidden="true" className="absolute right-0.5 top-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff453a] px-1 text-[9px] font-semibold leading-none text-white ring-2 ring-[var(--app-background)]">{botUnreadCount > 9 ? '9+' : botUnreadCount}</span> : null}</>
   return (
-    <nav aria-label={t('工作区导航')} className="workspace-navigation-rail" style={{ '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
-      <div className="flex flex-1 flex-col items-center gap-4">
+    <OpenLinkNavigationRail aria-label={t('工作区导航')} className="workspace-navigation-rail" footer={footer} style={{ '--workspace-sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
         <Link aria-current={!activePage || activePage === t('首页') ? 'page' : undefined} aria-label={t('首页')} className={railClass} href={`/app/${workspaceSlug}`} onMouseEnter={onPeek} onMouseLeave={onLeave} onClick={onCloseMobile} title={t('首页')}><img alt="" className="app-nav-icon" src={`${iconPath}home.svg`} /></Link>
         {botSidebar ? (
           <button aria-controls="workspace-chat-sidebar" aria-current="page" aria-expanded={botSidebar.expanded} aria-label={botLabel} className={`${railClass} relative`} onClick={botSidebar.toggle} ref={botSidebar.ref} title={t('Bot')} type="button">{botIcon}</button>
@@ -50,9 +50,7 @@ export function WorkspaceNavigationRail({ activePage, botSidebar, botUnreadCount
             <DropdownMenuItem disabled>{t('模板（即将推出）')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-      {footer}
-    </nav>
+    </OpenLinkNavigationRail>
   )
 }
 

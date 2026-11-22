@@ -30,9 +30,15 @@
       "@zorker/bot-demo": [
         "./packages/zorker-bot-demo/src/index.ts"
       ],
-    "@zorker/bot-demo/app": [
-      "./packages/zorker-bot-demo/src/app/index.ts"
-    ],
+      "@zorker/bot-demo/app": [
+        "./packages/zorker-bot-demo/src/app/index.ts"
+      ],
+      "@zorker/bot-demo/embed": [
+        "./packages/zorker-bot-demo/src/embed/index.ts"
+      ],
+      "@zorker/bot-demo/embed.css": [
+        "./packages/zorker-bot-demo/src/styles/embed.css"
+      ],
       "@zorker/bot-demo/website": [
         "./packages/zorker-bot-demo/src/website/index.ts"
       ],

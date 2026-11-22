@@ -11,6 +11,7 @@ import {
   AppCommandPalette,
   AppComposer,
   AppTranscript,
+  OpenLinkAppShell,
   type AppSession,
 } from '@zorker/bot-demo/app'
 import { AgentAvatar, resolveColor } from '@zorker/avatar'
@@ -1114,8 +1115,10 @@ export function BotWorkspace({
 
   return (
     <OpenLinkThemeProvider theme={activeTheme}>
-      <div className="bot-workspace openlink-app-shell workspace-navigation-shell relative flex h-dvh min-h-[560px] overflow-hidden" data-theme={activeTheme}>
-        <BotSidebar
+      <OpenLinkAppShell
+        className="bot-workspace openlink-app-shell workspace-navigation-shell relative flex h-dvh min-h-[560px] overflow-hidden"
+        data-theme={activeTheme}
+        navigation={<BotSidebar
           activeId={activeId}
           avatarUrl={avatarUrl}
           botUnreadCount={botUnreadCount}
@@ -1138,8 +1141,8 @@ export function BotWorkspace({
           rows={rows}
           themeMode={themeMode}
           workspaceSlug={workspaceSlug}
-        />
-
+        />}
+      >
         <PageTransition className="flex min-w-0 flex-1">
           <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--app-background)]">
             <div className="bot-chat-root zbd-root relative flex min-h-0 min-w-0 flex-1" data-sidebar-collapsed={collapsed ? '' : undefined}>
@@ -1414,7 +1417,7 @@ export function BotWorkspace({
             {error}
           </button>
         ) : null}
-      </div>
+      </OpenLinkAppShell>
     </OpenLinkThemeProvider>
   )
 }
